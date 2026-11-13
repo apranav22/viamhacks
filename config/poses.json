@@ -1,0 +1,17 @@
+{
+  "_comment": "Positions are the gripper TCP in the world frame, mm. Record destinations with: python record_pose.py <name>",
+  "scan_joints_deg": [0.0, 22.571, -50.684, 0.0, -74.053, 0.0],
+  "destinations": {
+    "box": null,
+    "reject": null,
+    "hold": null
+  },
+  "pick_region": {"x_min": 150, "x_max": 650, "y_min": -350, "y_max": 350},
+  "decision": {"hold_low": 0.15, "hold_high": 0.3},
+  "grasp": {
+    "approach_height_mm": 120,
+    "min_table_clearance_mm": 8,
+    "use_yaw": false,
+    "jaw_offset_deg": 90
+  }
+}
