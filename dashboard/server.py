@@ -3,12 +3,19 @@
     python dashboard/server.py                      # UDP :8766 in, http://localhost:8765 out
     python dashboard/server.py --host 0.0.0.0       # on the station; open http://<station>:8765 from a laptop
     python dashboard/server.py --replay runs/<run>/dash   # replay a recorded run (pitch / debugging)
+    python dashboard/server.py --no-preview         # don't connect to the robot at all
+
+Idle preview: when no run is active the server itself polls both cameras (~4 fps) and the arm/gripper
+state (~2 Hz), so the feeds are live between runs. It pauses the moment a run sends telemetry and
+stays paused until the run ends (or goes silent for 3 s), so it never competes with the run's camera calls.
 
 It reassembles frames, keeps the recent history in memory, streams events to browsers (SSE), and
 records the run (events.jsonl + key frames) under runs/<run>/dash. Stdlib only.
 """
 
 import argparse
+import asyncio
+import itertools
 import json
 import socket
 import struct
@@ -21,20 +28,28 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
+PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
+KEEP_PREVIEW = 24
 SAVE_FRAMES_FOR = {"look", "reference", "depth"}
 
 
 class Hub:
     def __init__(self, record_root):
         self.lock = threading.Condition()
-        self.events = deque(maxlen=6000)       # (seq, json_str, event)
+        self.events = deque(maxlen=20000)      # (seq, json_str, event)
         self.seq = 0
         self.frames = OrderedDict()            # fid -> (mime, bytes)
         self.partial = {}                      # fid -> [chunks]
+        self.pframes = OrderedDict()           # idle-preview frames, separate small store
         self.record_root = Path(record_root) if record_root else None
         self.rec_run, self.rec_fh = None, None
         self.last_packet = 0.0
         self.stats = {"packets": 0, "events": 0, "frames": 0, "incomplete": 0}
+        self.run_state, self.run_last = "IDLE", 0.0
+
+    def run_active(self):
+        """A run is active while it keeps sending telemetry and hasn't said IDLE."""
+        return self.run_state != "IDLE" and time.time() - self.run_last < 3.0
 
     # --- ingest -----------------------------------------------------------------------------
     def packet(self, data):
@@ -56,9 +71,24 @@ class Hub:
                 ev = json.loads(data[1:])
             except ValueError:
                 return
+            self.run_last = time.time()
+            if ev.get("k") == "state":
+                self.run_state = ev.get("state", "IDLE")
+            elif ev.get("k") == "run":
+                self.run_state = "RUN"
             self.event(ev)
 
+    def get_frame(self, fid):
+        with self.lock:
+            return (self.pframes if fid >= PREVIEW_BASE else self.frames).get(fid)
+
     def _store_frame(self, fid, blob, mime=None):
+        if fid >= PREVIEW_BASE:
+            with self.lock:
+                self.pframes[fid] = (mime, blob)
+                while len(self.pframes) > KEEP_PREVIEW:
+                    self.pframes.popitem(last=False)
+            return
         with self.lock:
             self.frames[fid] = (mime, blob)
             while len(self.frames) > KEEP_FRAMES:
@@ -68,9 +98,9 @@ class Hub:
     def event(self, ev):
         fr = ev.get("frame")
         if fr:
-            with self.lock:
-                got = self.frames.get(fr["id"])
-                if got:
+            got = self.get_frame(fr["id"])
+            if got and fr["id"] < PREVIEW_BASE:
+                with self.lock:
                     self.frames[fr["id"]] = (fr.get("mime"), got[1])
             fr["ok"] = bool(got)
         self._record(ev)
@@ -82,7 +112,7 @@ class Hub:
         self.stats["events"] += 1
 
     def _record(self, ev):
-        if not self.record_root or ev.get("_replay"):
+        if not self.record_root or ev.get("_replay") or ev.get("k") in ("preview", "arm_state", "preview_status"):
             return
         run = ev.get("run")
         if run and run != self.rec_run:
@@ -109,15 +139,22 @@ class Hub:
             if evs[i][2].get("k") == "run":
                 start = i
                 break
-        out, last_watch = [], None
+        out, latest = [], {}
         for item in evs[start:]:
-            if item[2].get("k") == "watch":
-                last_watch = item
+            k = item[2].get("k")
+            if k == "watch":
+                latest["watch"] = item
+            elif k == "preview":
+                latest["preview:" + item[2].get("cam", "")] = item
+            elif k in ("arm_state", "preview_status"):
+                latest[k] = item
             else:
                 out.append(item)
-        if last_watch:
-            out.append(last_watch)
-        return sorted(out, key=lambda x: x[0])
+        for item in evs[:start]:                      # previews from before the run started still matter
+            k = item[2].get("k")
+            if k == "preview":
+                latest.setdefault("preview:" + item[2].get("cam", ""), item)
+        return sorted(out + list(latest.values()), key=lambda x: x[0])
 
     def wait(self, after, timeout=15.0):
         with self.lock:
@@ -155,6 +192,73 @@ def replay(hub, folder, speed):
         time.sleep(3)
 
 
+PREVIEW_IDS = itertools.count(PREVIEW_BASE)          # never collides with the run's frame ids
+
+
+async def preview_loop(hub, key_file, cams, fps):
+    """Idle preview: poll cameras + arm/gripper state while no run is active. Read-only."""
+    import viam.components.arm  # noqa: F401
+    import viam.components.camera  # noqa: F401
+    import viam.components.gripper  # noqa: F401
+    from viam.components.arm import Arm
+    from viam.components.camera import Camera
+    from viam.components.gripper import Gripper
+    from viam.proto.common import Pose, PoseInFrame
+    from viam.robot.client import RobotClient
+
+    def status(state, **kw):
+        hub.event({"k": "preview_status", "t": time.time(), "state": state, **kw})
+
+    while True:
+        try:
+            creds = json.loads(Path(key_file).read_text())
+            m = await RobotClient.at_address(creds["address"], RobotClient.Options.with_api_key(
+                api_key=creds["api_key"], api_key_id=creds["api_key_id"]))
+            arm, grip = Arm.from_robot(m, "arm"), Gripper.from_robot(m, "gripper")
+            handles = {c: Camera.from_robot(m, c) for c in cams}
+            status("live", fps=fps)
+            tick, paused = 0, False
+            while True:
+                if hub.run_active():
+                    if not paused:
+                        status("paused", reason="run active")
+                        paused = True
+                    await asyncio.sleep(0.25)
+                    continue
+                if paused:
+                    status("live", fps=fps)
+                    paused = False
+                t0 = time.perf_counter()
+                for name, cam in handles.items():
+                    if hub.run_active():                # a run started mid-poll: yield the cameras at once
+                        break
+                    tc = time.perf_counter()
+                    imgs, _ = await cam.get_images(filter_source_names=["color"] if name == "cam" else None)
+                    img = next((i for i in imgs if "jpeg" in i.mime_type), imgs[0])
+                    fid = next(PREVIEW_IDS)
+                    hub._store_frame(fid, img.data, img.mime_type)
+                    hub.event({"k": "preview", "t": time.time(), "cam": name, "rpc_ms": round(1000 * (time.perf_counter() - tc)),
+                               "frame": {"id": fid, "len": len(img.data), "mime": img.mime_type, "ok": True}})
+                if tick % 2 == 0:
+                    tcp, joints, gpos, holding = await asyncio.gather(
+                        m.transform_pose(PoseInFrame(reference_frame="gripper", pose=Pose(o_z=1)), "world"),
+                        arm.get_joint_positions(), grip.do_command({"get": True}), grip.is_holding_something())
+                    p = tcp.pose
+                    hub.event({"k": "arm_state", "t": time.time(),
+                               "tcp": [round(p.x, 1), round(p.y, 1), round(p.z, 1), round(p.o_x, 3), round(p.o_y, 3), round(p.o_z, 3), round(p.theta, 1)],
+                               "joints": [round(v, 1) for v in joints.values], "pos": gpos.get("pos"),
+                               "holding": holding.is_holding_something})
+                tick += 1
+                await asyncio.sleep(max(0.0, 1.0 / fps - (time.perf_counter() - t0)))
+        except Exception as e:
+            status("error", error=f"{type(e).__name__}: {e}"[:200])
+            try:
+                await m.close()
+            except Exception:
+                pass
+            await asyncio.sleep(5)
+
+
 def make_handler(hub):
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -177,8 +281,7 @@ def make_handler(hub):
                     fid = int(path.rsplit("/", 1)[1])
                 except ValueError:
                     return self._send(400, b"bad id", "text/plain")
-                with hub.lock:
-                    got = hub.frames.get(fid)
+                got = hub.get_frame(fid)
                 if not got:
                     return self._send(404, b"gone", "text/plain")
                 mime, blob = got
@@ -208,10 +311,13 @@ def make_handler(hub):
                     if not batch:
                         age = round(time.time() - hub.last_packet, 1) if hub.last_packet else -1
                         self.wfile.write(f"data: {{\"k\":\"ping\",\"age\":{age}}}\n\n".encode())
-                    watches = [b for b in batch if b[2].get("k") == "watch"]
+                    newest = {}
+                    for q, _, ev in batch:            # slow browser: only the newest frame per feed
+                        if ev.get("k") in ("watch", "preview", "arm_state"):
+                            newest[(ev["k"], ev.get("cam"))] = q
                     for q, js, ev in batch:
-                        if ev.get("k") == "watch" and watches and q != watches[-1][0]:
-                            continue                 # slow browser: only the newest watch frame
+                        if ev.get("k") in ("watch", "preview", "arm_state") and newest[(ev["k"], ev.get("cam"))] != q:
+                            continue
                         self.wfile.write(f"data: {js}\n\n".encode())
                     if batch:
                         last = batch[-1][0]
@@ -231,12 +337,19 @@ def main():
     ap.add_argument("--record", default=str(ROOT / "runs"), help="'' to disable recording")
     ap.add_argument("--replay", default=None, help="a runs/<run>/dash folder to replay")
     ap.add_argument("--speed", type=float, default=1.0)
+    ap.add_argument("--no-preview", action="store_true", help="never connect to the robot (telemetry only)")
+    ap.add_argument("--preview-fps", type=float, default=4.0)
+    ap.add_argument("--preview-cams", default="cam,overview-cam")
+    ap.add_argument("--key", default=str(ROOT / "api-key.json"))
     a = ap.parse_args()
     hub = Hub(a.record or None if not a.replay else None)
     if a.replay:
         threading.Thread(target=replay, args=(hub, a.replay, a.speed), daemon=True).start()
     else:
         threading.Thread(target=udp_loop, args=(hub, a.udp_host, a.udp_port), daemon=True).start()
+        if not a.no_preview and Path(a.key).exists():
+            threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps)),
+                             daemon=True).start()
     srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub))
     srv.daemon_threads = True
     print(f"dashboard: http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}  "

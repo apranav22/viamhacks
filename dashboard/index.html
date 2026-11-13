@@ -47,6 +47,7 @@ svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{colo
   <span class="kv">item <b id="item">–</b></span>
   <span class="kv">in state <b id="elapsed">–</b></span>
   <span class="sp"></span>
+  <span class="kv">feeds <b id="pv">–</b></span>
   <span class="kv">run <b id="run">–</b></span>
   <span class="kv"><span id="link" class="dot"></span><b id="linktxt">no telemetry</b></span>
 </header>
@@ -67,16 +68,19 @@ svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{colo
     <div class="p"><h2>Item &amp; grasp</h2><div id="meas" class="empty">No hover look yet.</div></div>
     <div class="p"><h2>Gripper</h2><div id="grip" class="empty">No gripper reading yet.</div></div>
   </section>
+  <section class="p c4"><h2>Overhead camera <span class="kv" id="ovsub"></span></h2>
+    <div class="view"><img id="ovimg" alt=""><svg id="ovov" viewBox="0 0 640 480" preserveAspectRatio="none"></svg></div></section>
   <section class="p c4"><h2>Table map (top view, world mm)</h2><svg id="map" viewBox="0 0 400 380"></svg></section>
-  <section class="p c8"><h2>Timeline <span class="kv">spans and moves, current and previous item</span></h2><svg id="tl" viewBox="0 0 900 230"></svg></section>
   <section class="p c4"><h2>Loop performance</h2><svg id="perf" viewBox="0 0 400 110"></svg><div class="grid2" id="perfkv" style="margin-top:8px"></div></section>
-  <section class="p c8"><h2>Items (judge log)</h2><table><thead><tr><th>#</th><th>result</th><th>shape</th><th>latency</th><th>recoveries</th><th>first motion</th><th>decision</th></tr></thead><tbody id="items"><tr><td colspan="7" class="empty">No items yet.</td></tr></tbody></table></section>
+  <section class="p c12"><h2>Timeline <span class="kv">spans and moves, current and previous item</span></h2><svg id="tl" viewBox="0 0 900 230" style="max-height:260px"></svg></section>
+  <section class="p c12"><h2>Items (judge log)</h2><table><thead><tr><th>#</th><th>result</th><th>shape</th><th>latency</th><th>recoveries</th><th>first motion</th><th>decision</th></tr></thead><tbody id="items"><tr><td colspan="7" class="empty">No items yet.</td></tr></tbody></table></section>
   <section class="p c12"><h2>Events</h2><div class="log" id="log"></div></section>
 </main>
 <script>
 const STATES=["WATCH","HOVER","LOOK","PICK","LIFT","HOME","RELEASE"];
 const $=id=>document.getElementById(id);
 let S;
+let PV={cams:{},arm:null,status:"–"};   // idle preview: survives run resets
 function reset(){S={state:"IDLE",stateT:Date.now()/1e3,item:null,times:{},tab:"live",watch:null,look:null,refId:null,depth:null,
   cycles:[],spans:[],moves:[],lat:[],perf:[],tele:null,lastPkt:0,map:{},grip:{},masks:[],live:false};}
 reset();
@@ -85,9 +89,10 @@ const f1=v=>v==null?"–":(+v).toFixed(1), f0=v=>v==null?"–":Math.round(+v);
 const tstr=t=>new Date(t*1000).toLocaleTimeString([], {hour12:false})+"."+String(Math.floor((t%1)*1000)).padStart(3,"0");
 
 /* ---- frames: newest-wins loader, so a slow browser never queues frames ---- */
-let loading=false,pending=null;
-function showFrame(id){ if(!id) return; if(loading){pending=id;return;} loading=true; $("cam").src="/frame/"+id; }
-$("cam").onload=$("cam").onerror=()=>{loading=false; if(pending){const p=pending;pending=null;showFrame(p);}};
+function loader(el){ let busy=false,pend=null,cur=null; const go=id=>{ if(!id||id===cur) return; if(busy){pend=id;return;} busy=true; cur=id; el.src="/frame/"+id; };
+  el.onload=el.onerror=()=>{busy=false; if(pend){const p=pend;pend=null;go(p);}}; return go; }
+const showFrame=loader($("cam")), showOv=loader($("ovimg"));
+const runActive=()=>S.state!=="IDLE"&&S.lastPkt&&Date.now()/1e3-S.lastPkt<3;
 async function showHeight(d){
   const r=await fetch("/frame/"+d.id); if(!r.ok) return; const b=new Uint8Array(await r.arrayBuffer());
   const [h,w]=d.shape, c=$("hm"); c.width=w; c.height=h; const ctx=c.getContext("2d"), im=ctx.createImageData(w,h);
@@ -113,7 +118,9 @@ function ovJaws(L){ if(!L||!L.jaw_px) return ""; const [[ax,ay],[bx,by]]=L.jaw_p
 function render(){
   let svg=`<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#64748b88" stroke-width="3"/></pattern></defs>`+ovMasks();
   const B=$("banner"); B.className="banner"; let sub="";
-  if(S.tab==="live"&&S.watch){const w=S.watch; showFrame(w.frame&&w.frame.id);
+  if(S.tab==="live"&&!runActive()&&PV.cams["cam"]){const c=PV.cams["cam"]; showFrame(c.frame&&c.frame.id);
+    sub=`idle preview · ${f0(c.rpc_ms)} ms frame`;}
+  else if(S.tab==="live"&&S.watch){const w=S.watch; showFrame(w.frame&&w.frame.id);
     const col=w.hand?"#ef4444":w.placed?"#22c55e":"#f59e0b";
     if(w.item) svg+=ovBlob(w.item,col,w.item.xy?`(${f0(w.item.xy[0])}, ${f0(w.item.xy[1])}) mm`:"");
     if(w.hand){B.className="banner hand";B.textContent="HAND IN VIEW";} else if(w.placed){B.className="banner placed";B.textContent="PLACED";} else if(w.item){B.className="banner wait";B.textContent="SETTLING";}
@@ -125,6 +132,10 @@ function render(){
   else if(S.tab==="height"&&S.depth){showHeight(S.depth); svg=""; sub="height above the table from depth (hover look)";}
   $("ov").innerHTML=svg; $("camsub").textContent=sub;
 }
+
+/* ---- overhead camera (idle preview; run frames once the pipeline sends them) ---- */
+function renderOv(){ const c=PV.cams["overview-cam"]; if(!c) return; showOv(c.frame&&c.frame.id);
+  $("ovsub").textContent=runActive()?"paused during the run":`live · ${f0(c.rpc_ms)} ms frame`; }
 
 /* ---- cycle chain ---- */
 function renderChain(){
@@ -152,11 +163,14 @@ function renderMeas(){ const L=S.look; if(!L||!L.m){return;} const m=L.m, g=L.gr
   <div class="m">length × width<b>${f1(m.length)} × ${f1(m.width)} mm</b></div><div class="m">long-axis yaw<b>${f0(m.yaw_long)}°</b></div>
   <div class="m">grasp: fingertips at<b>z ${f1(g.tip_z)} mm</b></div><div class="m">jaws close along<b>${f0(g.jaw_heading)}° · ${f1(g.expected_width)} mm</b></div>
   <div class="m">depth coverage<b>${f0(100*m.depth_frac)} %</b></div><div class="m">graspable<b class="${g.ok?"ok":"bad"}">${g.ok?"yes":"no · "+esc(g.reason||"")}</b></div></div>`;}
-function renderGrip(){ const G=S.grip; if(G.pos==null&&!G.cmd) return; const pos=G.pos??null;
+function renderGrip(){ const G=S.grip, A=PV.arm; if(!runActive()&&A){G.pos=A.pos; G.holding=A.holding;}
+  if(G.pos==null&&!G.cmd) return; const pos=G.pos??null;
   $("grip").className=""; $("grip").innerHTML=`<div style="display:flex;justify-content:space-between"><span class="kv">jaw position <b>${pos==null?"–":f0(pos)}</b> / 850 ${G.expected?`· expected ≈ <b>${f0(G.expected)}</b>`:""}</span>
   <span class="kv">${G.holding==null?"":G.holding?'<b class="ok">HOLDING</b>':'<b class="warn">EMPTY</b>'}</span></div>
   <div class="gauge"><div class="f" style="width:${pos==null?0:Math.min(100,pos/8.5)}%"></div>${G.expected?`<div class="x" style="left:${Math.min(100,G.expected/8.5)}%"></div>`:""}</div>
-  <span class="kv">last command <b>${esc(G.cmd||"–")}</b>${G.result?` · grasp <b class="${G.result.ok?"ok":"bad"}">${G.result.ok?"ok":"missed"}</b>`:""}</span>`;}
+  <span class="kv">last command <b>${esc(G.cmd||"–")}</b>${G.result?` · grasp <b class="${G.result.ok?"ok":"bad"}">${G.result.ok?"ok":"missed"}</b>`:""}</span>
+  ${A?`<div class="grid2" style="margin-top:8px"><div class="m">gripper TCP (world)<b>${f0(A.tcp[0])}, ${f0(A.tcp[1])}, ${f0(A.tcp[2])} mm · θ ${f0(A.tcp[6])}°</b></div>
+  <div class="m">joints (deg)<b style="font-size:13px">${A.joints.map(f0).join(", ")}</b></div></div>`:""}`;}
 
 /* ---- map ---- */
 const MX=(x)=>360-x*0.5, MY=(y)=>200-y*0.5;   // world x up, y left; 0.5 px/mm
@@ -165,6 +179,7 @@ function renderMap(){ const M=S.map; let s=`<rect x="0" y="0" width="400" height
   for(let y=-300;y<=300;y+=100){s+=`<line x1="${MY(y)}" y1="${MX(0)}" x2="${MY(y)}" y2="${MX(700)}" stroke="#16213d"/>`;}
   s+=`<rect x="${MY(383)}" y="${MX(619)}" width="${(383+297)*0.5}" height="${(619-112)*0.5}" fill="none" stroke="#334155" stroke-dasharray="5 4"/><text x="${MY(383)+4}" y="${MX(619)+13}" fill="#64748b" font-size="10">watch view (home)</text>`;
   s+=`<circle cx="${MY(0)}" cy="${MX(0)}" r="22" fill="#1e293b" stroke="#475569"/><text x="${MY(0)}" y="${MX(0)+4}" fill="#94a3b8" font-size="10" text-anchor="middle">base</text>`;
+  if(PV.arm){const a=PV.arm.tcp; s+=`<circle cx="${MY(a[1])}" cy="${MX(a[0])}" r="6" fill="#e2e8f0" opacity=".8"/><text x="${MY(a[1])+9}" y="${MX(a[0])+4}" fill="#cbd5e1" font-size="10">gripper z ${f0(a[2])}</text>`;}
   if(M.watch){s+=`<circle cx="${MY(M.watch[1])}" cy="${MX(M.watch[0])}" r="9" fill="none" stroke="#f59e0b" stroke-width="2"/>`;}
   if(M.hover){s+=`<path d="M${MY(M.hover[1])-8},${MX(M.hover[0])} h16 M${MY(M.hover[1])},${MX(M.hover[0])-8} v16" stroke="#93c5fd" stroke-width="2"/>`;}
   if(M.m){const m=M.m, r=Math.PI/180*m.yaw_long, hx=Math.cos(r)*m.length/2, hy=Math.sin(r)*m.length/2;
@@ -213,6 +228,9 @@ function log(ev,txt){ const d=document.createElement("div"); d.className="k-"+ev
 /* ---- event handling ---- */
 function onEvent(ev){
   if(ev.k==="ping"){ return; } if(ev.k==="backlog_done"){ renderAll(); return; }
+  if(ev.k==="preview"){ PV.cams[ev.cam]=ev; if(!backlog){ if(ev.cam==="cam"&&S.tab==="live") render(); if(ev.cam==="overview-cam") renderOv(); } return; }
+  if(ev.k==="arm_state"){ PV.arm=ev; if(!backlog){ renderGrip(); renderMap(); } return; }
+  if(ev.k==="preview_status"){ PV.status=ev.state+(ev.error?": "+ev.error:""); $("pv").textContent=ev.state==="live"?`live ${ev.fps} fps`:ev.state; $("pv").className=ev.state==="error"?"bad":ev.state==="live"?"ok":"warn"; if(ev.error) $("pv").title=ev.error; return; }
   S.lastPkt=Date.now()/1e3;
   switch(ev.k){
     case "run": reset(); S.live=ev.live; S.masks=(ev.config||{}).MASK_RECTS||[]; $("run").textContent=ev.run; $("mode").textContent=ev.live?"LIVE MOTION":"DRY RUN"; $("mode").className="badge "+(ev.live?"live":"dry");
@@ -246,7 +264,7 @@ function renderAll(k){ if(k==="backlog_done"||!k) backlog=false;
   if(!k||k==="watch"||k==="look"||k==="reference"||k==="depth"||k==="run") render();
   renderChain(); if(!k||k==="latency"||k==="run") renderLat(); if(!k||k==="look") {renderMeas(); renderMap();} if(k==="watch"||k==="move") renderMap();
   if(!k||["gripper","gripper_cmd","grasp_result","run"].includes(k)) renderGrip(); if(!k||k==="span"||k==="move"||k==="run") renderTL();
-  if(!k||k==="watch"||k==="telemetry") renderPerf(); if(!k||k==="cycle") renderItems(); }
+  if(!k||k==="watch"||k==="telemetry") renderPerf(); if(!k||k==="cycle") renderItems(); if(!k) renderOv(); }
 function connect(){ backlog=true; const es=new EventSource("/events");
   es.onmessage=m=>{ try{ const ev=JSON.parse(m.data); if(ev.k==="ping"){S.lastPing=ev.age;} onEvent(ev); if(ev.k==="backlog_done") backlog=false; }catch(e){console.error(e);} };
   es.onerror=()=>{ $("linktxt").textContent="dashboard server down"; }; }
