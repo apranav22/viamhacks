@@ -35,18 +35,23 @@ from viam.components.camera import Camera
 from viam.proto.common import Pose, PoseInFrame
 
 from overview import Watcher, align, guarded, load_model
-from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Mover, cam_to_world, ctrl_c_raises, grasp_height,
+from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, box, Mover, cam_to_world, ctrl_c_raises, grasp_height,
                       grasp_theta, gripper_theta, halt, held, now_iso, scan, table_height, tcp_pose, world_state)
 from grasp import GOOD, classify, first_strategy, next_strategy
 from screws import WristView, color_frame, detect
 from station import connect
+from vh.kinematics import load_obstacles
 from vh.probe_tel import ProbeTel
+from viam.proto.common import GeometriesInFrame, WorldState
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
 RELOOK_MAX_SHIFT_MM = 60  # at hover, the nearest item within this distance is the same item
 RELOOK_MIN_SHIFT_MM = 3   # smaller shifts aren't worth a correction
 RELOOK_MIN_TURN_DEG = 5   # nor smaller jaw turns
 SMALL_MOVE_MM = 10
+# Ali's pick zone on the bare table (sort.ZONE): parts are picked only here. The wide pick_region in poses.json also
+# covers the cardboard bin; a part lying in it must not become the target. --wide restores the old region.
+PICK_ZONE = {"x_min": 220, "x_max": 450, "y_min": 260, "y_max": 395}
 
 S45 = math.sqrt(0.5)
 VIEWS = [  # name, gripper pointing direction (orientation vector), extra theta (deg)
@@ -225,6 +230,14 @@ async def look_color(machine, cam, poses: dict, table_z: float) -> SimpleNamespa
     return SimpleNamespace(items=sorted(items, key=lambda it: -it.pixels), table_z=table_z, rot=rot, t=t, k=k, jpeg=jpeg)
 
 
+def workcell(table_z: float) -> WorldState:
+    """Obstacles for planned moves: table, walls, ceiling (world_state) plus the webcam tripod, lamp and cardboard
+    box from config/obstacles.json, as sort.py and AGENTS.md require."""
+    extra = [box(n, *c, *d) for n, (c, d) in load_obstacles(table_z=table_z)[4:]]
+    return WorldState(obstacles=list(world_state(table_z).obstacles)
+                      + [GeometriesInFrame(reference_frame="world", geometries=extra)])
+
+
 async def relook(probe: Probe, machine, cam, poses: dict, item, table_z: float, attempt: int):
     """Look again (from wherever the arm is) and return (item, look): the item nearest the last
     estimate, whose position and angle replace the old ones; the old item if nothing is near."""
@@ -259,7 +272,7 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
         probe.note(step="no item", table_z=s.table_z)
         return
     item = s.items[0]
-    mover.ws = world_state(s.table_z)
+    mover.ws = workcell(s.table_z)
     theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)
     probe.tel.scan(s, item, "survey scan", theta, grasp_z, jaw, g)
@@ -354,6 +367,9 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     print(f"  picked in {time.perf_counter() - t_pick:.1f} s, {attempt} attempt(s)")
 
     present_z = s.table_z + PRESENT_HEIGHT_MM
+    if args.pick_only:
+        await place(probe, mover, poses, args, item, grasp_z, above, base_theta)
+        return
     await probe.step("to present height (planner)",
                      lambda: mover.to(item.x, item.y, present_z, theta, "to present height"))
 
@@ -369,6 +385,12 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
                      lambda: mover.to(item.x, item.y, present_z, theta, "point down"), fatal=False)
 
     # ---- 3. place
+    await place(probe, mover, poses, args, item, grasp_z, above, base_theta)
+
+
+async def place(probe: Probe, mover: Mover, poses: dict, args, item, grasp_z: float, above: float, base_theta: float):
+    """Over the destination (planner), straight down, open, straight up. --dest back: where it was picked."""
+    g = poses["grasp"]
     dest = poses["destinations"].get(args.dest) if args.dest != "back" else None
     if args.dest != "back" and dest is None:
         print(f"  destination {args.dest!r} not recorded (python record_pose.py {args.dest}); placing back")
@@ -385,6 +407,8 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
 async def main(args):
     with open(POSES_PATH) as f:
         poses = json.load(f)
+    if not args.wide:
+        poses["pick_region"] = dict(PICK_ZONE)
     os.makedirs(LOG_DIR, exist_ok=True)
 
     ctrl_c_raises()
@@ -440,6 +464,8 @@ if __name__ == "__main__":
     p.add_argument("--small-moves", type=int, default=0, help="time N direct 10 mm moves at hover")
     p.add_argument("--snap-cams", default="cam,overview-cam",
                    help="comma-separated cameras to save a frame from after every step ('' = none), e.g. overview-cam,cam")
+    p.add_argument("--pick-only", action="store_true", help="pick, check the grasp, put it back: skip the tilt views")
+    p.add_argument("--wide", action="store_true", help="pick from poses.json's whole pick_region, not Ali's pick zone")
     p.add_argument("--overview", action="store_true", help="close the loop with the overview-cam: wait until "
                    "the item is still, servo the claws over it, stop the descent if it moves (run overview.py calibrate first)")
     p.add_argument("--closed", action="store_true", help="with --touch: measure with the fingers closed")
