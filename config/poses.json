@@ -29,6 +29,8 @@
     "_table_z": "world z of the table top; the median of every scan except one (+1.5) on 2026-11-13",
     "empty_below_pos": 30,
     "_empty_below_pos": "finger position (0-850) under which the gripper closed on nothing; a held screw stopped at ~700",
+    "retries": 2,
+    "_retries": "sort.py: grasp attempts = 1 + retries, jaws +90 deg after each miss (Ali's loop). motion_probe.py uses max_attempts and grasp.py instead",
     "max_attempts": 5,
     "rescan_after": 3,
     "lift_check_mm": 20,

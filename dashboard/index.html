@@ -164,7 +164,7 @@ const drawn={};
 function drawCrop(cv,fid,crop){ const key=fid+":"+crop.join(","); if(drawn[cv.id]===key) return; drawn[cv.id]=key;
   const im=new Image(); im.onload=()=>{ const ctx=cv.getContext("2d"), [x0,y0,x1,y1]=crop, w=x1-x0, h=y1-y0, s=Math.min(cv.width/w,cv.height/h);
     ctx.fillStyle="#000"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(im,x0,y0,w,h,(cv.width-w*s)/2,(cv.height-h*s)/2,w*s,h*s); }; im.src="/frame/"+fid; }
-function renderStrip(){ $("insn").textContent=S.insItem??"–"; const keys=["top",...S.viewOrder], D=S.dec&&S.dec.n===S.insItem?S.dec:null;
+function renderStrip(){ $("insn").textContent=(S.insItem??"–")+(S.pose?" · "+S.pose:""); const keys=["top",...S.viewOrder], D=S.dec&&S.dec.n===S.insItem?S.dec:null;
   const host=$("strip"); if(host.children.length!==keys.length||host.dataset.k!==keys.join()){ host.dataset.k=keys.join();
     host.innerHTML=keys.map(k=>`<div class="tile" id="tile-${k}"><div class="nm"><span>${k==="top"?"top · wrist":esc(k)}</span><span id="tv-${k}"></span></div><canvas id="tc-${k}" width="200" height="250"></canvas><div class="sc" id="ts-${k}">–</div></div>`).join(""); for(const k in drawn) delete drawn[k]; }
   keys.forEach((k,i)=>{ const I=S.ins[k], t=$("tile-"+k), cv=$("tc-"+k);
@@ -280,7 +280,7 @@ function onEvent(ev){
     case "run": reset(); STATES=ev.states||DEFAULT_STATES; if(ev.views) S.viewOrder=ev.views; S.mode=ev.release; $("cyclesub").textContent=ev.cmd+(ev.type&&ev.type!=="unknown"?` · ${ev.label} ${ev.type}`:""); S.live=ev.live; S.masks=(ev.config||{}).MASK_RECTS||[]; $("run").textContent=ev.run; $("mode").textContent=ev.live?"LIVE MOTION":"DRY RUN"; $("mode").className="badge "+(ev.live?"live":"dry");
       $("log").innerHTML=""; log(ev,`run started: ${ev.cmd}${ev.live?" LIVE":" (dry run)"}${ev.step?" step":""} release=${ev.release}`); break;
     case "connected": log(ev,`connected in ${ev.ms} ms · home ${JSON.stringify(ev.home_deg)}`); break;
-    case "state": if(ev.state==="PICK"&&ev.item!==S.insItem){S.ins={}; S.insItem=ev.item; S.map.m=null; S.map.g=null;} S.state=ev.state; S.stateT=ev.t; if(ev.item!=null){S.item=ev.item; (S.times[ev.item]=S.times[ev.item]||{})[ev.state]=ev.t;}
+    case "state": if(ev.state==="PICK"&&ev.item!==S.insItem){S.ins={}; S.insItem=ev.item; S.map.m=null; S.map.g=null;} if(ev.views) S.viewOrder=ev.views; if(ev.pose) S.pose=ev.pose; S.state=ev.state; S.stateT=ev.t; if(ev.item!=null){S.item=ev.item; (S.times[ev.item]=S.times[ev.item]||{})[ev.state]=ev.t;}
       if((ev.state==="WATCH"||ev.state==="SURVEY")&&S.tab!=="live") setTab("live"); if(ev.state==="LOOK") {} log(ev,`→ ${ev.state}${ev.item!=null?" (item "+ev.item+(ev.attempt>1?", attempt "+ev.attempt:"")+")":""}`); break;
     case "watch": S.watch=ev; if(ev.item&&ev.item.xy) S.map.watch=ev.item.xy; S.perf.push({t:ev.t,rpc:ev.rpc_ms,proc:ev.proc_ms}); if(S.perf.length>300) S.perf.shift(); break;
     case "reference": S.refId=ev.frame&&ev.frame.id; log(ev,`empty-table reference captured${ev.blobs&&ev.blobs.length?` (${ev.blobs.length} fixed object(s) ignored)`:""}`); break;

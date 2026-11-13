@@ -47,6 +47,14 @@ the TABLE); switched to a fixed pick zone on the bare table x 220-450, y 260-395
 open (a nut was carried off once). Warning chime + "Robot arm moving" before every run, ping before each pick/place.
 ARM: released (at the watch pose, gripper open).
 
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:40]
+ARM: taken. Upright parts: depth height check at a high hover, grasp halfway up, side views pointing down. Collect run: taped thin socket screw, starting upright.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:47]
+Collect run 152536: 5 picks of a short taped hex bolt standing on its threads (was labelled socket_thin_long; relabelled
+hex_bolt_short in decisions.jsonl). Upright threshold 40 -> 15 mm: the 22 mm bolt was gripped as 'lying' and the webcam
+only saw its head. ARM: released (watch pose, open); team is arranging parts on the table.
+
 [claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/local-work · 15:30]
 No arm motion this session (read-only probes and dry runs only; the arm was at the watch pose, someone else driving).
 Done: grasp recovery (`grasp.py`, `tests/test_grasp.py`): after the close, lift `lift_check_mm` (20) and classify by
@@ -60,3 +68,9 @@ the current y-axis `JawFrame` and `vh.kinematics.ik` (0 clamps parts end to end;
 Fixed: the 9921ca9 merge had dropped motion_probe's ProbeTel setup while keeping three tel calls (crashed at start).
 Not done: none of the retry path has run on the arm. Gripper force: `get_gripper_torque` returns `{}` here, so not used.
 Next: live `motion_probe.py --live --step` and `sort.py --mode collect` on a bolt (not a nut) to see each outcome once.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/local-work · 15:55]
+Merged ali/pipeline (b01706b upright parts, 6a3a607 collect drops) into pranav/local-work; on conflicts Ali's side won
+(operator's call). So **sort.py is Ali's version**: its pick() keeps Ali's retry (1 + `retries`, jaws +90° per miss,
+held = pos > 30 after the full lift), not grasp.py; the 15:30 entry's "wired into sort.py" no longer holds.
+`config/poses.json` gets `retries: 2` back for it. grasp.py stays in motion_probe.py; adopting it in sort.py is Ali's call.

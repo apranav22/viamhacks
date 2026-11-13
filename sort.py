@@ -16,8 +16,7 @@ One cycle:
 Moves between known poses are joint moves to recorded / IK-solved joint vectors (no motion planner: the planner took
 4-7 s for these legs and picked wrapped joint configurations), each checked against the workcell obstacles first
 (vh/kinematics.py: forward kinematics from the arm's own URDF). Descend / lift are Pranav's straight moves; grasp
-height, jaw direction and held check come from pipeline.py and config/poses.json unchanged; the grasp check and
-retry strategy (what to change after a miss, a wrong clamp or a slip) from grasp.py.
+height, jaw direction, held check and retries come from pipeline.py and config/poses.json unchanged.
 
 Every stage is sent to the dashboard as UDP telemetry (vh/telemetry.py: non-blocking, measured in microseconds).
 Every decision is written to runs/<run>/decisions.jsonl with ms timestamps (the judge log).
@@ -46,7 +45,6 @@ from viam.services.generic import Generic
 
 from viam.proto.common import GeometriesInFrame, WorldState
 from viam.proto.component.arm import JointPositions
-from grasp import GOOD, classify, expected_pos, first_strategy, next_strategy
 from pipeline import Mover, box, cam_to_world, grasp_height, held, world_state
 from screws import WristView, detect
 from station import connect
@@ -63,10 +61,17 @@ LIFT_Z = 280.0                      # TCP height before swinging to the checkpoi
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
 VIEW_ORDER = ["front", "yaw-20", "yaw+35", "pitch-25"]   # this order keeps every leg clear of the box
 VIEW_J = {k: flip(v["joints_deg"]) for k, v in CP["views"].items()}   # wrist-flipped: j4 near 0, no 180 deg wrist spin
-GOOD_TCP = (470.0, -120.0, 260.0)   # over the far (good) compartment, pointing down
+GOOD_TCP = (470.0, -120.0, 260.0)
+# Upright parts hang in line with the gripper: end face first (pointed at the lens), then the side all round with the
+# gripper pointing down and joint 6 turned 0 / +120 / -120. Ends at a pose whose path to the good box clears the divider.
+_D = ik(np.array([285.0, -150.0, 300.0]), axis=(0, 0, -1), seed=VIEW_J["front"])[0]
+UPRIGHT_J = {"end": VIEW_J["front"], "side0": _D, "side+120": _D[:5] + [_D[5] + 120], "side-120": _D[:5] + [_D[5] - 120]}
+UPRIGHT_ORDER = ["end", "side0", "side+120", "side-120"]   # over the far (good) compartment, pointing down
 PM = np.array(CP["webcam"]["P_world_to_px"])
 STABLE_MM, STABLE_DEG = 3.0, 8.0
-ZONE = {"x_min": 220, "x_max": 450, "y_min": 260, "y_max": 395}   # pick zone on the bare table (kit storage is past y 400)
+STANDING_MM = 15                    # taller than this: upright (a flat nut is 8-10 mm; a short bolt on its end is 22 mm)
+HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or screw upright): depth needs >~20 cm range
+ZONE = {"x_min": 220, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
 TAPE_FRAC = 0.02                    # share of the part crop that is tape-blue to call it "known: tape"
@@ -183,6 +188,7 @@ class Sorter:
         self.q = None                 # last known joints
         self.n = 0
         self.good_j = ik(np.array(GOOD_TCP), seed=VIEW_J["front"])[0]
+        self.good_j_up = ik(np.array(GOOD_TCP[:2] + (300.0,)), seed=UPRIGHT_J["side-120"])[0]   # hanging part clears the divider
         self.view = None              # WristView at the watch pose (fixed: computed once)
         self.pad = dict(PAD)          # replaced by the pad found in the first watch frame
         extra = [box(n, *c, *d) for n, (c, d) in self.obs[4:]]     # tripod, lamp, box (for the one planner move)
@@ -313,31 +319,50 @@ class Sorter:
             x0, y0, x1, y1 = new[4]
             tape = tape_fraction(rgb[max(0, y0 - 6):y1 + 6, max(0, x0 - 6):x1 + 6])
         (self.idir / f"top_{attempt}.jpg").write_bytes(jpg)
+        self.meta.setdefault("top", {})[f"top_{attempt}"] = {
+            "bbox": list(new[4]) if new else None, "xy": [round(new[0], 1), round(new[1], 1)] if new else None,
+            "yaw_world": round(new[3], 1) if new else None, "pixels": new[2] if new else None,
+            "cam_R": np.round(rot, 5).tolist(), "cam_t": np.round(t, 2).tolist()}
         self.tel.emit("look", frame=jpg, n=self.n, label=f"hover look {attempt}", item=self.item_px(new, view) if new else None,
                       m={"x": new[0], "y": new[1], "yaw_long": new[3], "height": 10} if new else None, tape=tape,
                       shape=self.args.type, grasp={"jaw_heading": heading % 180, "tip_z": TZ + G["min_table_clearance_mm"], "ok": True})
         return new, tape
 
+    async def depth_look(self, xy):
+        """One color+depth frame from hover: is the part near xy standing up? Returns (height_mm, xy_of_upper_half)
+        or (None, None) without depth. Color alone can't tell an upright screw from a flat nut, and puts an upright
+        part's top ~20 mm off (it isn't on the table plane), so standing parts are located from depth points."""
+        imgs, _ = await self.cam.get_images()
+        dimg = next((i for i in imgs if i.name == "depth"), None)
+        if dimg is None:
+            return None, None
+        D = np.asarray(dimg.bytes_to_depth_array(), dtype=float)
+        k = (await self.cam.get_properties()).intrinsic_parameters
+        rot, t = await cam_to_world(self.m)
+        h, w = D.shape
+        u, v = np.meshgrid(np.arange(w), np.arange(h))
+        P = np.stack([(u - k.center_x_px) * D / k.focal_x_px, (v - k.center_y_px) * D / k.focal_y_px, D], -1) @ rot.T + t
+        sel = (D > 0) & (np.hypot(P[..., 0] - xy[0], P[..., 1] - xy[1]) < 45) & (P[..., 2] > TZ + 6)
+        pts = P[sel]
+        if len(pts) < 25:
+            return 0.0, None
+        top = float(np.percentile(pts[:, 2], 95))
+        upper = pts[pts[:, 2] > TZ + 0.5 * (top - TZ)]
+        self.tel.emit("note", step="depth look", height=round(top - TZ, 1), points=int(len(pts)),
+                      xy=[round(float(c), 1) for c in upper[:, :2].mean(0)])
+        return top - TZ, upper[:, :2].mean(0)
+
     async def pick(self, item):
-        """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command.
-        Each grasp is checked after a short lift (grasp.classify: good / empty / wrong / slipped, from the finger
-        position against the part's width) and the next attempt changes what most likely failed
-        (grasp.next_strategy): lower + slower after a miss or a slip, jaws turned 90 deg after a wrong clamp, and
-        every rescan_after failures back to the watch pose to find the part again."""
+        """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command."""
         self.state("PICK")
         t_cmd = None
-        strat = first_strategy(G)
-        for attempt in range(1, G["max_attempts"] + 1):
-            if strat.rescan:
-                self.tel.emit("recovery", level="L2", what=f"{attempt - 1} failed grasps: back to watch to find the part again")
-                await self.jmove(WATCH_J, f"rescan {attempt}", holding=False)
-                found, _, _, _ = await self.watch()
-                if found is None:
-                    break
-                item = found
-                self.state("PICK")
-            heading = item[3] + G["jaw_offset_deg"] + strat.extra_deg
-            q, err, _ = ik(np.array([item[0], item[1], HOVER_Z]), seed=self.q or WATCH_J, jaw_heading_deg=heading)
+        theta_extra = 0.0
+        self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)
+        squat = round_part(item)
+        hz = HOVER_HIGH_Z if squat else HOVER_Z
+        for attempt in range(1, 2 + G["retries"]):
+            heading = item[3] + G["jaw_offset_deg"] + theta_extra
+            q, err, _ = ik(np.array([item[0], item[1], hz]), seed=self.q or WATCH_J, jaw_heading_deg=heading)
             if attempt == 1:
                 sound("Ping")
             t = await self.jmove(q, f"hover {attempt}", holding=False)
@@ -352,59 +377,70 @@ class Sorter:
             shift = math.dist(new[:2], item[:2])
             turn = abs((new[3] - item[3] + 90) % 180 - 90)
             item = new
+            height = None
+            if squat and attempt == 1:
+                height, dxy = await self.depth_look(item[:2])
+                print(f"  height from depth: {height if height is None else round(height)} mm")
+                if height and height > STANDING_MM and dxy is not None:
+                    self.upright = height
+                    item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
+                    shift = 99.0
+                    self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
             if shift > 2.0 or turn > 4.0:
-                heading = item[3] + G["jaw_offset_deg"] + strat.extra_deg
-                q, _, _ = ik(np.array([item[0], item[1], HOVER_Z]), seed=self.q, jaw_heading_deg=heading)
+                heading = item[3] + G["jaw_offset_deg"] + theta_extra
+                q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
                 await self.jmove(q, f"aim {attempt}", holding=False)
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
-            await self.mv.set_finger_speed(strat.speed)
-            width = item[6] if len(item) > 6 else None
-            gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G, strat.clearance_mm)   # look_color's lying-part height
-            print(f"  attempt {attempt}/{G['max_attempts']}: jaw +{strat.extra_deg:.0f}, tips {strat.clearance_mm:.1f} mm, "
-                  f"speed {strat.speed}, part {width or 0:.1f} mm wide", flush=True)
+            # lying: closed tips 2 mm above the table; standing: halfway up (pipeline.grasp_height, Pranav's rule)
+            gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G)
+            if self.upright:                                         # Pranav's halfway rule, for any upright part
+                gz = TZ + self.upright / 2 + G["tcp_to_tip_mm"]
+            self.pose = "upright" if self.upright else "lying"
+            if self.upright:
+                self.upright = (gz - G["tcp_to_tip_mm"]) - TZ      # what hangs below the tips once lifted
             await self.straight(item[0], item[1], gz, f"descend {attempt}")
             with self.tel.span(f"grab {attempt}", phase="grab", item=self.n):
                 pos = await self.mv.grab()
             self.state("LIFT")
-            await self.straight(item[0], item[1], gz + G["lift_check_mm"], f"lift check {attempt}")
+            await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}")
             pl = await self.mv.finger_pos()
-            outcome, why = classify(pos, pl, width, G)
-            ok = outcome == GOOD
+            ok = held(pl, G)
             self.tel.emit("gripper", pos=pl, holding=ok)
-            self.tel.emit("grasp_result", n=self.n, ok=ok, pos=pl, pos_closed=pos, holding=ok, attempt=attempt,
-                          outcome=outcome, why=why, expected_pos=round(expected_pos(width)) if width else None,
-                          extra_deg=strat.extra_deg, clearance_mm=strat.clearance_mm, speed=strat.speed)
-            print(f"  attempt {attempt}: {outcome}: {why}", flush=True)
+            self.tel.emit("grasp_result", n=self.n, ok=bool(ok), pos=pl, holding=ok, attempt=attempt, expected_pos=None)
             if ok:
-                await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}")
-                await self.mv.set_finger_speed(G["finger_speed"])
                 self.grasp_z = gz
                 return True, item, t_cmd
             with self.tel.span("open", phase="pick", item=self.n):
                 await self.release()
-            await self.straight(item[0], item[1], HOVER_Z, f"recover {attempt}")
-            strat = next_strategy(strat, outcome, attempt, G)
-            self.tel.emit("recovery", level="L1", what=f"grasp {attempt} {outcome} ({why}): next {strat}")
-        await self.mv.set_finger_speed(G["finger_speed"])
+            theta_extra += 90.0
+            self.tel.emit("recovery", level="L1", what=f"missed grasp {attempt}: retry with the jaws turned 90 deg")
         return False, item, t_cmd
 
     async def inspect(self):
         """Webcam views at the checkpoint. Returns the decision (sort mode decides after every view)."""
-        self.state("INSPECT")
         scores = {}
         decision, reason, at = None, None, None
         if self.args.mode == "sort" and self.top_tape is not None and self.top_tape > TAPE_FRAC:
             # decided from the hover look; still go to the first view: it is over the reject compartment
             decision, reason, at = "reject", f"known: tape (top face, {100 * self.top_tape:.1f}% of part)", "top"
-        for name in VIEW_ORDER:
-            await self.jmove(VIEW_J[name], f"view {name}", holding=True)
+        hold = self.upright or True
+        order = UPRIGHT_ORDER if self.upright else VIEW_ORDER
+        vj = UPRIGHT_J if self.upright else VIEW_J
+        self.state("INSPECT", views=order, pose=self.pose)
+        for name in order:
+            try:
+                await self.jmove(vj[name], f"view {name}", holding=hold)
+            except RuntimeError as e:              # path blocked for this part: skip the view, keep going
+                self.tel.emit("recovery", level="L1", what=f"view {name} skipped: {e}")
+                print(f"  view {name} skipped: {e}")
+                continue
             t0 = time.perf_counter()
             jpg = await self.web_jpeg()
             ms = (time.perf_counter() - t0) * 1000
-            p, z = fk_tcp(VIEW_J[name])
-            u, v = project(p + z * 20)
+            p, z = fk_tcp(vj[name])
+            u, v = project(p + z * (20 + 0.5 * self.upright))
             box = [int(max(0, u - 260)), int(max(0, v - 330)), int(min(1920, u + 260)), int(min(1080, v + 330))]
             crop = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))[box[1]:box[3], box[0]:box[2]]
             tape = tape_fraction(crop)
@@ -412,7 +448,10 @@ class Sorter:
             Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
             anomaly = None            # PatchCore score goes here once trained (per type, per view)
             scores[name] = {"tape": round(tape, 4), "anomaly": anomaly, "frame_ms": round(ms)}
+            self.meta.setdefault("views", {})[name] = {"crop_box": box, "joints_deg": [round(v, 2) for v in vj[name]],
+                                                       "tcp": [round(float(c), 1) for c in p], "tool_axis": [round(float(c), 3) for c in z]}
             jaw = await self.mv.finger_pos()
+            self.meta["views"][name]["jaw"] = jaw
             self.tel.emit("view", frame=jpg, n=self.n, view=name, crop=box, tape=tape, anomaly=anomaly, frame_ms=round(ms), jaw=jaw)
             if not held(jaw, G):
                 self.tel.emit("recovery", level="L2", what=f"part dropped during view {name}")
@@ -424,8 +463,31 @@ class Sorter:
         if self.args.mode == "collect":
             return "collect", self.args.label, None, scores
         if not decision:
-            decision, reason, at = "good", "no tape in any view; anomaly model not loaded yet", VIEW_ORDER[-1]
+            decision, reason, at = "good", "no tape in any view; anomaly model not loaded yet", order[-1]
         return decision, reason, at, scores
+
+    async def capture_refs(self):
+        """Every webcam view with the EMPTY gripper (fingers open): the fixed background each view's part mask is
+        differenced against (config/webcam_refs/<view>.jpg). The fingers close to the part's width when holding, so
+        the mask also ignores the finger region (known from the projected TCP)."""
+        out = ROOT / "config" / "webcam_refs"
+        out.mkdir(exist_ok=True)
+        self.state("REFS")
+        if await self.mv.finger_pos() < 780:
+            await self.release()
+        for vj, order in ((VIEW_J, VIEW_ORDER), (UPRIGHT_J, UPRIGHT_ORDER)):
+            for name in order:
+                try:
+                    await self.jmove(vj[name], f"ref {name}", holding=False)
+                except RuntimeError as e:
+                    print(f"  ref {name} skipped: {e}")
+                    continue
+                jpg = await self.web_jpeg()
+                (out / f"{name}.jpg").write_bytes(jpg)
+                self.tel.emit("view", frame=jpg, n=0, view=name, crop=[0, 0, 1920, 1080], tape=0.0, anomaly=None, frame_ms=0,
+                              jaw=await self.mv.finger_pos())
+        await self.jmove(WATCH_J, "return", holding=False)
+        print(f"  empty-gripper references -> {out}")
 
     async def place_back(self):
         """Collect mode: put the part on the pad at a new random spot and angle."""
@@ -435,9 +497,13 @@ class Sorter:
         x = random.uniform(r["x_min"] + 40, r["x_max"] - 40)
         y = random.uniform(r["y_min"] + 30, r["y_max"] - 30)
         q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=random.uniform(0, 180))
-        await self.jmove(q, "over pad", holding=True)
-        await self.straight(x, y, self.grasp_z + 3, "lower")
-        with self.tel.span("release", phase="place", item=self.n):
+        await self.jmove(q, "over pad", holding=self.upright or True)
+        # set it down (upright parts stay upright) or let go 20-35 mm up so it lands on a random face / tips over
+        how = random.choice(["set", "drop", "drop"]) if not self.args.set_only else "set"
+        drop = 3.0 if how == "set" else random.uniform(20, 35)
+        self.meta["placed_next"] = {"x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
+        await self.straight(x, y, self.grasp_z + drop, "lower")
+        with self.tel.span(f"release ({how})", phase="place", item=self.n):
             await self.release()
         await self.straight(x, y, HOVER_Z, "retreat")
 
@@ -445,6 +511,7 @@ class Sorter:
         self.n += 1
         self.idir = self.dir / f"item_{self.n:03d}"
         self.idir.mkdir()
+        self.meta = {"item": self.n, "label": self.args.label, "type": self.args.type, "mode": self.args.mode}
         self._watch_start = time.time()
         item, t_app, t_stable, watch_jpg = await self.watch()
         if item is None:
@@ -469,7 +536,7 @@ class Sorter:
         decision, reason, at, scores = await self.inspect()
         t_dec = time.time()
         rec.update(decision=decision, reason=reason, decided_at_view=at, scores=scores, t_decided=iso(t_dec),
-                   top_tape=self.top_tape)
+                   top_tape=self.top_tape, pose=self.pose, height_mm=round(self.upright, 1) if self.upright else None)
         if self.args.mode == "collect":
             rec.update(label=self.args.label, type=self.args.type)
         if self.args.mode == "sort":
@@ -482,7 +549,7 @@ class Sorter:
                 await self.release()
         elif decision == "good":
             self.state("DROP", decision="good")
-            await self.jmove(self.good_j, "to good", holding=True)
+            await self.jmove(self.good_j_up if self.upright else self.good_j, "to good", holding=self.upright or True)
             with self.tel.span("release (good)", phase="drop", item=self.n):
                 await self.release()
         elif decision == "collect":
@@ -496,6 +563,9 @@ class Sorter:
 
     def finish(self, rec):
         self.judge.write(json.dumps(rec) + "\n")
+        self.meta.update(pose=getattr(self, "pose", None), height_mm=rec.get("height_mm"), decision=rec.get("decision"),
+                         grasp_tcp_z=getattr(self, "grasp_z", None))
+        (self.idir / "meta.json").write_text(json.dumps(self.meta, indent=1, default=float))
         self.tel.emit("cycle", item=self.n, result=rec["decision"], decision=f'{rec["decision"]}: {rec["reason"]}',
                       latency_ms=rec["latency_ms"], recoveries=0, t_first_motion=rec["t_first_motion"], shape=self.args.type,
                       cycle_s=rec.get("cycle_s"), scores=rec.get("scores"))
@@ -519,6 +589,8 @@ class Sorter:
             wp, _ = fk_tcp(WATCH_J)
             await self.mv.to(float(wp[0]), float(wp[1]), float(wp[2]), 0, "to watch pose (planner)")
             await self.jmove(WATCH_J, "watch (exact joints)", holding=False)
+        if a.refs:
+            await self.capture_refs()
         count = a.reps if a.mode == "collect" else a.items
         try:
             for _ in range(count):
@@ -537,6 +609,8 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
+    p.add_argument("--set-only", action="store_true", help="collect: always set the part down gently (no drops)")
+    p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
     ik(np.array([300.0, 300.0, 200.0]))          # warm up scipy (first call ~0.4 s)
