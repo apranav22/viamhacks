@@ -25,11 +25,11 @@ from datetime import datetime
 
 import numpy as np
 
-from pipeline import config as C
-from pipeline import perception as P
-from pipeline.geometry import down_pose, theta_for_jaw_heading
-from pipeline.station import Station
-from pipeline.telemetry import Telemetry
+from vh import config as C
+from vh import perception as P
+from vh.geometry import down_pose, theta_for_jaw_heading
+from vh.station import Station
+from vh.telemetry import Telemetry
 
 
 def iso(t):
@@ -233,7 +233,7 @@ async def main(args):
     run_dir.mkdir(parents=True, exist_ok=True)
     tel = Telemetry(C.TELEMETRY_HOST, C.TELEMETRY_PORT, enabled=C.TELEMETRY and not args.no_telemetry, run_id=run_id)
     if args.fake:
-        from pipeline.fake import FakeStation
+        from vh.fake import FakeStation
         if args.live:
             raise SystemExit("--fake can't move anything; drop --live")
         st = FakeStation(tel, args.fake)

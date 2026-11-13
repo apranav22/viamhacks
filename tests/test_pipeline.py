@@ -14,9 +14,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from pipeline import perception as P  # noqa: E402
-from pipeline.geometry import jaw_heading_for_theta, ov_to_R, theta_for_jaw_heading, Transform  # noqa: E402
-from pipeline.telemetry import Telemetry  # noqa: E402
+from vh import perception as P  # noqa: E402
+from vh.geometry import jaw_heading_for_theta, ov_to_R, theta_for_jaw_heading, Transform  # noqa: E402
+from vh.telemetry import Telemetry  # noqa: E402
 
 IMG = ROOT / "site" / "img" / "home_color.jpg"
 
@@ -42,7 +42,7 @@ def test_ray_plane():
 
 
 def test_watch_and_placement():
-    from pipeline.fake import FakeStation
+    from vh.fake import FakeStation
     st = asyncio.run(FakeStation(Telemetry(enabled=False), IMG).connect())
     dec = lambda name: P.decode_color(st.frames[name], P.WATCH_SCALE)
     ref = dec("empty").astype(np.float32) / 255
