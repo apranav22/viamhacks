@@ -46,3 +46,11 @@ random spot, latency 366-433 ms, cycle 12.5-17 s. Found: the cardboard pad gets 
 the TABLE); switched to a fixed pick zone on the bare table x 220-450, y 260-395. Releases now wait for the fingers to
 open (a nut was carried off once). Warning chime + "Robot arm moving" before every run, ping before each pick/place.
 ARM: released (at the watch pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:40]
+ARM: taken. Upright parts: depth height check at a high hover, grasp halfway up, side views pointing down. Collect run: taped thin socket screw, starting upright.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:47]
+Collect run 152536: 5 picks of a short taped hex bolt standing on its threads (was labelled socket_thin_long; relabelled
+hex_bolt_short in decisions.jsonl). Upright threshold 40 -> 15 mm: the 22 mm bolt was gripped as 'lying' and the webcam
+only saw its head. ARM: released (watch pose, open); team is arranging parts on the table.

@@ -73,9 +73,12 @@ def body_points(joints_deg, holding=True):
         pts.append((fl + z * 135 + y * 45 * s, 20))
     tip = fl + z * (TCP_MM + TIP_CLOSED_MM)
     pts.append((tip, 12))
-    if holding:                                    # a held part: up to ~45 mm either side of the tips, along gripper x
+    if holding is True or holding == "across":     # lying part held across the jaws: ~45 mm either side, along gripper x
         for s in (-45, 45):
             pts.append((tip + x * s, 12))
+    elif isinstance(holding, (int, float)) and not isinstance(holding, bool) and holding > 0:
+        for d in np.arange(0, holding + 1, 12):    # upright part held in line: `holding` mm past the tips, along z
+            pts.append((tip + z * d, 12))
     return pts
 
 
