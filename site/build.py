@@ -1,5 +1,8 @@
 """Builds site/index.html (static, no dependencies). Run: python3 site/build.py && python3 -m http.server 8899 -d site"""
 import math
+import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
+from route import section as route_section
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -155,7 +158,7 @@ th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);ver
 .easy{{background:#dcfce7;color:#166534}} .medium{{background:#fef3c7;color:#92400e}} .hard{{background:#fee2e2;color:#991b1b}}
 .v-yes{{background:#dcfce7;color:#166534}} .v-no{{background:#fee2e2;color:#991b1b}} .v-stretch{{background:#e0e7ff;color:#3730a3}}
 .diagram{{width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}}
-.diagram .small{{font-size:13px;fill:#334155}} .diagram .dark{{fill:#0f172a}} .diagram .mute{{fill:#64748b}}
+.diagram .small{{font-size:13px;fill:#334155}} .diagram .dark{{fill:#0f172a}} .diagram .mute{{fill:#64748b}} .diagram .tiny{{font-size:11px}}
 .big{{font-size:20px;font-weight:650;margin:0}} .callout{{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px 20px}}
 .callout.warn{{background:#fff7ed;border-color:#fed7aa}}
 figure{{margin:0}} figure img{{width:100%;border-radius:10px;border:1px solid var(--line)}} figcaption{{font-size:13px;color:var(--mute);margin-top:6px}}
@@ -165,7 +168,7 @@ code{{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:13px}}
 <header><h1>Track 3: Spot it, sort it</h1>
 <p>Six judge items, placed one at a time, five minutes. Find every defect (including one we've never seen), put each item where we said we would, survive a judge moving it, and prove it in a log.
 This page: one cycle from start to end, the path past the fixed camera, recovery levels, what the judges measure, where detection breaks, and whether 3D reconstruction helps.</p></header>
-<nav><a href="#states">Start → end</a><a href="#path">The path</a><a href="#recovery">Recovery levels</a><a href="#scoring">Scoring</a><a href="#asym">The core problem</a><a href="#cases">Cases</a><a href="#coverage">Coverage</a>
+<nav><a href="#states">Start → end</a><a href="#route">Route per item</a><a href="#recovery">Recovery levels</a><a href="#scoring">Scoring</a><a href="#asym">The core problem</a><a href="#cases">Cases</a><a href="#coverage">Coverage</a>
 <a href="#decide">Decision rule</a><a href="#recon">3D reconstruction?</a><a href="#evals">Our evals</a><a href="#station">What we see</a><a href="#open">Open questions</a></nav>
 <main>
 
@@ -195,14 +198,7 @@ This page: one cycle from start to end, the path past the fixed camera, recovery
 <p class="lead" style="margin-top:10px">Our part of a cycle: ≈15–20 s at the arm's 60 deg/s. Six cycles plus the judge placing each item fit in 5 minutes with room for a retry. Holding is monitored during every move after the grasp (L3).</p>
 </section>
 
-<section id="path"><h2>The path: decide on the way to the bins</h2>
-<p class="lead">Both bins are reached through one <b>checkpoint</b> in front of the fixed camera. The wrist camera gives the initial guess before the grasp; the checkpoint view sees the side that was on the table. The decision must be final before the route splits.</p>
-{layout_svg()}
-<div class="grid g3" style="margin-top:16px">
-<div class="card"><h3>Stop, don't fly by</h3>A webcam exposure of ~20 ms at 100 mm/s smears the part over several pixels, which hurts the anomaly model. A ~0.3 s stop is sharp and deterministic, and the GPU model (~25 ms) finishes inside it.</div>
-<div class="card"><h3>What the checkpoint sees</h3>Fingertips pointed at the camera = the face that was on the table. One ±45° tilt adds the sides. Behind the part is always the gripper itself: a constant background the anomaly model learns as normal.</div>
-<div class="card"><h3>Camera placement</h3>Today's overview-cam is ~1 m away at a low angle with a busy background. Move the stand 20–30 cm from the checkpoint, test focus and resolution, lock exposure / white balance if possible, add the stand as an obstacle.</div>
-</div></section>
+{route_section()}
 
 <section id="recovery"><h2>Recovery levels</h2>
 <p class="lead">Ordered by how likely the judge is to do it and how cheap it is for us. The weighted rubric doesn't list recovery separately; it most likely protects <b>execution (30%)</b>. Ask staff how it's scored.</p>
