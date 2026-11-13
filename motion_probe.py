@@ -39,7 +39,6 @@ from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Mover, cam_to_world, 
                       grasp_theta, gripper_theta, halt, held, now_iso, scan, table_height, tcp_pose, world_state)
 from screws import WristView, color_frame, detect
 from station import connect
-from vh.probe_tel import ProbeTel
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
 RELOOK_MAX_SHIFT_MM = 60  # at hover, the nearest item within this distance is the same item
@@ -69,8 +68,6 @@ class Probe:
         self.n = 0
         self.failures = []
         self.watcher = None  # with --overview: also save its annotated frame after every step
-        self.tel = ProbeTel(run_id=os.path.basename(self.dir) + ("_live" if live else "_dry"))
-        self._frames = {}    # raw camera bytes from the last snapshot, for the dashboard
 
     def note(self, **kw):
         self.log.write(json.dumps({"t": now_iso(), **kw}) + "\n")
@@ -97,7 +94,6 @@ class Probe:
     async def frame(self, cam_name: str, tag: str):
         images, _ = await Camera.from_robot(self.machine, cam_name).get_images()
         img = next(i for i in images if "depth" not in i.name)
-        self._frames[cam_name] = img.data
         path = os.path.join(self.dir, f"{tag}-{cam_name}.jpg")
         Image.open(io.BytesIO(img.data)).convert("RGB").save(path)
         return os.path.basename(path)
@@ -114,7 +110,6 @@ class Probe:
         """Run one timed step; non-fatal failures are logged and the run goes on. The snapshot is
         taken after the timer stops, so it doesn't count toward the step's ms."""
         self.n += 1
-        self.tel.before_step(self.n, name)
         t0 = time.perf_counter()
         try:
             out, ok, err = await fn(), True, None
@@ -128,8 +123,6 @@ class Probe:
             self.watcher.save(os.path.join(self.dir, f"{tag}-tracked.jpg"), name)
             snap["tracked_xy"] = [round(v, 1) for v in self.watcher.position()]
         self.note(n=self.n, step=name, ok=ok, ms=round(ms), error=err, live=self.live, **snap)
-        self.tel.after_step(self.n, name, ok, ms, err, snap, self._frames)
-        self._frames = {}
         if not ok:
             self.failures.append((self.n, name, err, snap.get("frames")))
         if not ok and fatal:
@@ -261,7 +254,6 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     mover.ws = world_state(s.table_z)
     theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)
-    probe.tel.scan(s, item, "survey scan", theta, grasp_z, jaw, g)
     above = item.top_z + g["approach_height_mm"]
     print(f"item at ({item.x:.0f}, {item.y:.0f}), top {item.top_z - s.table_z:.0f} mm above table "
           f"z={s.table_z:.1f}, yaw {item.yaw_deg:.0f} deg, {len(s.items)} in view")
@@ -402,7 +394,6 @@ async def probe_or_touch(machine, mover: Mover, poses: dict, args):
     await probe.step("home (joints)", lambda: mover.joints(poses["scan_joints_deg"], "return to scan pose"),
                      fatal=False)
 
-    probe.tel.end(probe.n, len(probe.failures))
     print(f"\n{probe.n} steps, {len(probe.failures)} failed")
     for n, name, err, frames in probe.failures:
         print(f"  #{n} {name}: {err}\n      frames: {frames}")

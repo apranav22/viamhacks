@@ -1,209 +1,207 @@
 {
- "_comment": "Secondary-capture checkpoint, measured live 2026-11-13 ~13:30 (Ali). TCP = gripper frame in world mm; tool axis points from the TCP at the webcam lens.",
+ "_comment": "Re-measured 2026-11-13 14:45-14:50 after the webcam moved to a tripod [claude-code/claude-opus-5-5 \u00b7 op Ali]. Replaces the 13:30 values (lens was at (-40,-196,25)).",
  "webcam": {
   "component": "overview-cam",
+  "format": "MJPEG 1920x1080 @30",
   "lens_world_mm": [
-   -40,
-   -196,
-   25
+   -101,
+   -206,
+   347
   ],
-  "body_bbox_world_mm": {
-   "x": [
-    -116,
-    -19
+  "optical_axis_world": [
+   0.982,
+   0.123,
+   -0.145
+  ],
+  "K_px": [
+   [
+    1643.3,
+    21.1,
+    847.3
    ],
-   "y": [
-    -236,
-    -156
+   [
+    0.0,
+    1799.4,
+    627.0
    ],
-   "z_top": 39
-  },
-  "facing": "+x (front grey divider, x ~690)",
-  "how_measured": "wrist RealSense depth from home with the base at -90 deg (joints [-90, 22.57, -50.68, 0, -74.05, 0])",
-  "depth": false,
-  "note": "rdk:builtin:webcam, /dev/video38, 640x480 YUYV, wide-angle with barrel distortion; no depth stream"
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "P_world_to_px": [
+   [
+    -0.001445192520571415,
+    0.002138580300626879,
+    0.00021911052727089373,
+    0.21817534809217048
+   ],
+   [
+    -0.0004965612983279548,
+    -8.180020706428264e-05,
+    0.0026216477461631737,
+    -0.9759024648706969
+   ],
+   [
+    -1.3752865952371438e-06,
+    -1.7263005438358661e-07,
+    2.0347571976590498e-07,
+    -0.0002452026657834534
+   ]
+  ],
+  "how_measured": "18 TCP poses pointing down (x 260/340/420, y -220/-130/-40, z 230/320), closed fingertips (TCP z - 20.5) found in the webcam frame, DLT fit: mean reprojection 8 px, max 49 px (no lens distortion model). Agrees with wrist depth (camera body x -145..-114, y -243..-218, top z ~350).",
+  "px_per_mm_at_checkpoint": "~6 (a 16 mm screw shank is ~95 px)"
  },
  "checkpoint": {
   "tcp_world": [
-   202,
-   -166,
-   90
+   285,
+   -150,
+   260
   ],
-  "orientation": {
-   "o_x": -0.959,
-   "o_y": -0.119,
-   "o_z": -0.257,
-   "theta": 180
-  },
-  "joints_deg": [
-   -17.67,
-   -55.68,
-   -53.14,
-   -25.04,
-   -72.76,
-   1.11
-  ],
-  "lens_distance_mm": 250,
-  "elevation_deg": 15,
-  "image": "claws centered at ~(330, 245); ~3.5 px/mm at the part; background = black claw bar, grey divider around it",
-  "reach": "motion.move from a pointing-down hover over (262, -166, 300): 1.4 s; back 1.4 s"
+  "over": "REJECT = near compartment (x 245-370, y -258..+8): opening the fingers here drops the part into reject",
+  "tool_axis": "points from the TCP at the lens",
+  "distance_to_lens_mm": 400
  },
  "views": {
-  "yaw+35": {
-   "o": [
-    -0.72,
-    -0.65,
-    -0.26
-   ],
-   "joints_deg": [
-    -1.6,
-    -53.0,
-    -41.6,
-    -46.5,
-    -67.0,
-    8.6
-   ],
-   "ok": true
-  },
-  "pitch-25": {
-   "o": [
-    -0.76,
-    -0.09,
-    -0.64
-   ],
-   "joints_deg": [
-    -20.4,
-    -39.5,
-    -41.1,
-    -27.0,
-    -51.6,
-    -1.0
-   ],
-   "ok": true
-  },
-  "yaw-35": {
-   "ok": false,
-   "why": "wrist RealSense would hit the laptop at x -8..326, y -600..-289 (move the laptop, or use yaw-20)"
-  },
-  "pitch+25": {
-   "ok": false,
-   "why": "wrist RealSense would hit the table (it hangs below the claws in this roll)"
-  }
- },
- "obstacles_seen": {
-  "laptop": {
-   "x": [
-    -8,
-    326
-   ],
-   "y": [
-    -600,
-    -289
-   ],
-   "z_top": 195
-  }
- },
- "jaw_axis": "Fingers close along the GRIPPER Y axis. Confirmed: jaw_offset_deg 0 grips across a socket screw (jaw 168 = 16.8 mm) on the first try; 90 had gripped end to end (jaw 785).",
- "capture_views": {
-  "_comment": "Chosen 2026-11-13 14:00 from orient_135709 (socket screw, tape on head, light on). Joint moves between these are deterministic for data collection.",
   "front": {
-   "why": "primary: bottom face, whole part in frame, 250 mm",
-   "joints_deg": [
-    -17.63,
-    -55.65,
-    -53.18,
-    -25.0,
-    -72.78,
-    1.1
-   ],
-   "tcp": [
-    202.0,
-    -166.0,
-    90.0
-   ],
    "o": [
-    -0.959,
-    -0.119,
-    -0.258
+    -0.966,
+    -0.14,
+    0.217
    ],
    "theta": -180.0,
-   "move_ms": 1159
+   "joints_deg": [
+    -12.67,
+    -52.37,
+    -62.3,
+    -202.02,
+    111.71,
+    176.24
+   ],
+   "planner_ms": 4049
   },
   "yaw+35": {
-   "why": "side of the shank (one finger-contact side)",
-   "joints_deg": [
-    -1.66,
-    -52.95,
-    -41.59,
-    -46.43,
-    -67.04,
-    8.49
-   ],
-   "tcp": [
-    202.0,
-    -166.0,
-    90.0
-   ],
    "o": [
-    -0.717,
-    -0.647,
-    -0.258
+    -0.711,
+    -0.669,
+    0.217
    ],
    "theta": -180.0,
-   "move_ms": 788
+   "joints_deg": [
+    1.29,
+    -47.57,
+    -50.02,
+    -222.27,
+    104.35,
+    178.31
+   ],
+   "planner_ms": 550
   },
   "yaw-20": {
-   "why": "other side (yaw-35 blocked by the modelled laptop box)",
-   "joints_deg": [
-    -26.95,
-    -56.96,
-    -57.4,
-    -14.06,
-    -75.5,
-    -0.11
-   ],
-   "tcp": [
-    202.0,
-    -166.0,
-    90.0
-   ],
    "o": [
-    -0.942,
-    0.216,
-    -0.258
+    -0.956,
+    0.199,
+    0.217
    ],
    "theta": -180.0,
-   "move_ms": 607
+   "joints_deg": [
+    -21.0,
+    -53.98,
+    -66.02,
+    -189.98,
+    114.39,
+    177.89
+   ],
+   "planner_ms": 749
   },
   "pitch-25": {
-   "why": "end faces / top of the head",
-   "joints_deg": [
-    -20.4,
-    -39.45,
-    -41.16,
-    -26.9,
-    -51.65,
-    -1.01
-   ],
-   "tcp": [
-    202.0,
-    -166.0,
-    90.0
-   ],
    "o": [
-    -0.761,
-    -0.094,
-    -0.642
+    -0.966,
+    -0.14,
+    -0.216
    ],
    "theta": -180.0,
-   "move_ms": 593
+   "joints_deg": [
+    -12.71,
+    -39.55,
+    -58.72,
+    -200.49,
+    95.53,
+    173.23
+   ],
+   "planner_ms": 512
+  },
+  "front_roll90": {
+   "o": [
+    -0.966,
+    -0.14,
+    0.217
+   ],
+   "theta": -90.0,
+   "joints_deg": [
+    -12.7,
+    -52.4,
+    -62.27,
+    -202.05,
+    111.71,
+    266.18
+   ],
+   "planner_ms": 1792
   }
  },
- "rejected_views": {
-  "front_roll90": "same face rotated, no new surface",
-  "near_200": "head out of frame, soft focus",
-  "pitch+20_high": "part out of frame",
-  "far_300": "fine but ~30% fewer pixels than front",
-  "yaw+20": "redundant with yaw+35"
+ "good_drop": {
+  "tcp_world": [
+   480,
+   -125,
+   230
+  ],
+  "pointing": "down, theta 0",
+  "joints_deg": [
+   345.37,
+   -19.17,
+   -54.31,
+   -180.02,
+   35.12,
+   165.39
+  ],
+  "planner_ms_from_checkpoint": 7323,
+  "note": "the planner picked joint1 345 / joint4 -180: 7.3 s. Record this leg as joint waypoints."
+ },
+ "pick_pad": {
+  "world_mm": {
+   "x": [
+    225,
+    457
+   ],
+   "y": [
+    271,
+    400
+   ]
+  },
+  "pick_region": {
+   "x_min": 235,
+   "x_max": 450,
+   "y_min": 280,
+   "y_max": 392
+  },
+  "note": "poses.json pick_region (x 150-650, y -350..350) contains the box: color detection sees the divider flap as parts. Kit storage lies just past y 400."
+ },
+ "watch_pose": {
+  "tcp_world": [
+   200,
+   310,
+   330
+  ],
+  "theta": 0,
+  "joints_deg": [
+   57.13,
+   6.59,
+   -40.35,
+   0.0,
+   -46.93,
+   57.13
+  ],
+  "note": "wrist cam sees the whole pad width at ~0.77 mm/px; planner move from home 1.2 s"
  }
 }
