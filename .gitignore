@@ -1,7 +1,6 @@
 .env
 .venv/
 __pycache__/
-logs/
 *.jpg
 *.png
 config/backup-*.json
