@@ -355,7 +355,8 @@ def grasp_theta(jaw: JawFrame, item: Item, g: dict, extra_deg: float = 0, near: 
     return jaw.theta_for(item.yaw_deg + g["jaw_offset_deg"] + extra_deg, near)
 
 
-STANDING_MM = 25  # a part this tall is standing up; grasp it halfway up instead of at the base
+STANDING_MM = 40  # a part this tall is standing up; grasp it halfway up instead of at the base.
+                  # Not lower: from the hover pose, depth read a lying bolt as 26 mm tall
 
 
 def grasp_height(item: Item, table_z: float, g: dict) -> float:
