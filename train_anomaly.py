@@ -8,6 +8,7 @@ Threshold = max calibration good score * margin: an explicitly provisional small
 """
 import argparse
 import json
+import time
 from pathlib import Path
 
 import numpy as np
@@ -35,17 +36,27 @@ def fit_group(samples, dataset_dir, out_dir, args):
     torch.manual_seed(17)
     np.random.seed(17)
     torch.set_num_threads(2)
-    model = PatchcoreModel(layers=['layer2', 'layer3'], backbone='resnet18', pre_trained=True, num_neighbors=1)
+    device = args.train_device
+    if device == 'xpu' and not torch.xpu.is_available():
+        raise RuntimeError('Intel XPU training requested but unavailable; no silent CPU fallback')
+    model = PatchcoreModel(layers=['layer2', 'layer3'], backbone='resnet18', pre_trained=True, num_neighbors=1).to(device)
     for p in model.parameters():
         p.requires_grad_(False)
-    mean = torch.tensor([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).reshape(1, 3, 1, 1)
+    mean = torch.tensor([0.485, 0.456, 0.406], device=device).reshape(1, 3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225], device=device).reshape(1, 3, 1, 1)
     model.train()
     model.feature_extractor.eval()  # frozen BatchNorm too: no updates on our tiny dataset
     with torch.no_grad():
         for sample in train:
-            x = torch.from_numpy(tensor(dataset_dir / sample['image'], args.size))
+            x = torch.from_numpy(tensor(dataset_dir / sample['image'], args.size)).to(device)
             model((x - mean) / std)
+    feature_device = str(model.embedding_store[0].device)
+    print(f'FEATURES executed on {feature_device}; coreset selection/export on CPU', flush=True)
+    # PatchCore has no gradient-training epochs: GPU extracts normal patches, CPU selects the small bank.
+    # Export a CPU copy so tracing/export never depends on an XPU device on the inference machine.
+    model.embedding_store = [e.cpu() for e in model.embedding_store]
+    model.cpu()
+    mean, std = mean.cpu(), std.cpu()
     model.subsample_embedding(sampling_ratio=args.coreset_ratio)
     model.eval()
 
@@ -105,6 +116,7 @@ def fit_group(samples, dataset_dir, out_dir, args):
                  test_pick_ids=sorted({s['pick_id'] for s in test}),
                  calibration='prototype-good-max-margin', margin=args.margin,
                  bank_size=int(model.memory_bank.shape[0]), backbone='resnet18', num_neighbors=1,
+                 fit_execution={'feature_device': feature_device, 'coreset_device': 'cpu', 'export_device': 'cpu'},
                  max_torch_openvino_score_difference=max_difference, test_results=results)
     return entry
 
@@ -117,6 +129,7 @@ def main():
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--size', default=256, type=int)
     p.add_argument('--coreset-ratio', default=0.01, type=float)
+    p.add_argument('--train-device', choices=['cpu', 'xpu'], default='cpu', help='Frozen feature extraction device; coreset/export stay on CPU')
     p.add_argument('--margin', default=1.10, type=float)
     a = p.parse_args()
     if a.out.exists():

@@ -28,6 +28,7 @@ import io
 import json
 import math
 import random
+import socket
 import sys
 import time
 from datetime import datetime
@@ -48,6 +49,7 @@ from viam.proto.component.arm import JointPositions
 from pipeline import Mover, box, cam_to_world, grasp_height, held, world_state
 from screws import WristView, detect
 from station import connect
+from station_shell import execute as station_exec
 from vh.kinematics import check_path, flip, ik, load_obstacles, tcp as fk_tcp
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
@@ -76,6 +78,11 @@ ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
 TAPE_FRAC = 0.02                    # share of the part crop that is tape-blue to call it "known: tape"
+# Wrist RGB controls (2026-11-13 17:05, runs/camera_lock_*): 1280x720, brightness 8, manual exposure 10 ms (luma ~123,
+# no clipping, matches auto). Auto white balance kept: every manual temperature 4200-5500 K gave a red cast (R/G ~2.1).
+# v4l2 controls reset when the camera/module restarts, so every run sets and records them.
+WRIST_V4L2 = {"brightness": 8, "auto_exposure": 1, "exposure_time_absolute": 100, "white_balance_automatic": 1}
+WRIST_DEV = "/dev/video4"
 STATES_SORT = ["WATCH", "PICK", "LIFT", "INSPECT", "DECIDE", "DROP", "RETURN"]
 STATES_COLLECT = ["WATCH", "PICK", "LIFT", "INSPECT", "PLACE", "RETURN"]
 
@@ -159,7 +166,7 @@ def zone_px(view, z):
         for y in (z["y_min"], z["y_max"]):
             c = view.rot.T @ (np.array([x, y, view.table_z]) - view.t)
             us.append(k.focal_x_px * c[0] / c[2] + k.center_x_px); vs.append(k.focal_y_px * c[1] / c[2] + k.center_y_px)
-    return [int(max(0, min(us))), int(max(0, min(vs))), int(min(640, max(us))), int(min(480, max(vs)))]
+    return [int(max(0, min(us))), int(max(0, min(vs))), int(min(k.width_px, max(us))), int(min(k.height_px, max(vs)))]
 
 
 def round_part(it):
@@ -196,6 +203,7 @@ class Sorter:
         self.good_j_up = ik(np.array(GOOD_TCP[:2] + (300.0,)), seed=UPRIGHT_J["side-120"])[0]   # hanging part clears the divider
         self.view = None              # WristView at the watch pose (fixed: computed once)
         self.pad = dict(PAD)          # replaced by the pad found in the first watch frame
+        self.ignore_xy = []           # parts deliberately left in place (upright, grasp disabled)
         extra = [box(n, *c, *d) for n, (c, d) in self.obs[4:]]     # tripod, lamp, box (for the one planner move)
         self.mv.ws = WorldState(obstacles=list(world_state(TZ).obstacles) + [GeometriesInFrame(reference_frame="world", geometries=extra)])
 
@@ -306,6 +314,9 @@ class Sorter:
             t1 = time.perf_counter()
             rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
             items = sorted(detect(rgb, self.view, self.zone), key=lambda it: -it[2])
+            if not items:
+                self.ignore_xy = []                     # zone empty: forget parts we chose to leave
+            items = [it for it in items if all(math.dist(it[:2], q) > 25 for q in self.ignore_xy)]
             t2 = time.perf_counter()
             it = items[0] if items else None
             now = time.time()
@@ -403,6 +414,14 @@ class Sorter:
             if squat and attempt == 1:
                 height, dxy = await self.depth_look(item[:2])
                 print(f"  height from depth: {height if height is None else round(height)} mm")
+                if height and height > STANDING_MM and dxy is not None and not self.args.allow_upright:
+                    # 15:48 an upright bolt hit the gripper body on the way down (E-stop). Until the grasp height
+                    # keeps the part top below the palm (measured), leave upright parts where they are.
+                    self.skip_reason = f"upright part ({height:.0f} mm tall): not picked, upright grasp disabled"
+                    self.ignore_xy.append((float(dxy[0]), float(dxy[1])))
+                    self.tel.emit("recovery", level="L1", what=self.skip_reason)
+                    print("  " + self.skip_reason)
+                    return False, item, t_cmd
                 if height and height > STANDING_MM and dxy is not None:
                     self.upright = height
                     item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
@@ -546,13 +565,13 @@ class Sorter:
         self.idir = self.dir / f"item_{self.n:03d}"
         self.idir.mkdir()
         self.meta = {"item": self.n, "label": self.args.label, "type": self.args.type, "mode": self.args.mode,
-                     "background": self.args.background}
+                     "background": self.args.background, "camera": getattr(self, "camera_settings", None)}
         self._watch_start = time.time()
         item, t_app, t_stable, watch_jpg = await self.watch()
         if item is None:
             return False
         (self.idir / "watch.jpg").write_bytes(watch_jpg)
-        self.not_seen = False
+        self.not_seen, self.skip_reason = False, None
         ok, item, t_cmd = await self.pick(item)
         lat = {"n": self.n, "t_appeared": t_app, "t_stable": t_stable, "t_cmd": t_cmd, "t_moving": t_cmd,
                "ms_to_stable": round((t_stable - t_app) * 1000), "ms_to_cmd": round((t_cmd - t_app) * 1000),
@@ -561,7 +580,7 @@ class Sorter:
         rec = {"item": self.n, "t_seen": iso(t_app), "t_first_motion": iso(t_cmd), "latency_ms": lat["ms_to_motion"],
                "pick_xy": [round(item[0], 1), round(item[1], 1)], "yaw": round(item[3], 1)}
         if not ok:
-            rec.update(decision="none", reason="part not seen from hover" if self.not_seen else "could not grasp",
+            rec.update(decision="none", reason=self.skip_reason or ("part not seen from hover" if self.not_seen else "could not grasp"),
                        t_decided=iso(time.time()))
             if self.gripper and await self.mv.finger_pos() < 780:
                 await self.release()
@@ -606,16 +625,33 @@ class Sorter:
                       cycle_s=rec.get("cycle_s"), scores=rec.get("scores"))
         print(f"[{self.n}] {rec['decision']}: {rec['reason']} · latency {rec['latency_ms']} ms · cycle {rec.get('cycle_s')} s", flush=True)
 
+    async def set_camera(self):
+        """Apply WRIST_V4L2 on the station and refuse to run unless the read-back and frame size match."""
+        sets = " ".join(f"--set-ctrl {k}={v}" for k, v in WRIST_V4L2.items())
+        rc, out = await station_exec(self.m, f"v4l2-ctl -d {WRIST_DEV} {sets} && v4l2-ctl -d {WRIST_DEV} "
+                                             f"--get-ctrl {','.join(WRIST_V4L2)}", 30)
+        got = {ln.split(":")[0].strip(): int(ln.split(":")[1].split()[0]) for ln in out.splitlines() if ":" in ln}
+        if rc or any(got.get(k) != v for k, v in WRIST_V4L2.items()):
+            raise SystemExit(f"wrist camera controls not applied: {out}")
+        k = (await Camera.from_robot(self.m, "cam").get_properties()).intrinsic_parameters
+        self.camera_settings = {**got, "width_px": k.width_px, "height_px": k.height_px, "fx": round(k.focal_x_px, 2)}
+        if (k.width_px, k.height_px) != (1280, 720):
+            raise SystemExit(f"wrist camera is {k.width_px}x{k.height_px}, expected 1280x720 (fresh dataset)")
+        print("wrist camera", self.camera_settings, flush=True)
+
     async def run(self):
         a = self.args
         self.tel.emit("run", cmd=f"sort.py --mode {a.mode}", live=True, release=a.mode, states=STATES_SORT if a.mode == "sort" else STATES_COLLECT, views=VIEW_ORDER,
-                      label=a.label, type=a.type)
+                      label=a.label, type=a.type, platform=sys.platform, host=socket.gethostname())
         if (await Generic.from_robot(self.m, "teleop").do_command({"command": "status"})).get("running"):
             raise SystemExit("teleop is running: someone else is driving")
         j0 = await self.joints(); await asyncio.sleep(1)
         if max(abs(x - y) for x, y in zip(j0, await self.joints())) > 0.2:
             raise SystemExit("arm moving: someone else is driving")
         print("WARNING: arm about to move"); sound("Sosumi"); say("Robot arm moving. Stand clear.")
+        if sys.platform != "darwin":
+            await asyncio.sleep(2.5)          # the laptop dashboard speaks the warning (it got the run event); let it finish
+        await self.set_camera()
         if await self.mv.finger_pos() < 780:
             await self.release()
         p, _ = fk_tcp(self.q)
@@ -649,6 +685,7 @@ async def main():
     p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")
+    p.add_argument("--allow-upright", action="store_true", help="grasp upright parts (UNSAFE: hit the gripper 15:48)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()

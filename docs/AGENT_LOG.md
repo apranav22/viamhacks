@@ -80,3 +80,37 @@ Preview correction: screws.detect now supplies part overlays; idle preview hand 
 Keep: motion poses/primitives and teammate site/EDA work left unchanged. Missing models/views reject; source images and local models are preserved and gitignored.
 Not done: live inference on robot, upright clearance correction, part masks, rotation normalization, automatic type recognition, matched cardboard/white anomaly comparison.
 Next: collect new independent normal and taped/non-blue-defect picks of the same SKU/background at the deployment capture poses; inspect false-positive heatmaps before adding masking or backbone fine-tuning.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T16:56:05]
+ARM: taken for user-approved, E-stop-attended camera-only height sweep. Teleop off; arm stable. 380/320/285 mm camera world-z; planned moves with table/walls/ceiling/tripod/lamp/box obstacles. No gripper actuation. Will return to starting watch pose, not issue a new home move.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T16:56:40]
+ARM: released. Camera-only sweep completed; returned to starting watch pose within 0.28 mm. Gripper unchanged (no commands); not a home/grasp validation. Images: runs/camera_height_sweep_20261113_165601. No camera configuration changed.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:00:03]
+CONFIG TEST approved by Ali: back up to config/backup-camera-test-170002.json; test wrist 640x480 -> 1280x720, RGB brightness 0 -> 8 -> 16; gain/exposure unchanged. No motion. Restore original resolution and brightness in finally; do not overwrite other config changes.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:00:36]
+CONFIG TEST finished: status=completed, restored=True; wrist resolution back to (640, 480), RGB brightness 0; no motion. Images/report runs/camera_settings_20261113_170001. Restore errors: []
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:04:55]
+CONFIG (approved by Ali): wrist cam resolution (640, 480) -> (1280, 720) via fragment mod; backup config/backup-cam1280-170454.json. Revert: set that mod back to 640/480. RGB brightness -> 8 via v4l2 (not persistent across camera/module restart). No motion.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:05:26]
+Camera lock test done: final [1280, 720], controls 'brightness: 8\ngain: 64\nwhite_balance_automatic: 1\nauto_exposure: 3 (Aperture Priority Mode)'. Exposure/WB back on auto pending choice. Report runs/camera_lock_20261113_170453.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 17:07]
+CONFIG (approved by Ali): wrist cam stays 1280x720 (fragment mod; backup config/backup-cam1280-*.json; revert = mod back to
+640/480). RGB v4l2: brightness 8, manual exposure 100 (10 ms), auto WB (manual temps gave a red cast). sort.py now applies +
+verifies these at run start (set_camera) and records them in each item's meta.json; refuses to run if not 1280x720.
+screws.detect scales its pixel constants by frame height/480; sort.zone_px clamps to the real frame size. Offline: detect
+finds the same blobs at 640 and 1280 (areas x2.3); tests/test_pipeline.py + anomaly tests pass. No arm motion.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 17:10]
+Took over the Intel-station work from pi/unknown. Added deploy_station.py (chunked, hash-verified releases; shared
+runs/ + models/), dashboard speaks/pings for runs from the station (no speaker there), sort.py waits 2.5 s after the
+warning off-macOS, upright grasp OFF by default (--allow-upright; 15:48 E-stop), `--type any` pooled training, top
+crop border check uses the real frame size (was 640x480-only). Deployed release 20261113_170857. Training
+models/any_white_v1 on the station XPU (log /opt/viam/sorter-ali/train_any_white_v1.log). No motion, no config change.
+Noted: another claude-code session switched the wrist cam to 1280x720 at 17:04:55 (logged above); depth is aligned at
+1280x720 too, so depth_look stays valid; the top-view banks were fitted on 640x480 images and need refitting.

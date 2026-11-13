@@ -30,6 +30,9 @@ from pipeline import LOG_DIR, POSES_PATH, cam_to_world, scan
 from station import connect
 from tracking import MultiTracker
 
+# Pixel constants below were tuned on the 640x480 wrist stream. 1280x720 has the same vertical field of view
+# (fx 908 vs 605), so detect() scales lengths by frame height / 480 and areas by its square.
+CALIB_HEIGHT_PX = 480
 COLOR_DIFF = 70           # summed RGB distance from the local background that counts as a part
 BACKGROUND_SIGMA_PX = 25  # wider than a part at the survey scale
 MIN_PIXELS, MAX_PIXELS = 40, 12000
@@ -54,8 +57,10 @@ class WristView:
 def detect(rgb, view: WristView | None, region: dict | None) -> list:
     """Parts on the white table: [(x, y, pixels, yaw_deg, bbox)]. World mm with a view, else pixels."""
     f = rgb.astype(np.float32)
+    s = rgb.shape[0] / CALIB_HEIGHT_PX
+    sigma = BACKGROUND_SIGMA_PX * s / 4
     # the background is smooth, so blur at quarter resolution and scale back up (~10x faster)
-    small = ndimage.gaussian_filter(f[::4, ::4], sigma=(BACKGROUND_SIGMA_PX / 4, BACKGROUND_SIGMA_PX / 4, 0))
+    small = ndimage.gaussian_filter(f[::4, ::4], sigma=(sigma, sigma, 0))
     background = np.repeat(np.repeat(small, 4, axis=0), 4, axis=1)[:f.shape[0], :f.shape[1]]
     mask = ndimage.binary_opening(np.abs(f - background).sum(axis=-1) > COLOR_DIFF, iterations=1)
     mask = ndimage.binary_closing(mask, iterations=2)  # shiny parts break into pieces
@@ -65,9 +70,9 @@ def detect(rgb, view: WristView | None, region: dict | None) -> list:
     for i, sl in enumerate(ndimage.find_objects(labels), start=1):
         ys, xs = np.nonzero(labels[sl] == i)
         ys, xs = ys + sl[0].start, xs + sl[1].start
-        if not MIN_PIXELS <= len(xs) <= MAX_PIXELS:
+        if not MIN_PIXELS * s * s <= len(xs) <= MAX_PIXELS * s * s:
             continue
-        m = EDGE_MARGIN_PX
+        m = round(EDGE_MARGIN_PX * s)
         if xs.min() < m or ys.min() < m or xs.max() >= w - m or ys.max() >= h - m:
             continue  # cut by the frame edge: the gripper finger (always at the bottom), hands, clutter.
                       # Not by darkness: a dark stainless screw (gray 54) is as dark as the finger (53)

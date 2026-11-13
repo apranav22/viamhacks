@@ -145,8 +145,8 @@ class AnomalyModels:
             score = float(request.get_tensor(outputs["pred_score"]).data.reshape(-1)[0])
             amap = request.get_tensor(outputs["anomaly_map"]).data.squeeze().copy()
             ms = (time.perf_counter() - t0) * 1000
-            if not math.isfinite(score) or amap.ndim != 2 or not np.isfinite(amap).all():
-                return Score("invalid", ms=ms, detail="Nonfinite score/map or invalid map shape")
+            if not math.isfinite(score) or amap.ndim != 2 or amap.size == 0 or not np.isfinite(amap).all():
+                return Score("invalid", ms=ms, detail="Nonfinite score/map, empty map or invalid map shape")
             return Score("ok", score, entry["threshold"], ms, amap)
         except Exception as e:
             return Score("error", ms=(time.perf_counter() - t0) * 1000, detail=f"{type(e).__name__}: {e}")

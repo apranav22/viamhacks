@@ -36,6 +36,17 @@ KEEP_PREVIEW = 24
 SAVE_FRAMES_FOR = {"look", "reference", "depth", "view", "anomaly_result"}
 
 
+def _sound(name, say=None):
+    """Non-blocking chime / speech on this computer (macOS afplay / say)."""
+    import subprocess
+    try:
+        subprocess.Popen(["afplay", f"/System/Library/Sounds/{name}.aiff"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if say:
+            subprocess.Popen(["say", say], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
 class Hub:
     def __init__(self, record_root):
         self.lock = threading.Condition()
@@ -49,7 +60,8 @@ class Hub:
         self.last_packet = 0.0
         self.stats = {"packets": 0, "events": 0, "frames": 0, "incomplete": 0}
         self.run_state, self.run_last = "IDLE", 0.0
-        self.latest = {}                       # newest idle-preview frame/detection per camera + arm state
+        self.latest = {}
+        self.remote_run = False                       # newest idle-preview frame/detection per camera + arm state
 
     def run_active(self):
         """A run is active while it keeps sending telemetry and hasn't said IDLE."""
@@ -78,8 +90,14 @@ class Hub:
             self.run_last = time.time()
             if ev.get("k") == "state":
                 self.run_state = ev.get("state", "IDLE")
+                if self.remote_run and ev.get("state") in ("PICK", "PLACE"):
+                    _sound("Ping")
             elif ev.get("k") == "run":
                 self.run_state = "RUN"
+                # the loop runs on another machine (the station has no speaker): warn people here instead
+                self.remote_run = ev.get("platform", "darwin") != "darwin"
+                if self.remote_run:
+                    _sound("Sosumi", say="Robot arm moving. Stand clear.")
             self.event(ev)
 
     def get_frame(self, fid):

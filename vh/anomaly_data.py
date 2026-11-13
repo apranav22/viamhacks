@@ -8,6 +8,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+from PIL import Image
+
 from .anomaly import CROP_POLICY, context_crop, group_key
 
 
@@ -26,7 +28,8 @@ def collect_samples(run_dirs, part_type, background):
             row = json.loads(line)
             pick = f"{root.name}/item_{row['item']:03d}"
             folder = root / f"item_{row['item']:03d}"
-            if row.get("decision") != "collect" or row.get("type") != part_type:
+            # part_type "any": one model per view over every part type's good picks (the judged run can't know the type)
+            if row.get("decision") != "collect" or (part_type != "any" and row.get("type") != part_type):
                 skipped.append({"pick": pick, "reason": "not a completed collection of requested type"})
                 continue
             if not (folder / "meta.json").exists():
@@ -43,7 +46,9 @@ def collect_samples(run_dirs, part_type, background):
             if tops:
                 name, value = sorted(tops, key=lambda p: int(p[0].split('_')[-1]))[-1]
                 bbox = value["bbox"]
-                if bbox[0] > 3 and bbox[1] > 3 and bbox[2] < 636 and bbox[3] < 476:
+                with Image.open(folder / f"{name}.jpg") as im:      # 640x480 before 17:05, 1280x720 after
+                    w, h = im.size
+                if bbox[0] > 3 and bbox[1] > 3 and bbox[2] < w - 4 and bbox[3] < h - 4:
                     records.append({**common, "view": "top", "image": str(folder / f"{name}.jpg"), "bbox": bbox})
                 else:
                     skipped.append({"pick": pick, "reason": "top crop touches frame border"})
