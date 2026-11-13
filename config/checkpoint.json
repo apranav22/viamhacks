@@ -1,0 +1,30 @@
+{
+  "_comment": "Secondary-capture checkpoint, measured live 2026-11-13 ~13:30 (Ali). TCP = gripper frame in world mm; tool axis points from the TCP at the webcam lens.",
+  "webcam": {
+    "component": "overview-cam",
+    "lens_world_mm": [-40, -196, 25],
+    "body_bbox_world_mm": {"x": [-116, -19], "y": [-236, -156], "z_top": 39},
+    "facing": "+x (front grey divider, x ~690)",
+    "how_measured": "wrist RealSense depth from home with the base at -90 deg (joints [-90, 22.57, -50.68, 0, -74.05, 0])",
+    "depth": false,
+    "note": "rdk:builtin:webcam, /dev/video38, 640x480 YUYV, wide-angle with barrel distortion; no depth stream"
+  },
+  "checkpoint": {
+    "tcp_world": [202, -166, 90],
+    "orientation": {"o_x": -0.959, "o_y": -0.119, "o_z": -0.257, "theta": 180},
+    "joints_deg": [-17.67, -55.68, -53.14, -25.04, -72.76, 1.11],
+    "lens_distance_mm": 250, "elevation_deg": 15,
+    "image": "claws centered at ~(330, 245); ~3.5 px/mm at the part; background = black claw bar, grey divider around it",
+    "reach": "motion.move from a pointing-down hover over (262, -166, 300): 1.4 s; back 1.4 s"
+  },
+  "views": {
+    "yaw+35": {"o": [-0.72, -0.65, -0.26], "joints_deg": [-1.6, -53.0, -41.6, -46.5, -67.0, 8.6], "ok": true},
+    "pitch-25": {"o": [-0.76, -0.09, -0.64], "joints_deg": [-20.4, -39.5, -41.1, -27.0, -51.6, -1.0], "ok": true},
+    "yaw-35": {"ok": false, "why": "wrist RealSense would hit the laptop at x -8..326, y -600..-289 (move the laptop, or use yaw-20)"},
+    "pitch+25": {"ok": false, "why": "wrist RealSense would hit the table (it hangs below the claws in this roll)"}
+  },
+  "obstacles_seen": {
+    "laptop": {"x": [-8, 326], "y": [-600, -289], "z_top": 195}
+  },
+  "jaw_axis": "Fingers close along the GRIPPER Y axis (verified: close/open at the checkpoint, filmed by the webcam). At home (theta 0) that is world y. pipeline.JawFrame assumes x -> set grasp.jaw_offset_deg 90 -> 0."
+}

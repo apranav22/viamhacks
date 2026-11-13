@@ -33,3 +33,7 @@ One line per surprise, newest last. This is raw material for "what failed, what 
 - **Without an empty-table reference, a laptop at the image edge looks like a hand.** The run captures a reference at start.
 - **Watch-loop perception was 28 ms/frame;** half-resolution decode (JPEG DCT scaling) + OpenCV morphology → 5 ms, same item within 1 px.
 - **Telemetry cost measured:** 23 µs/event, 74 µs with a frame, same with the dashboard down.
+- **Webcam moved to the back-right corner of the table** (lens ≈ (−40, −196, 25) mm, clamped at the table edge next to the arm base, facing +x at the grey front divider). Located with the wrist RealSense's depth after a base sweep.
+- **Checkpoint found and reached live:** TCP (202, −166, 90), tool axis pointing back at the lens, 250 mm away, 15° above it. The part sits against the black claw bar with the divider behind; ~3.5 px/mm. `config/checkpoint.json`.
+- **The wrist RealSense can't see a held part:** it projects ~64 px below the image and is ~14 cm away, under the D435 minimum depth. The "opposite" view of the webcam is the hover look before the grasp.
+- **The jaws close along the gripper's y axis, not x** (filmed at the checkpoint). `JawFrame` assumed x, so grasps were aimed 90° off: `jaw_offset_deg` 90 → 0.
