@@ -58,3 +58,22 @@ new holdout). Leave-one-defect-type-out evaluation when there's time.
 - Tape is removable: peel it to get good samples of every SKU, then re-tape at new spots (head, under the fingers,
   bore, tip, underside) for defect variety. Ask staff first, they're their props.
 - One pick gives 1 wrist view + 1–3 webcam views; vary placement and grasp each time. ~15 s per pick.
+
+## Two reference frames, stacked (15:55, [claude-code/claude-opus-5-5 · op Ali])
+
+| | Stage 1: top (wrist cam at hover) | Stage 2: webcam (held at the checkpoint over reject) |
+|---|---|---|
+| background | plain table | busy (fingers, arm, backboard) but identical per view: recorded joint poses |
+| scale | fixed hover height, ~0.45 mm/px | fixed pose, ~6 px/mm |
+| input | crop at the detected bbox, rotated so the long axis is horizontal; part pixels only (detector colour mask) | crop at the projected fingertips (`meta.json` crop_box); part = differs from `config/webcam_refs/<view>.jpg` (empty gripper) outside the fingers |
+| memory banks | `top/lying`, `top/upright` | one per view: front, yaw-20, yaw+35, pitch-25 (held across); end, side0, side+120, side-120 (held upright) |
+
+One frozen backbone (OpenVINO) for both, separate PatchCore banks per view. "Canonical" = the bank of good patches
+for that view, filled with many placements / faces / grip points (collect mode drops the part from 20-35 mm half the
+time so it lands on a random face; upright parts set down stay upright, dropped ones tip over).
+Decision: stage 1 confident defect -> drop at once (already over reject); else stage 2 views; tape OR anomaly in any
+view; unsure -> reject. Splits by pick (all views of a pick in one split). Synthetic defects (cut-paste, colour blobs,
+strokes on part pixels) are for validation only.
+
+Per pick on disk: `runs/<run>/item_NNN/` watch.jpg, top_N.jpg, web_<view>.jpg (1080p), crop_<view>.jpg, meta.json
+(bboxes, yaw, pose, height, jaw, crop boxes, joints, how it was placed next); the run's decisions.jsonl has labels.

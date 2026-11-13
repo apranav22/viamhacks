@@ -319,6 +319,10 @@ class Sorter:
             x0, y0, x1, y1 = new[4]
             tape = tape_fraction(rgb[max(0, y0 - 6):y1 + 6, max(0, x0 - 6):x1 + 6])
         (self.idir / f"top_{attempt}.jpg").write_bytes(jpg)
+        self.meta.setdefault("top", {})[f"top_{attempt}"] = {
+            "bbox": list(new[4]) if new else None, "xy": [round(new[0], 1), round(new[1], 1)] if new else None,
+            "yaw_world": round(new[3], 1) if new else None, "pixels": new[2] if new else None,
+            "cam_R": np.round(rot, 5).tolist(), "cam_t": np.round(t, 2).tolist()}
         self.tel.emit("look", frame=jpg, n=self.n, label=f"hover look {attempt}", item=self.item_px(new, view) if new else None,
                       m={"x": new[0], "y": new[1], "yaw_long": new[3], "height": 10} if new else None, tape=tape,
                       shape=self.args.type, grasp={"jaw_heading": heading % 180, "tip_z": TZ + G["min_table_clearance_mm"], "ok": True})
@@ -444,7 +448,10 @@ class Sorter:
             Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
             anomaly = None            # PatchCore score goes here once trained (per type, per view)
             scores[name] = {"tape": round(tape, 4), "anomaly": anomaly, "frame_ms": round(ms)}
+            self.meta.setdefault("views", {})[name] = {"crop_box": box, "joints_deg": [round(v, 2) for v in vj[name]],
+                                                       "tcp": [round(float(c), 1) for c in p], "tool_axis": [round(float(c), 3) for c in z]}
             jaw = await self.mv.finger_pos()
+            self.meta["views"][name]["jaw"] = jaw
             self.tel.emit("view", frame=jpg, n=self.n, view=name, crop=box, tape=tape, anomaly=anomaly, frame_ms=round(ms), jaw=jaw)
             if not held(jaw, G):
                 self.tel.emit("recovery", level="L2", what=f"part dropped during view {name}")
@@ -459,6 +466,29 @@ class Sorter:
             decision, reason, at = "good", "no tape in any view; anomaly model not loaded yet", order[-1]
         return decision, reason, at, scores
 
+    async def capture_refs(self):
+        """Every webcam view with the EMPTY gripper (fingers open): the fixed background each view's part mask is
+        differenced against (config/webcam_refs/<view>.jpg). The fingers close to the part's width when holding, so
+        the mask also ignores the finger region (known from the projected TCP)."""
+        out = ROOT / "config" / "webcam_refs"
+        out.mkdir(exist_ok=True)
+        self.state("REFS")
+        if await self.mv.finger_pos() < 780:
+            await self.release()
+        for vj, order in ((VIEW_J, VIEW_ORDER), (UPRIGHT_J, UPRIGHT_ORDER)):
+            for name in order:
+                try:
+                    await self.jmove(vj[name], f"ref {name}", holding=False)
+                except RuntimeError as e:
+                    print(f"  ref {name} skipped: {e}")
+                    continue
+                jpg = await self.web_jpeg()
+                (out / f"{name}.jpg").write_bytes(jpg)
+                self.tel.emit("view", frame=jpg, n=0, view=name, crop=[0, 0, 1920, 1080], tape=0.0, anomaly=None, frame_ms=0,
+                              jaw=await self.mv.finger_pos())
+        await self.jmove(WATCH_J, "return", holding=False)
+        print(f"  empty-gripper references -> {out}")
+
     async def place_back(self):
         """Collect mode: put the part on the pad at a new random spot and angle."""
         self.state("PLACE")
@@ -468,8 +498,12 @@ class Sorter:
         y = random.uniform(r["y_min"] + 30, r["y_max"] - 30)
         q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=random.uniform(0, 180))
         await self.jmove(q, "over pad", holding=self.upright or True)
-        await self.straight(x, y, self.grasp_z + 3, "lower")
-        with self.tel.span("release", phase="place", item=self.n):
+        # set it down (upright parts stay upright) or let go 20-35 mm up so it lands on a random face / tips over
+        how = random.choice(["set", "drop", "drop"]) if not self.args.set_only else "set"
+        drop = 3.0 if how == "set" else random.uniform(20, 35)
+        self.meta["placed_next"] = {"x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
+        await self.straight(x, y, self.grasp_z + drop, "lower")
+        with self.tel.span(f"release ({how})", phase="place", item=self.n):
             await self.release()
         await self.straight(x, y, HOVER_Z, "retreat")
 
@@ -477,6 +511,7 @@ class Sorter:
         self.n += 1
         self.idir = self.dir / f"item_{self.n:03d}"
         self.idir.mkdir()
+        self.meta = {"item": self.n, "label": self.args.label, "type": self.args.type, "mode": self.args.mode}
         self._watch_start = time.time()
         item, t_app, t_stable, watch_jpg = await self.watch()
         if item is None:
@@ -528,6 +563,9 @@ class Sorter:
 
     def finish(self, rec):
         self.judge.write(json.dumps(rec) + "\n")
+        self.meta.update(pose=getattr(self, "pose", None), height_mm=rec.get("height_mm"), decision=rec.get("decision"),
+                         grasp_tcp_z=getattr(self, "grasp_z", None))
+        (self.idir / "meta.json").write_text(json.dumps(self.meta, indent=1, default=float))
         self.tel.emit("cycle", item=self.n, result=rec["decision"], decision=f'{rec["decision"]}: {rec["reason"]}',
                       latency_ms=rec["latency_ms"], recoveries=0, t_first_motion=rec["t_first_motion"], shape=self.args.type,
                       cycle_s=rec.get("cycle_s"), scores=rec.get("scores"))
@@ -551,6 +589,8 @@ class Sorter:
             wp, _ = fk_tcp(WATCH_J)
             await self.mv.to(float(wp[0]), float(wp[1]), float(wp[2]), 0, "to watch pose (planner)")
             await self.jmove(WATCH_J, "watch (exact joints)", holding=False)
+        if a.refs:
+            await self.capture_refs()
         count = a.reps if a.mode == "collect" else a.items
         try:
             for _ in range(count):
@@ -569,6 +609,8 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
+    p.add_argument("--set-only", action="store_true", help="collect: always set the part down gently (no drops)")
+    p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
     ik(np.array([300.0, 300.0, 200.0]))          # warm up scipy (first call ~0.4 s)
