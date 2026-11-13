@@ -1,0 +1,21 @@
+{"step": "survey pose (joints)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "scan", "ok": true, "ms": 537, "error": null, "live": false}
+{"step": "hover (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "open", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "descend (straight)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "grab", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "lift (straight)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "to present height (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "holding after lift", "held": null}
+{"step": "view tilt +x (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "view tilt -x (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "view tilt +y (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "view tilt -y (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "view spin 90 (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "view horizontal +x (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "point down again (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "over destination (planner)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "lower (straight)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "release", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "retreat (straight)", "ok": true, "ms": 0, "error": null, "live": false}
+{"step": "home (joints)", "ok": true, "ms": 0, "error": null, "live": false}

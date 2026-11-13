@@ -1,4 +1,10 @@
+.env
 api-key.json
-runs/
-__pycache__/
 .venv/
+__pycache__/
+logs/
+runs/
+*.jpg
+*.png
+!site/img/*.jpg
+config/backup-*.json

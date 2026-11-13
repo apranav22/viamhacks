@@ -1,0 +1,30 @@
+{
+  "_comment": "Positions are the gripper TCP in the world frame, mm. Record destinations with: python record_pose.py <name>",
+  "scan_joints_deg": [0.0, 22.571, -50.684, 0.0, -74.053, 0.0],
+  "destinations": {
+    "box": null,
+    "reject": null,
+    "hold": null
+  },
+  "overview": {
+    "_comment": "overview-cam calibration grid (world mm) and fingertip heights above the table; see overview.py",
+    "_grid": "where the overview-cam sees the claws whole (it sits on the -y side looking toward +y; at y<=0 the claws leave the frame)",
+    "cal_grid_x": [200, 350, 500],
+    "cal_grid_y": [100, 225, 350],
+    "cal_tip_heights_mm": [25, 85],
+    "still_s": 0.3,
+    "still_timeout_s": 10,
+    "descent_abort_mm": 8,
+    "align_tol_mm": 2
+  },
+  "pick_region":{"x_min": 150, "x_max": 650, "y_min": -350, "y_max": 350},
+  "decision": {"hold_low": 0.15, "hold_high": 0.3},
+  "grasp": {
+    "approach_height_mm": 120,
+    "min_table_clearance_mm": 4,
+    "tcp_to_tip_mm": 13.5,
+    "_tcp_to_tip": "how far the real fingertips reach past the gripper TCP (arm + 150 mm). --touch read 10.8 against a pad that was later removed, ~2-3 mm off; the first grasp with 10.8 and 4-5 mm clearance gripped but scraped the table. 13.5 = 10.8 + 2.7. Exact: motion_probe.py --live --touch X,Y --closed on the bare table",
+    "use_yaw": true,
+    "jaw_offset_deg": 90
+  }
+}

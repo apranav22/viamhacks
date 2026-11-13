@@ -1,5 +1,6 @@
-viam-sdk>=0.85
+viam-sdk==0.85.2
 numpy
 scipy
 pillow
-opencv-python-headless  # optional: 10x faster morphology
+python-dotenv
+opencv-python-headless  # optional: 10x faster morphology in vh/perception.py
