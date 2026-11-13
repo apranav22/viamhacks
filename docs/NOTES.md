@@ -25,3 +25,11 @@ One line per surprise, newest last. This is raw material for "what failed, what 
   - GPU/NPU f16 shifts scores by up to 0.1, so calibrate on the deploy device.
   - OpenVINO's CPU cache ignores the precision hint.
   - A 1B VLM answers from the prompt, not the image; a 4B VLM gets 5/8 and is slow. The VLM explains, it doesn't detect.
+- **Run format changed:** one item at a time; the judge may move it during the approach or after the grasp.
+- **Bolts can stand upright.** From above an upright bolt looks like a nut; only depth separates them (53 mm vs ~10 mm).
+- **A blue-topped nut (nylon-insert lock nut?)** would trip a pure "blue = tape" rule; the anomaly model must learn it as normal.
+- **Washers can't be grasped top-down** by the two-finger claw.
+- **Orientation math verified:** R = Rz(lon)·Ry(lat)·Rz(theta) matches the frame system to 1e-4; pointing down, x heading = 180° − theta.
+- **Without an empty-table reference, a laptop at the image edge looks like a hand.** The run captures a reference at start.
+- **Watch-loop perception was 28 ms/frame;** half-resolution decode (JPEG DCT scaling) + OpenCV morphology → 5 ms, same item within 1 px.
+- **Telemetry cost measured:** 23 µs/event, 74 µs with a frame, same with the dashboard down.

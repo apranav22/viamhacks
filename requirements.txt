@@ -1,0 +1,5 @@
+viam-sdk>=0.85
+numpy
+scipy
+pillow
+opencv-python-headless  # optional: 10x faster morphology
