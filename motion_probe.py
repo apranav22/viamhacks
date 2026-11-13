@@ -4,7 +4,7 @@ Every motion is timed and logged; a view the planner can't reach is logged and s
     python motion_probe.py                      # dry run: connect, scan, print every motion; nothing moves
     python motion_probe.py --live --step        # move, waiting for Enter before every motion
     python motion_probe.py --live --step --small-moves 5   # also time 10 mm direct moves at hover
-    python motion_probe.py --live --touch 400,0  # lower over a clear spot to measure tcp_to_tip_mm
+    python motion_probe.py --live --touch 400,0 --closed  # lower over a clear spot to measure tcp_to_tip_mm
 
 1. pick:    survey -> hover above the biggest item (planner) -> re-look from hover, correct once if it
             moved -> open -> descend -> grab -> holding? -> lift to the present height
@@ -33,13 +33,14 @@ from viam.components.camera import Camera
 from viam.proto.common import Pose, PoseInFrame
 
 from overview import Watcher, align, guarded, load_model
-from pipeline import (LOG_DIR, POSES_PATH, Mover, grasp_height, gripper_theta, now_iso, scan, tcp_pose,
-                      world_state)
+from pipeline import (LOG_DIR, POSES_PATH, JawFrame, Mover, grasp_height, grasp_theta, gripper_theta, now_iso,
+                      scan, tcp_pose, world_state)
 from station import connect
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
 RELOOK_MAX_SHIFT_MM = 60  # at hover, the nearest item within this distance is the same item
 RELOOK_MIN_SHIFT_MM = 3   # smaller shifts aren't worth a correction
+RELOOK_MIN_TURN_DEG = 5   # nor smaller jaw turns
 SMALL_MOVE_MM = 10
 
 S45 = math.sqrt(0.5)
@@ -147,9 +148,10 @@ async def _flange_for(mover: Mover, machine, x, y, z) -> Pose:
                 theta=p.theta)
 
 
-async def touch(mover: Mover, machine, poses: dict, x: float, y: float):
-    """Interactive: lower the open gripper over a clear spot until the fingertips just touch a sheet of
-    paper on the table; tcp_to_tip_mm = TCP z - table z at that moment."""
+async def touch(mover: Mover, machine, poses: dict, x: float, y: float, closed: bool):
+    """Interactive: lower the gripper over a clear spot until the fingertips just touch a sheet of
+    paper on the table; tcp_to_tip_mm = TCP z - table z at that moment. closed: with the fingers shut,
+    as they are around a screw (the linkage may carry the tips lower than when open)."""
     cam = Camera.from_robot(machine, "cam")
     await mover.joints(poses["scan_joints_deg"], "go to scan pose")
     s = await scan(machine, cam, poses["pick_region"])
@@ -157,7 +159,7 @@ async def touch(mover: Mover, machine, poses: dict, x: float, y: float):
     base_theta = await gripper_theta(machine)
     z = s.table_z + 150
     floor = s.table_z + 3  # measured: the tips reach ~10 mm past the TCP
-    await mover.open()
+    await (mover.grab() if closed else mover.open())
     await mover.to(x, y, z, base_theta, "over the touch spot")
     print(f"table z {s.table_z:.1f}. Enter = down 5 mm, a number = down that many mm (negative = up), "
           f"q = done (tips touching the paper)")
@@ -174,7 +176,8 @@ async def touch(mover: Mover, machine, poses: dict, x: float, y: float):
             continue
         await mover.arm.move_to_position(await _flange_for(mover, machine, x, y, z - dz))
         z = (await tcp_pose(machine)).z
-    print(f"\ntcp_to_tip_mm = {z - s.table_z:.1f}   (put this in config/poses.json -> grasp)")
+    print(f"\ntcp_to_tip_mm = {z - s.table_z:.1f} with the fingers {'closed' if closed else 'open'}   "
+          f"(put this in config/poses.json -> grasp)")
     await mover.straight(x, y, s.table_z + 150, "up")
     await mover.joints(poses["scan_joints_deg"], "return to scan pose")
 
@@ -200,7 +203,8 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
 
     # ---- 1. pick
     await probe.step("survey pose (joints)", lambda: mover.joints(poses["scan_joints_deg"], "go to scan pose"))
-    base_theta = await gripper_theta(machine)
+    jaw = await JawFrame.measure(machine)  # at the survey pose, pointing down
+    base_theta = jaw.theta0
     s = await probe.step("scan", lambda: scan(machine, cam, poses["pick_region"]))
     if not s.items:
         print(f"no item in the pick region (table_z={s.table_z:.1f}); put a part on the table")
@@ -208,11 +212,13 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
         return
     item = s.items[0]
     mover.ws = world_state(s.table_z)
-    theta = base_theta + (item.yaw_deg + g["jaw_offset_deg"] if g["use_yaw"] else 0)
+    theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)
     above = item.top_z + g["approach_height_mm"]
     print(f"item at ({item.x:.0f}, {item.y:.0f}), top {item.top_z - s.table_z:.0f} mm above table "
           f"z={s.table_z:.1f}, yaw {item.yaw_deg:.0f} deg, {len(s.items)} in view")
+    print(f"  jaws: close along {item.yaw_deg + g['jaw_offset_deg']:.0f} deg -> gripper theta {theta:.0f} "
+          f"(survey theta {base_theta:.0f}, use_yaw={g['use_yaw']})")
     probe.note(step="item", x=item.x, y=item.y, top_z=item.top_z, table_z=s.table_z, yaw_deg=item.yaw_deg,
                pixels=item.pixels, in_view=len(s.items), base_theta=base_theta, theta=theta)
 
@@ -229,8 +235,11 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
             print(f"  re-look: item at ({new.x:.0f}, {new.y:.0f}), {shift:.1f} mm from the survey estimate, "
                   f"top {new.top_z - s.table_z:.1f} mm above table")
             probe.note(step="re-look", seen=True, shift_mm=round(shift, 1), x=new.x, y=new.y, top_z=new.top_z)
-            if shift > RELOOK_MIN_SHIFT_MM:
-                item = new
+            new_theta = grasp_theta(jaw, new, g)
+            turn = abs(((new_theta - theta) + 180) % 360 - 180)
+            if shift > RELOOK_MIN_SHIFT_MM or turn > RELOOK_MIN_TURN_DEG:
+                print(f"  re-aim: shift {shift:.1f} mm, jaw turn {turn:.0f} deg (yaw {item.yaw_deg:.0f} -> {new.yaw_deg:.0f})")
+                item, theta = new, new_theta
                 await probe.step("hover correction (planner)",
                                  lambda: mover.to(item.x, item.y, above, theta, "hover correction"))
     if args.small_moves:
@@ -317,7 +326,7 @@ async def main(args):
             if not args.live:
                 raise SystemExit("--touch moves the arm; add --live")
             x, y = (float(v) for v in args.touch.split(","))
-            await touch(mover, machine, poses, x, y)
+            await touch(mover, machine, poses, x, y, args.closed)
             return
 
         cams = [c for c in args.snap_cams.split(",") if c]
@@ -354,6 +363,7 @@ if __name__ == "__main__":
                    help="comma-separated cameras to save a frame from after every step ('' = none), e.g. overview-cam,cam")
     p.add_argument("--overview", action="store_true", help="close the loop with the overview-cam: wait until "
                    "the item is still, servo the claws over it, stop the descent if it moves (run overview.py calibrate first)")
+    p.add_argument("--closed", action="store_true", help="with --touch: measure with the fingers closed")
     p.add_argument("--touch", metavar="X,Y", help="with --live: lower over a clear table spot (world mm) "
                    "step by step to measure tcp_to_tip_mm")
     asyncio.run(main(p.parse_args()))

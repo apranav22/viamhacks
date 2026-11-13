@@ -21,10 +21,10 @@
   "decision": {"hold_low": 0.15, "hold_high": 0.3},
   "grasp": {
     "approach_height_mm": 120,
-    "min_table_clearance_mm": 8,
-    "tcp_to_tip_mm": 10.8,
-    "_tcp_to_tip": "how far the real fingertips reach past the gripper TCP (arm + 150 mm). motion_probe.py --touch on 2026-11-13: 10.8, stopped by the 10 mm floor just short of the paper, so the true value is ~9-11 (10.8 errs high = safe). The claws collision box reaches 50 mm: very conservative",
-    "use_yaw": false,
+    "min_table_clearance_mm": 4,
+    "tcp_to_tip_mm": 13.5,
+    "_tcp_to_tip": "how far the real fingertips reach past the gripper TCP (arm + 150 mm). --touch read 10.8 against a pad that was later removed, ~2-3 mm off; the first grasp with 10.8 and 4-5 mm clearance gripped but scraped the table. 13.5 = 10.8 + 2.7. Exact: motion_probe.py --live --touch X,Y --closed on the bare table",
+    "use_yaw": true,
     "jaw_offset_deg": 90
   }
 }

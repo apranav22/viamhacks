@@ -269,6 +269,49 @@ async def gripper_theta(machine) -> float:
     return (await tcp_pose(machine)).theta
 
 
+def wrap90(deg: float) -> float:
+    """An angle mod 180 into [-90, 90): the two fingers are symmetric, so a closing direction and
+    its opposite are the same grasp."""
+    return (deg + 90) % 180 - 90
+
+
+@dataclass
+class JawFrame:
+    """How the gripper's world theta turns the direction its fingers close, read from the frame
+    system with the gripper pointing down. The fingers close along the gripper's x axis (seen on
+    the arm; not y, as the claws geometry's 120 mm along y suggests). At the survey pose theta 0
+    closes along world x, and +theta turns the closing direction by -theta."""
+    theta0: float   # world theta now
+    close0: float   # heading (deg) the fingers close along now
+    s_theta: float  # +1/-1: world theta change per turn about the gripper's own z
+    s_close: float  # +1/-1: closing heading change per turn about the gripper's own z
+
+    @classmethod
+    async def measure(cls, machine) -> "JawFrame":
+        async def world(p):
+            return (await machine.transform_pose(PoseInFrame(reference_frame="gripper", pose=p), "world")).pose
+
+        s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
+        # the gripper's x axis, before and after a 30 deg turn about its own z
+        o, turned, x0, x1 = await asyncio.gather(world(Pose(o_z=1)), world(Pose(o_z=1, theta=30)),
+                                                 world(Pose(x=100, o_z=1)), world(Pose(x=100 * c, y=100 * s, o_z=1)))
+
+        def heading(w):
+            return math.degrees(math.atan2(w.y - o.y, w.x - o.x))
+
+        return cls(o.theta, heading(x0), math.copysign(1, wrap90(turned.theta - o.theta)),
+                   math.copysign(1, wrap90(heading(x1) - heading(x0))))
+
+    def theta_for(self, close_deg: float) -> float:
+        """World theta that makes the fingers close along heading close_deg, by the smallest turn."""
+        return self.theta0 + self.s_theta * wrap90((close_deg - self.close0) * self.s_close)
+
+
+def grasp_theta(jaw: JawFrame, item: Item, g: dict) -> float:
+    """Fingers across the part: closing direction = long axis + jaw_offset_deg (90)."""
+    return jaw.theta_for(item.yaw_deg + g["jaw_offset_deg"]) if g["use_yaw"] else jaw.theta0
+
+
 def grasp_height(item: Item, table_z: float, g: dict) -> float:
     """TCP height for the grasp: fingertips halfway up the item, never closer to the table than the
     clearance. tcp_to_tip_mm is how far the real fingertips reach past the 150 mm gripper TCP."""
@@ -277,7 +320,7 @@ def grasp_height(item: Item, table_z: float, g: dict) -> float:
 
 
 async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: dict, table_z: float,
-                      base_theta: float):
+                      jaw: "JawFrame"):
     g = poses["grasp"]
     dest = poses["destinations"].get(dest_name)
     if dest is None:
@@ -285,7 +328,7 @@ async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: 
         if mover.live:
             raise SystemExit(1)
         dest = {"x": 0, "y": 0, "z": 0}
-    theta = base_theta + (item.yaw_deg + g["jaw_offset_deg"] if g["use_yaw"] else 0)
+    theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, table_z, g)
     above = item.top_z + g["approach_height_mm"]
 
@@ -294,7 +337,7 @@ async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: 
     await mover.straight(item.x, item.y, grasp_z, "descend")
     held = await mover.grab()
     await mover.straight(item.x, item.y, above, "lift")
-    await mover.to(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], base_theta, f"over {dest_name}")
+    await mover.to(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], jaw.theta0, f"over {dest_name}")
     await mover.straight(dest["x"], dest["y"], dest["z"], f"lower into {dest_name}")
     await mover.open()
     await mover.straight(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], "retreat")
@@ -324,7 +367,7 @@ async def main(args):
 
         mover = Mover(machine, args.live, args.step, table_z=0.0)
         await mover.joints(poses["scan_joints_deg"], "go to scan pose")
-        base_theta = await gripper_theta(machine)
+        jaw = await JawFrame.measure(machine)
 
         while True:
             s = await scan(machine, cam, poses["pick_region"])
@@ -348,7 +391,7 @@ async def main(args):
 
             mover.ws = world_state(s.table_z)
             mover.first_motion_at = None
-            held = await handle_item(machine, mover, item, dest, poses, s.table_z, base_theta)
+            held = await handle_item(machine, mover, item, dest, poses, s.table_z, jaw)
             log.event(item=n, decision=dest, confidence=conf, score=score, anomaly_boxes=boxes,
                       seen_at=seen_at, first_motion_at=mover.first_motion_at, held=held,
                       x=item.x, y=item.y, top_z=item.top_z, table_z=s.table_z, live=args.live)
