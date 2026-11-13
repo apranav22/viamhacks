@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT))
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
 PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
 KEEP_PREVIEW = 24
-SAVE_FRAMES_FOR = {"look", "reference", "depth", "view"}
+SAVE_FRAMES_FOR = {"look", "reference", "depth", "view", "anomaly_result"}
 
 
 class Hub:

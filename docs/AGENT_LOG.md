@@ -57,3 +57,26 @@ only saw its head. ARM: released (watch pose, open); team is arranging parts on 
 
 [claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 16:00]
 ARM: taken (Ali: go). --refs, then collect: clean long stainless button-head screw, 8 picks.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 16:10]
+ARM: taken (Ali: go). Collect: clean long stainless button-head screw, 8 picks, gentle set-down.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T15:44:03]
+ARM: taken. Operator confirmed E-stop attended and everyone clear. Collect: clean large socket-head screw, 8 reps, gentle set-downs. sort.py performs teleop and arm-still checks before motion.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T15:48:16]
+SAFETY INCIDENT: operator reports using E-stop because an upright bolt contacted the arm/gripper body during descent, preventing jaw closure. No collection process remains active. Upright grasp is NOT verified safe; do not repeat it or reset E-stop automatically. Logs in run 20261113_154405_collect show height estimates of 20–22 mm and 80 mm for the same item over different picks; exact collision cause remains unverified. Operator requests demo continue and debugging deferred: only a separately verified lying-flat path is eligible, not the upright routine. Saved captures still need quality review; do not count every completed cycle as verified training data.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 16:00:20]
+ARM: taken for operator-approved lower/centred camera-only test. Teleop off, joints stable; no gripper commands.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 16:00:38]
+ARM: released after camera-only test. Returned to starting pose, gripper unchanged. Images: runs/camera_closeup_20261113_160017/. No grasp performed.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T16:24:20]
+Done: offline anomaly pipeline (curated pick-level split, frozen ResNet18 PatchCore, OpenVINO IR export/runtime, per-type/pose/view/background keys, conservative fusion) and real-score dashboard replay/heatmaps. No robot connection in training/replay. Five white-background stainless-screw models fitted on 9 picks: 5 train, 2 calibration, 2 test. Both physical-part-independent and real-defect/background holdouts are still missing. One of two held-out clean picks falsely rejected by the wrist model; all 8 webcam test images passed. No threshold tuning to hide that error. Synthetic blue and black marks raised scores (sanity only, not real recall).
+Verified: 10 anomaly unit/integration tests + 6 existing pipeline tests, JS syntax, browser score/heatmap rendering and toggle, no browser errors. Replay telemetry mean ~198 us, max ~695 us; CPU per-view scoring observed ~52-61 ms in that replay. GPU/NPU not benchmarked.
+Preview correction: screws.detect now supplies part overlays; idle preview hand status is explicitly not evaluated, rather than treating cardboard saturation as a hand. Actual running-loop hand checks untouched.
+Keep: motion poses/primitives and teammate site/EDA work left unchanged. Missing models/views reject; source images and local models are preserved and gitignored.
+Not done: live inference on robot, upright clearance correction, part masks, rotation normalization, automatic type recognition, matched cardboard/white anomaly comparison.
+Next: collect new independent normal and taped/non-blue-defect picks of the same SKU/background at the deployment capture poses; inspect false-positive heatmaps before adding masking or backbone fine-tuning.

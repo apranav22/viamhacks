@@ -1,0 +1,5 @@
+# Optional runtime for --anomaly-bundle; training packages are not imported in the control loop.
+-r requirements.txt
+openvino==2026.4.1
+# Offline fitting additionally uses: pip install anomalib==2.7.0
+# Torch/torchvision must match the training workstation; see docs/ANOMALY.md for tested versions.

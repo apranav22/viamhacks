@@ -69,7 +69,7 @@ svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{colo
     <div class="view"><img id="ovimg" alt=""><svg id="ovov" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet"></svg><div id="ovbanner" class="banner"></div></div>
   </section>
   <section class="p c8"><h2>Cycle <span class="kv" id="cyclesub"></span></h2><div class="chain" id="chain"></div>
-    <h2 style="margin-top:12px">Inspection · item <b id="insn" style="color:var(--ink)">–</b> <span class="kv">crops the loop already captured; scores vs thresholds</span></h2><div class="strip" id="strip"></div></section>
+    <h2 style="margin-top:12px">Inspection · item <b id="insn" style="color:var(--ink)">–</b> <span class="kv">scores vs thresholds · <label><input id="showmaps" type="checkbox" checked> heatmaps (red ≥ threshold)</label></span></h2><div class="strip" id="strip"></div></section>
   <section class="c4 stack">
     <div class="p"><h2>Decision</h2><div id="dec"><div class="verdict pending">–</div><div class="kv">waiting for the first item</div></div></div>
     <div class="p"><h2>Latency: item seen → arm moving</h2>
@@ -133,7 +133,7 @@ function render(){
   if(S.tab==="live"&&!runActive()&&PV.cams["cam"]){const c=PV.cams["cam"]; showFrame(c.frame&&c.frame.id); const d=c.det||{};
     (d.items||[]).forEach((it,i)=>{svg+=ovBlob(it,i?"#facc15":"#22c55e",it.xy?`(${f0(it.xy[0])}, ${f0(it.xy[1])}) mm`:`${it.area} px`);});
     if(d.hand){B.className="banner hand";B.textContent="HAND IN VIEW";} else if((d.items||[]).length){B.className="banner placed";B.textContent=`${d.items.length} DETECTED`;}
-    sub=`idle preview · ${f0(c.rpc_ms)} ms frame · detect ${f1(c.det_ms)} ms${d.error?" · "+d.error:""}`;}
+    sub=`idle preview · ${f0(c.rpc_ms)} ms frame · detect ${f1(c.det_ms)} ms${d.hand_status==="not_evaluated"?" · hand check: run only":""}${d.error?" · "+d.error:""}`;}
   else if(S.tab==="live"&&!S.watch&&S.snap["cam"]){const c=S.snap["cam"]; showFrame(c.frame&&c.frame.id); sub=`run snapshot after: ${c.step}`;}
   else if(S.tab==="live"&&S.watch){const w=S.watch; showFrame(w.frame&&w.frame.id);
     const col=w.hand?"#ef4444":w.placed?"#22c55e":"#f59e0b";
@@ -151,7 +151,7 @@ function render(){
 
 /* ---- webcam: the run's inspection frames while a run is on, else the idle preview ---- */
 function renderOv(){ const V=S.lastView, P=PV.cams["overview-cam"], B=$("ovbanner"); B.className="banner"; let svg="", sub="";
-  if(V&&(runActive()||!P)){ showOv(V.frame&&V.frame.id); const [x0,y0,x1,y1]=V.crop||[0,0,0,0], bad=V.tape>TAPE, col=bad?"#ef4444":"#22d3ee";
+  if(V&&(runActive()||!P)){ showOv(V.frame&&V.frame.id); const [x0,y0,x1,y1]=V.crop||[0,0,0,0], bad=V.tape>TAPE||V.anomalous, col=bad?"#ef4444":"#22d3ee";
     svg+=`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" fill="none" stroke="${col}" stroke-width="5" rx="10"/>
       <text x="${x0+8}" y="${Math.max(y0-14,40)}" fill="${col}" font-size="40" font-weight="800" paint-order="stroke" stroke="#000" stroke-width="6">${esc(V.view)} · tape ${(100*V.tape).toFixed(1)}%${V.anomaly!=null?" · anomaly "+f1(V.anomaly):""}</text>`;
     sub=`item ${V.n} · view ${V.view} · frame ${f0(V.frame_ms)} ms`;
@@ -161,19 +161,30 @@ function renderOv(){ const V=S.lastView, P=PV.cams["overview-cam"], B=$("ovbanne
 
 /* ---- inspection strip: crops drawn in the browser from frames the loop already sent ---- */
 const drawn={};
-function drawCrop(cv,fid,crop){ const key=fid+":"+crop.join(","); if(drawn[cv.id]===key) return; drawn[cv.id]=key;
-  const im=new Image(); im.onload=()=>{ const ctx=cv.getContext("2d"), [x0,y0,x1,y1]=crop, w=x1-x0, h=y1-y0, s=Math.min(cv.width/w,cv.height/h);
-    ctx.fillStyle="#000"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(im,x0,y0,w,h,(cv.width-w*s)/2,(cv.height-h*s)/2,w*s,h*s); }; im.src="/frame/"+fid; }
+function drawCrop(cv,fid,crop,map){ const show=$("showmaps").checked, key=fid+":"+crop.join(",")+":"+(show&&map?map.id:""); if(drawn[cv.id]===key) return; drawn[cv.id]=key;
+  const im=new Image(); im.onload=async()=>{ if(drawn[cv.id]!==key) return;
+    const ctx=cv.getContext("2d"), [x0,y0,x1,y1]=crop, w=x1-x0, h=y1-y0, s=Math.min(cv.width/w,cv.height/h), dx=(cv.width-w*s)/2, dy=(cv.height-h*s)/2;
+    ctx.fillStyle="#000"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(im,x0,y0,w,h,dx,dy,w*s,h*s);
+    if(!show||!map) return;
+    try{const response=await fetch("/frame/"+map.id); if(!response.ok) return; const bytes=new Uint8Array(await response.arrayBuffer());
+      if(bytes.length!==4096||drawn[cv.id]!==key) return;
+      const layer=document.createElement("canvas"); layer.width=layer.height=64; const lc=layer.getContext("2d"), pixels=lc.createImageData(64,64);
+      for(let i=0;i<4096;i++){const v=bytes[i], j=i*4; pixels.data[j]=255; pixels.data[j+1]=v>=128?35:190; pixels.data[j+2]=0; pixels.data[j+3]=Math.max(0,(v-64)/191)*155;}
+      lc.putImageData(pixels,0,0); ctx.drawImage(layer,dx,dy,w*s,h*s);
+    }catch(e){console.warn("heatmap unavailable",e);}
+  }; im.src="/frame/"+fid; }
+$("showmaps").onchange=()=>{for(const k in drawn) delete drawn[k]; renderStrip();};
 function renderStrip(){ $("insn").textContent=(S.insItem??"–")+(S.pose?" · "+S.pose:""); const keys=["top",...S.viewOrder], D=S.dec&&S.dec.n===S.insItem?S.dec:null;
   const host=$("strip"); if(host.children.length!==keys.length||host.dataset.k!==keys.join()){ host.dataset.k=keys.join();
     host.innerHTML=keys.map(k=>`<div class="tile" id="tile-${k}"><div class="nm"><span>${k==="top"?"top · wrist":esc(k)}</span><span id="tv-${k}"></span></div><canvas id="tc-${k}" width="200" height="250"></canvas><div class="sc" id="ts-${k}">–</div></div>`).join(""); for(const k in drawn) delete drawn[k]; }
   keys.forEach((k,i)=>{ const I=S.ins[k], t=$("tile-"+k), cv=$("tc-"+k);
     if(!I){ t.className="tile"+(D?" skip":(S.state==="INSPECT"&&keys.findIndex(x=>!S.ins[x])===i?" now":"")); $("ts-"+k).textContent=D?"skipped (decided)":"–"; $("tv-"+k).textContent="";
       const ctx=cv.getContext("2d"); ctx.fillStyle="#0d1528"; ctx.fillRect(0,0,cv.width,cv.height); drawn[cv.id]=null; return; }
-    if(I.frame) drawCrop(cv,I.frame,I.crop);
-    const bad=I.tape!=null&&I.tape>TAPE, here=D&&D.at===k;
-    t.className="tile "+(bad?"bad":"okk"); $("tv-"+k).innerHTML=here?`<b class="${D.decision==="good"?"ok":"bad"}">decided</b>`:"";
-    $("ts-"+k).innerHTML=`tape <b class="${bad?"bad":"ok"}">${I.tape==null?"–":(100*I.tape).toFixed(1)+"%"}</b> · anomaly <b>${I.anomaly==null?"–":f1(I.anomaly)}</b>${I.ms!=null?` <span class="kv">· ${f0(I.ms)} ms</span>`:""}`; }); }
+    if(I.frame) drawCrop(cv,I.frame,I.crop,I.heatmap);
+    const tapeBad=I.tape!=null&&I.tape>TAPE, bad=tapeBad||I.anomalous, here=D&&D.at===k;
+    t.className="tile "+(bad?"bad":I.status==="ok"?"okk":""); $("tv-"+k).innerHTML=here?`<b class="${D.decision==="good"?"ok":"bad"}">decided</b>`:"";
+    $("ts-"+k).innerHTML=`tape <b class="${tapeBad?"bad":""}">${I.tape==null?"–":(100*I.tape).toFixed(1)+"%"}</b><br>`+
+      (I.status==="ok"?`anomaly <b class="${I.anomalous?"bad":"ok"}">${f1(I.anomaly)} / ${f1(I.threshold)}</b> · ${f0(I.infer_ms)} ms`:`<span class="warn">${esc(I.status||"not scored")}</span>`); }); }
 function renderDec(){ const D=S.dec; if(!D) return; const cls=D.decision==="good"?"good":D.decision==="reject"?"reject":D.decision==="collect"?"collect":"pending";
   $("dec").innerHTML=`<div class="verdict ${cls}">${D.decision==="collect"?"SAVED":esc(D.decision.toUpperCase())}</div>
   <div style="margin:6px 0 4px">${esc(D.reason||"")}</div>
@@ -262,9 +273,9 @@ function renderPerf(){ const P=S.perf.slice(-120); let s=`<rect width="400" heig
   $("perfkv").innerHTML=`<div class="m">watch rate<b>${fps?fps.toFixed(1)+" fps":"–"}</b></div><div class="m">perception<b>${f1(last.proc)} ms</b></div>
   <div class="m">telemetry cost / emit<b>${T.mean_us!=null?f1(T.mean_us)+" µs":"–"}</b></div><div class="m">telemetry max · dropped<b>${T.max_us!=null?f0(T.max_us)+" µs · "+T.dropped:"–"}</b></div>`;}
 
-function renderItems(){ if(!S.cycles.length) return; $("items").innerHTML=S.cycles.slice().reverse().map(c=>{const sc=c.scores||{}, mt=Math.max(0,...Object.values(sc).map(v=>v.tape||0)), d=c.result||"";
+function renderItems(){ if(!S.cycles.length) return; $("items").innerHTML=S.cycles.slice().reverse().map(c=>{const sc=c.scores||{}, tapes=Object.values(sc).map(v=>v.tape).filter(v=>v!=null&&Number.isFinite(v)), mt=tapes.length?Math.max(...tapes):null, d=c.result||"";
   return `<tr><td>${c.item}</td><td class="${d==="good"?"ok":d==="reject"?"bad":""}"><b>${esc(d)}</b></td><td>${esc((c.decision||"").replace(/^[^:]*: /,""))}</td><td>${esc(c.shape||"–")}</td>
-  <td>${c.latency_ms==null?"–":c.latency_ms+" ms"}</td><td>${c.cycle_s!=null?c.cycle_s+" s":"–"}</td><td>${esc((c.t_first_motion||"").slice(11,23))}</td><td>${(100*mt).toFixed(1)}%</td></tr>`;}).join("");}
+  <td>${c.latency_ms==null?"–":c.latency_ms+" ms"}</td><td>${c.cycle_s!=null?c.cycle_s+" s":"–"}</td><td>${esc((c.t_first_motion||"").slice(11,23))}</td><td>${mt==null?"–":(100*mt).toFixed(1)+"%"}</td></tr>`;}).join("");}
 
 function log(ev,txt){ const d=document.createElement("div"); d.className="k-"+ev.k; d.innerHTML=`<span class="t">${tstr(ev.t)}</span>${esc(txt)}`;
   const L=$("log"); L.prepend(d); while(L.children.length>200) L.lastChild.remove();}
@@ -292,6 +303,10 @@ function onEvent(ev){
     case "snap": S.snap[ev.cam]=ev; if(ev.cam==="overview-cam") renderOv(); else if(S.tab==="live") render(); break;
     case "view": S.ins[ev.view]={frame:ev.frame&&ev.frame.id,crop:ev.crop,tape:ev.tape,anomaly:ev.anomaly,ms:ev.frame_ms}; S.lastView=ev; S.insItem=ev.n;
       log(ev,`view ${ev.view}: tape ${(100*ev.tape).toFixed(2)}%${ev.anomaly!=null?" anomaly "+f1(ev.anomaly):""} · frame ${ev.frame_ms} ms · jaw ${f0(ev.jaw)}`); break;
+    case "anomaly_result": {const I=S.ins[ev.view]||(S.ins[ev.view]={}); Object.assign(I,{anomaly:ev.score,threshold:ev.threshold,status:ev.status,anomalous:ev.anomalous,infer_ms:ev.infer_ms});
+      if(ev.model_crop) I.crop=ev.model_crop; if(ev.frame) I.heatmap=ev.frame;
+      if(S.lastView&&S.lastView.view===ev.view) Object.assign(S.lastView,{anomaly:ev.score,threshold:ev.threshold,anomalous:ev.anomalous});
+      log(ev,`anomaly ${ev.view}: ${ev.status}${ev.status==="ok"?` score ${f1(ev.score)} / threshold ${f1(ev.threshold)} · ${f0(ev.infer_ms)} ms`:" · "+(ev.detail||"")}`); break;}
     case "decision": S.dec=ev; log(ev,`DECISION item ${ev.n}: ${ev.decision.toUpperCase()} (${ev.reason}) at ${ev.at||"–"}, ${ev.ms_from_seen} ms after seen`); break;
     case "candidate": log(ev,`present candidate ${ev.id} saved at (${ev.tcp.slice(0,3).map(f0).join(", ")})`); break;
     case "note": log(ev,`note: ${ev.step||""} ${JSON.stringify(Object.fromEntries(Object.entries(ev).filter(([k])=>!["k","t","s","run","_q"].includes(k))))}`); break;
@@ -315,8 +330,8 @@ function renderAll(k){ if(k==="backlog_done"||!k) backlog=false;
   if(!k||k==="watch"||k==="look"||k==="reference"||k==="depth"||k==="run") render();
   renderChain(); if(!k||k==="latency"||k==="run") renderLat(); if(!k||k==="look") {renderMeas(); renderMap();} if(k==="watch"||k==="move") renderMap();
   if(!k||["gripper","gripper_cmd","grasp_result","run"].includes(k)) renderGrip(); if(!k||k==="span"||k==="move"||k==="run") renderTL();
-  if(!k||k==="watch"||k==="telemetry") renderPerf(); if(!k||k==="cycle") renderItems(); if(!k||k==="view"||k==="decision"||k==="run") renderOv();
-  if(!k||["view","decision","look","state","run"].includes(k)) {renderStrip(); renderDec();} }
+  if(!k||k==="watch"||k==="telemetry") renderPerf(); if(!k||k==="cycle") renderItems(); if(!k||k==="view"||k==="anomaly_result"||k==="decision"||k==="run") renderOv();
+  if(!k||["view","anomaly_result","decision","look","state","run"].includes(k)) {renderStrip(); renderDec();} }
 function connect(){ backlog=true; const es=new EventSource("/events");
   es.onmessage=m=>{ try{ const ev=JSON.parse(m.data); if(ev.k==="ping"){S.lastPing=ev.age;} onEvent(ev); if(ev.k==="backlog_done") backlog=false; }catch(e){console.error(e);} };
   es.onerror=()=>{ $("linktxt").textContent="dashboard server down"; }; }

@@ -50,6 +50,7 @@ from screws import WristView, detect
 from station import connect
 from vh.kinematics import check_path, flip, ik, load_obstacles, tcp as fk_tcp
 from vh.telemetry import Telemetry
+from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
 
 POSES = json.load(open(ROOT / "config" / "poses.json"))
 CP = json.load(open(ROOT / "config" / "checkpoint.json"))
@@ -184,6 +185,10 @@ class Sorter:
         self.dir = ROOT / "runs" / self.run_id
         self.dir.mkdir(parents=True)
         self.tel = Telemetry(host=args.dash_host, run_id=self.run_id)
+        self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device) if args.anomaly_bundle else None
+        if self.anomaly:
+            loaded = self.anomaly.warm(args.type, args.background)  # compile and warm BEFORE any arm motion
+            print(f"Anomaly models ready on {args.anomaly_device}: {len(loaded)} groups", flush=True)
         self.judge = open(self.dir / "decisions.jsonl", "a", buffering=1)
         self.q = None                 # last known joints
         self.n = 0
@@ -241,6 +246,22 @@ class Sorter:
         imgs, _ = await self.cam.get_images(filter_source_names=["color"])
         img = next(i for i in imgs if "depth" not in i.name)
         return img.data
+
+    async def infer_crop(self, image, bbox, view):
+        try:
+            crop, box = context_crop(image, bbox)
+        except ValueError as e:
+            return Score("invalid", detail=str(e)), bbox
+        if self.anomaly is None:
+            return Score("missing", detail="No anomaly bundle loaded"), box
+        result = await asyncio.to_thread(self.anomaly.score, crop, self.args.type, self.pose, view, self.args.background)
+        return result, box
+
+    def emit_anomaly(self, view, result, crop):
+        fields = result.fields()
+        self.meta.setdefault("anomaly", {})[view] = {**fields, "model_crop": crop}
+        self.tel.emit("anomaly_result", frame=result.heatmap_bytes(), mime="application/x-anomaly-map;h=64;w=64",
+                      n=self.n, view=view, model_crop=crop, background=self.args.background, **fields)
 
     async def web_jpeg(self):
         # the webcam hands out its newest buffered frame; the second call is taken after the arm stopped
@@ -319,6 +340,7 @@ class Sorter:
             x0, y0, x1, y1 = new[4]
             tape = tape_fraction(rgb[max(0, y0 - 6):y1 + 6, max(0, x0 - 6):x1 + 6])
         (self.idir / f"top_{attempt}.jpg").write_bytes(jpg)
+        self.top_image, self.top_bbox = jpg, list(new[4]) if new else None
         self.meta.setdefault("top", {})[f"top_{attempt}"] = {
             "bbox": list(new[4]) if new else None, "xy": [round(new[0], 1), round(new[1], 1)] if new else None,
             "yaw_world": round(new[3], 1) if new else None, "pixels": new[2] if new else None,
@@ -422,9 +444,14 @@ class Sorter:
         """Webcam views at the checkpoint. Returns the decision (sort mode decides after every view)."""
         scores = {}
         decision, reason, at = None, None, None
+        top, top_box = await self.infer_crop(self.top_image, self.top_bbox, "top")
+        scores["top"] = {**top.fields(), "anomaly": top.score, "tape": self.top_tape}
+        self.emit_anomaly("top", top, top_box)
         if self.args.mode == "sort" and self.top_tape is not None and self.top_tape > TAPE_FRAC:
-            # decided from the hover look; still go to the first view: it is over the reject compartment
+            # A top-view decision still travels to a checkpoint before releasing into reject.
             decision, reason, at = "reject", f"known: tape (top face, {100 * self.top_tape:.1f}% of part)", "top"
+        elif self.args.mode == "sort" and top.fields()["anomalous"]:
+            decision, reason, at = "reject", reject_reason(scores, ["top"]), "top"
         hold = self.upright or True
         order = UPRIGHT_ORDER if self.upright else VIEW_ORDER
         vj = UPRIGHT_J if self.upright else VIEW_J
@@ -446,24 +473,31 @@ class Sorter:
             tape = tape_fraction(crop)
             (self.idir / f"web_{name}.jpg").write_bytes(jpg)
             Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
-            anomaly = None            # PatchCore score goes here once trained (per type, per view)
-            scores[name] = {"tape": round(tape, 4), "anomaly": anomaly, "frame_ms": round(ms)}
+            result, model_box = await self.infer_crop(jpg, box, name)
+            anomaly = result.score
+            scores[name] = {"tape": round(tape, 4), "anomaly": anomaly, "frame_ms": round(ms), **result.fields()}
             self.meta.setdefault("views", {})[name] = {"crop_box": box, "joints_deg": [round(v, 2) for v in vj[name]],
                                                        "tcp": [round(float(c), 1) for c in p], "tool_axis": [round(float(c), 3) for c in z]}
             jaw = await self.mv.finger_pos()
             self.meta["views"][name]["jaw"] = jaw
             self.tel.emit("view", frame=jpg, n=self.n, view=name, crop=box, tape=tape, anomaly=anomaly, frame_ms=round(ms), jaw=jaw)
+            self.emit_anomaly(name, result, model_box)
             if not held(jaw, G):
                 self.tel.emit("recovery", level="L2", what=f"part dropped during view {name}")
                 return "dropped", f"dropped during view {name}", name, scores
             if self.args.mode == "sort" and not decision and tape > TAPE_FRAC:
                 decision, reason, at = "reject", f"known: tape ({name}, {100 * tape:.1f}% of crop)", name
+            elif self.args.mode == "sort" and not decision and result.fields()["anomalous"]:
+                decision, reason, at = "reject", reject_reason(scores, [name]), name
             if decision:
                 break
+        if not any(name in scores for name in order):
+            raise RuntimeError("No inspection checkpoint reached; refusing to release over the pickup area")
         if self.args.mode == "collect":
             return "collect", self.args.label, None, scores
         if not decision:
-            decision, reason, at = "good", "no tape in any view; anomaly model not loaded yet", order[-1]
+            uncertain = reject_reason(scores, ["top", *order])
+            decision, reason, at = ("reject", uncertain, "fusion") if uncertain else ("good", "all required anomaly views below threshold; no tape", "fusion")
         return decision, reason, at, scores
 
     async def capture_refs(self):
@@ -511,7 +545,8 @@ class Sorter:
         self.n += 1
         self.idir = self.dir / f"item_{self.n:03d}"
         self.idir.mkdir()
-        self.meta = {"item": self.n, "label": self.args.label, "type": self.args.type, "mode": self.args.mode}
+        self.meta = {"item": self.n, "label": self.args.label, "type": self.args.type, "mode": self.args.mode,
+                     "background": self.args.background}
         self._watch_start = time.time()
         item, t_app, t_stable, watch_jpg = await self.watch()
         if item is None:
@@ -609,6 +644,9 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
+    p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json; without a model, sort mode rejects as uncertain")
+    p.add_argument("--anomaly-device", choices=["CPU", "GPU", "NPU"], default="CPU")
+    p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")

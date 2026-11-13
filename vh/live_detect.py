@@ -1,7 +1,7 @@
 """Cheap detectors for the dashboard's idle preview (run in the dashboard process, never in the loop).
 
-- wrist(): parts on the table in the wrist frame -> boxes + world xy (ray ∩ table plane). Same color
-  segmentation as vh.perception at half resolution, ~5 ms.
+- wrist(): parts in the wrist frame -> boxes + world xy (ray ∩ table plane), using the same
+  local-contrast detector as sort.py. Preview does not evaluate hand clearance.
 - overhead(): for mapping the secondary-capture pose: the held part (saturated zinc/tape blue) in the
   overhead frame: where, how big, how sharp, how bright, how much tape-blue; plus the dark claws.
 """
@@ -22,23 +22,24 @@ except ImportError:
 
 
 def wrist(jpeg, T=None, intr=None):
-    rgb = P.decode_color(jpeg, P.WATCH_SCALE)
-    fg = P.segment(rgb, None, C.MASK_RECTS, P.WATCH_SCALE)
+    # Use the SAME local-contrast part detector as sort.py, not the old white-table
+    # saturation mask (which merged cardboard with the part and called it a hand).
+    # Preview overlays are not a hand/safety detector. The running loop owns its hand check.
+    import math
+    from screws import detect
+    rgb = P.decode_color(jpeg, 1)
     out = []
-    hand = False
-    for b in P.blobs(fg, P.WATCH_SCALE)[:12]:
-        if b.touches_border:
-            hand = hand or b.area >= C.HAND_PX
-            continue
-        if not C.MIN_ITEM_PX_WATCH <= b.area <= 20000:
-            continue
-        ov = b.overlay()
+    for u, v, area, yaw, bbox in detect(rgb, None, None):
+        angle = math.radians(yaw)
+        half = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) / 2
+        dx, dy = math.cos(angle) * half, math.sin(angle) * half
+        ov = {"bbox": list(bbox), "c": [u, v], "axis": [u-dx, v-dy, u+dx, v+dy], "area": area}
         if T is not None and intr is not None:
-            p = T.ray_to_plane(intr.rays(*b.centroid), C.TABLE_Z)
-            if T.t[2] > p[2]:                              # only if the ray really hits the table below
+            p = T.ray_to_plane(intr.rays(u, v), C.TABLE_Z)
+            if T.t[2] > p[2]:
                 ov["xy"] = [round(float(p[0]), 1), round(float(p[1]), 1)]
         out.append(ov)
-    return {"items": out, "hand": hand}
+    return {"items": out, "hand": None, "hand_status": "not_evaluated", "detector": "screws.detect"}
 
 
 def _sharpness(gray):
