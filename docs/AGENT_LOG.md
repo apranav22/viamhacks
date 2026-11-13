@@ -32,3 +32,17 @@ socket screw from the pad with Pranav's grasp steps (poses.json unchanged except
 it back. Obstacles in `config/obstacles.json`. Arm at the watch pose over the pad (200, 310, 330), gripper open.
 Timing: lift → first view 4.0 s (planner), view → view 0.5–0.75 s, checkpoint → good 7.3 s (planner chose a wrapped
 joint-1 config): both long legs must become recorded joint moves.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:08]
+ARM: still taken. First live run of sort.py (collect mode, the taped nut, 2 reps).
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:20]
+ARM: taken. sort.py now chimes + says 'Robot arm moving' at run start and pings before each pick/place (team asked).
+Collect run: taped hex nut, 3 reps.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 15:20]
+sort.py collect mode works end to end: 4 picks of the taped hex nut, each with top + 4 webcam crops, placed back at a
+random spot, latency 366-433 ms, cycle 12.5-17 s. Found: the cardboard pad gets pinched and dragged (grasp is 2 mm above
+the TABLE); switched to a fixed pick zone on the bare table x 220-450, y 260-395. Releases now wait for the fingers to
+open (a nut was carried off once). Warning chime + "Robot arm moving" before every run, ping before each pick/place.
+ARM: released (at the watch pose, gripper open).
