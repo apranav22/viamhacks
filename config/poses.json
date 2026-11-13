@@ -6,11 +6,24 @@
     "reject": null,
     "hold": null
   },
-  "pick_region": {"x_min": 150, "x_max": 650, "y_min": -350, "y_max": 350},
+  "overview": {
+    "_comment": "overview-cam calibration grid (world mm) and fingertip heights above the table; see overview.py",
+    "_grid": "where the overview-cam sees the claws whole (it sits on the -y side looking toward +y; at y<=0 the claws leave the frame)",
+    "cal_grid_x": [200, 350, 500],
+    "cal_grid_y": [100, 225, 350],
+    "cal_tip_heights_mm": [25, 85],
+    "still_s": 0.3,
+    "still_timeout_s": 10,
+    "descent_abort_mm": 8,
+    "align_tol_mm": 2
+  },
+  "pick_region":{"x_min": 150, "x_max": 650, "y_min": -350, "y_max": 350},
   "decision": {"hold_low": 0.15, "hold_high": 0.3},
   "grasp": {
     "approach_height_mm": 120,
     "min_table_clearance_mm": 8,
+    "tcp_to_tip_mm": 10.8,
+    "_tcp_to_tip": "how far the real fingertips reach past the gripper TCP (arm + 150 mm). motion_probe.py --touch on 2026-11-13: 10.8, stopped by the 10 mm floor just short of the paper, so the true value is ~9-11 (10.8 errs high = safe). The claws collision box reaches 50 mm: very conservative",
     "use_yaw": false,
     "jaw_offset_deg": 90
   }

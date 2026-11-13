@@ -209,6 +209,7 @@ def save_debug_image(scan: Scan, n: int, decision: str, score):
 
 class Mover:
     def __init__(self, machine, live: bool, step: bool, table_z: float):
+        self.machine = machine
         self.motion = Motion.from_robot(machine, "builtin")
         self.arm = Arm.from_robot(machine, "arm")
         self.gripper = Gripper.from_robot(machine, "gripper")
@@ -237,6 +238,18 @@ class Mover:
                 reference_frame="world", pose=Pose(x=x, y=y, z=z, o_z=-1, theta=theta)),
                 world_state=self.ws)
 
+    async def straight(self, x, y, z, what):
+        """Move the gripper TCP in a straight line to (x, y, z), keeping its orientation, by moving the
+        arm directly: no planner and no obstacle check. For the last few cm near the table, where the
+        planner refuses every pose because the gripper's `claws` geometry reaches 50 mm past the TCP.
+        The arm base is the world frame, so a TCP translation is the same flange translation."""
+        if self._gate(f"{what} (straight) -> ({x:.0f}, {y:.0f}, {z:.0f})"):
+            tcp = await tcp_pose(self.machine)
+            p = await self.arm.get_end_position()
+            await self.arm.move_to_position(Pose(
+                x=p.x + x - tcp.x, y=p.y + y - tcp.y, z=p.z + z - tcp.z,
+                o_x=p.o_x, o_y=p.o_y, o_z=p.o_z, theta=p.theta))
+
     async def open(self):
         if self._gate("open gripper"):
             await self.gripper.open()
@@ -247,9 +260,20 @@ class Mover:
         return None
 
 
+async def tcp_pose(machine) -> Pose:
+    """The gripper TCP (arm + 150 mm) in the world frame."""
+    return (await machine.transform_pose(PoseInFrame(reference_frame="gripper", pose=Pose(o_z=1)), "world")).pose
+
+
 async def gripper_theta(machine) -> float:
-    r = await machine.transform_pose(PoseInFrame(reference_frame="gripper", pose=Pose(o_z=1)), "world")
-    return r.pose.theta
+    return (await tcp_pose(machine)).theta
+
+
+def grasp_height(item: Item, table_z: float, g: dict) -> float:
+    """TCP height for the grasp: fingertips halfway up the item, never closer to the table than the
+    clearance. tcp_to_tip_mm is how far the real fingertips reach past the 150 mm gripper TCP."""
+    tips_z = max((item.top_z + table_z) / 2, table_z + g["min_table_clearance_mm"])
+    return tips_z + g["tcp_to_tip_mm"]
 
 
 async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: dict, table_z: float,
@@ -262,18 +286,18 @@ async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: 
             raise SystemExit(1)
         dest = {"x": 0, "y": 0, "z": 0}
     theta = base_theta + (item.yaw_deg + g["jaw_offset_deg"] if g["use_yaw"] else 0)
-    grasp_z = max((item.top_z + table_z) / 2, table_z + g["min_table_clearance_mm"])
+    grasp_z = grasp_height(item, table_z, g)
     above = item.top_z + g["approach_height_mm"]
 
     await mover.open()
     await mover.to(item.x, item.y, above, theta, "approach")
-    await mover.to(item.x, item.y, grasp_z, theta, "descend")
+    await mover.straight(item.x, item.y, grasp_z, "descend")
     held = await mover.grab()
-    await mover.to(item.x, item.y, above, theta, "lift")
+    await mover.straight(item.x, item.y, above, "lift")
     await mover.to(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], base_theta, f"over {dest_name}")
-    await mover.to(dest["x"], dest["y"], dest["z"], base_theta, f"lower into {dest_name}")
+    await mover.straight(dest["x"], dest["y"], dest["z"], f"lower into {dest_name}")
     await mover.open()
-    await mover.to(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], base_theta, "retreat")
+    await mover.straight(dest["x"], dest["y"], dest["z"] + g["approach_height_mm"], "retreat")
     await mover.joints(poses["scan_joints_deg"], "return to scan pose")
     return held
 
