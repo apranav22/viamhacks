@@ -33,7 +33,6 @@ from tracking import MultiTracker
 COLOR_DIFF = 70           # summed RGB distance from the local background that counts as a part
 BACKGROUND_SIGMA_PX = 25  # wider than a part at the survey scale
 MIN_PIXELS, MAX_PIXELS = 40, 12000
-MIN_GRAY = 60             # darker blobs are the gripper's black claws
 PART_Z_ABOVE_TABLE = 4    # rays are cut at about half a fastener's height
 EDGE_MARGIN_PX = 4        # opening/closing shave the border, so "touches the edge" needs a margin
 
@@ -61,7 +60,6 @@ def detect(rgb, view: WristView | None, region: dict | None) -> list:
     mask = ndimage.binary_opening(np.abs(f - background).sum(axis=-1) > COLOR_DIFF, iterations=1)
     mask = ndimage.binary_closing(mask, iterations=2)  # shiny parts break into pieces
     labels, n = ndimage.label(mask)
-    gray = f @ [0.299, 0.587, 0.114]
     h, w = mask.shape
     out = []
     for i, sl in enumerate(ndimage.find_objects(labels), start=1):
@@ -71,9 +69,8 @@ def detect(rgb, view: WristView | None, region: dict | None) -> list:
             continue
         m = EDGE_MARGIN_PX
         if xs.min() < m or ys.min() < m or xs.max() >= w - m or ys.max() >= h - m:
-            continue  # cut by the frame edge: the gripper finger (always bottom-right), hands, clutter
-        if gray[ys, xs].mean() < MIN_GRAY:
-            continue
+            continue  # cut by the frame edge: the gripper finger (always at the bottom), hands, clutter.
+                      # Not by darkness: a dark stainless screw (gray 54) is as dark as the finger (53)
         u, v = float(xs.mean()), float(ys.mean())
         evals, evecs = np.linalg.eigh(np.cov(np.stack([xs, ys])))
         a = evecs[:, np.argmax(evals)]

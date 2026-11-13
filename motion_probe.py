@@ -33,8 +33,9 @@ from viam.components.camera import Camera
 from viam.proto.common import Pose, PoseInFrame
 
 from overview import Watcher, align, guarded, load_model
-from pipeline import (LOG_DIR, POSES_PATH, JawFrame, Mover, ctrl_c_raises, grasp_height, grasp_theta, gripper_theta,
-                      halt, held, now_iso, scan, table_height, tcp_pose, world_state)
+from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Scan, Mover, cam_to_world, ctrl_c_raises, grasp_height,
+                      grasp_theta, gripper_theta, halt, held, now_iso, scan, table_height, tcp_pose, world_state)
+from screws import WristView, color_frame, detect
 from station import connect
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
@@ -197,14 +198,25 @@ async def small_moves(probe: Probe, mover: Mover, n: int):
         await probe.step(f"small move {i + 1} ({dx:+d} mm)", go, fatal=False)
 
 
+async def look_color(machine, cam, poses: dict, table_z: float) -> list:
+    """Parts seen by the wrist cam from where the arm is, from color only: each pixel's ray cut with
+    the table plane. Position and angle from the part's pixels; at hover (~0.45 mm/px) much better
+    than scan(), whose angle comes from depth points too sparse at that range (one look turned the
+    jaws 90 deg)."""
+    rgb, (rot, t), props = await asyncio.gather(color_frame(cam, True), cam_to_world(machine), cam.get_properties())
+    view = WristView(props.intrinsic_parameters, rot, t, table_z)
+    return [Item(x=x, y=y, top_z=table_z + 10, yaw_deg=yaw, bbox=bbox, pixels=px)
+            for x, y, px, yaw, bbox in detect(rgb, view, poses["pick_region"])]
+
+
 async def relook(probe: Probe, machine, cam, poses: dict, item, table_z: float, attempt: int):
     """Look again (from wherever the arm is) and return the item nearest the last estimate; its
     position and angle replace the old ones. Keeps the old item if nothing is near."""
-    s2 = await probe.step(f"look ({attempt})", lambda: scan(machine, cam, poses["pick_region"]))
-    near = [it for it in s2.items if math.dist((it.x, it.y), (item.x, item.y)) < RELOOK_MAX_SHIFT_MM]
+    seen = await probe.step(f"look ({attempt})", lambda: look_color(machine, cam, poses, table_z))
+    near = [it for it in seen if math.dist((it.x, it.y), (item.x, item.y)) < RELOOK_MAX_SHIFT_MM]
     if not near:
         print("  item not seen; keeping the last estimate")
-        probe.note(step="look", attempt=attempt, seen=False)
+        probe.note(step="look", attempt=attempt, seen=False, parts_seen=len(seen))
         return item
     new = min(near, key=lambda it: math.dist((it.x, it.y), (item.x, item.y)))
     shift = math.dist((new.x, new.y), (item.x, item.y))
@@ -222,13 +234,16 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     await probe.step("survey pose (joints)", lambda: mover.joints(poses["scan_joints_deg"], "go to scan pose"))
     jaw = await JawFrame.measure(machine)  # at the survey pose, pointing down
     base_theta = jaw.theta0
-    s = await probe.step("scan", lambda: scan(machine, cam, poses["pick_region"]))
+    # color only, from the survey pose: no depth needed (the table height is configured), and depth
+    # sometimes comes back empty
+    s = Scan(color=None, table_z=g["table_z"], items=[])
+    s.items = sorted(await probe.step("scan (color)", lambda: look_color(machine, cam, poses, s.table_z)),
+                     key=lambda it: -it.pixels)
     if not s.items:
-        print(f"no item in the pick region (table_z={s.table_z:.1f}); put a part on the table")
+        print(f"no item in the pick region; put a part on the table")
         probe.note(step="no item", table_z=s.table_z)
         return
     item = s.items[0]
-    s.table_z = table_height(s.table_z, g)
     mover.ws = world_state(s.table_z)
     theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)

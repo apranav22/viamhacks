@@ -261,17 +261,23 @@ class Mover:
         (about 0 = closed on nothing), or None in a dry run."""
         if not self._gate("close gripper"):
             return None
+        start = await self.finger_pos()
         await self.gripper.grab()
-        return await self.fingers_settled()
+        return await self.fingers_settled(start)
 
     async def finger_pos(self) -> float:
         return float((await self.gripper.do_command({"get": True}))["pos"])
 
-    async def fingers_settled(self, timeout_s=3.0) -> float:
-        last, steady, t_end = None, 0, time.monotonic() + timeout_s
-        while time.monotonic() < t_end:
+    async def fingers_settled(self, start: float, timeout_s=3.0) -> float:
+        """Finger position once they stop. Steadiness only counts after they have moved 15 from
+        `start` (or 1 s has passed): right after grab() returns they may not have started yet, and
+        three equal readings of still-open fingers once passed for a finished grasp."""
+        t0 = time.monotonic()
+        last, steady = None, 0
+        while time.monotonic() - t0 < timeout_s:
             pos = await self.finger_pos()
-            steady = steady + 1 if last is not None and abs(pos - last) < 3 else 0
+            started = abs(pos - start) > 15 or time.monotonic() - t0 > 1.0
+            steady = steady + 1 if started and last is not None and abs(pos - last) < 3 else 0
             if steady >= 3:
                 return pos
             last = pos
@@ -314,9 +320,11 @@ def wrap90(deg: float) -> float:
 @dataclass
 class JawFrame:
     """How the gripper's world theta turns the direction its fingers close, read from the frame
-    system with the gripper pointing down. The fingers close along the gripper's x axis (seen on
-    the arm; not y, as the claws geometry's 120 mm along y suggests). At the survey pose theta 0
-    closes along world x, and +theta turns the closing direction by -theta."""
+    system with the gripper pointing down. The fingers close along the gripper's y axis: the claws
+    geometry is 120 mm along y (the 85 mm opening plus two fingers), the wrist cam sees the
+    fingertips side by side along gripper y, and with x the jaws clamped an 85 mm bolt end to end
+    (fingers stopped at 791). At the survey pose theta 0 closes along world y, and +theta turns the
+    closing direction by -theta."""
     theta0: float   # world theta now
     close0: float   # heading (deg) the fingers close along now
     s_theta: float  # +1/-1: world theta change per turn about the gripper's own z
@@ -328,15 +336,15 @@ class JawFrame:
             return (await machine.transform_pose(PoseInFrame(reference_frame="gripper", pose=p), "world")).pose
 
         s, c = math.sin(math.radians(30)), math.cos(math.radians(30))
-        # the gripper's x axis, before and after a 30 deg turn about its own z
-        o, turned, x0, x1 = await asyncio.gather(world(Pose(o_z=1)), world(Pose(o_z=1, theta=30)),
-                                                 world(Pose(x=100, o_z=1)), world(Pose(x=100 * c, y=100 * s, o_z=1)))
+        # the gripper's y axis, before and after a 30 deg turn about its own z
+        o, turned, y0, y1 = await asyncio.gather(world(Pose(o_z=1)), world(Pose(o_z=1, theta=30)),
+                                                 world(Pose(y=100, o_z=1)), world(Pose(x=-100 * s, y=100 * c, o_z=1)))
 
         def heading(w):
             return math.degrees(math.atan2(w.y - o.y, w.x - o.x))
 
-        return cls(o.theta, heading(x0), math.copysign(1, wrap90(turned.theta - o.theta)),
-                   math.copysign(1, wrap90(heading(x1) - heading(x0))))
+        return cls(o.theta, heading(y0), math.copysign(1, wrap90(turned.theta - o.theta)),
+                   math.copysign(1, wrap90(heading(y1) - heading(y0))))
 
     def theta_for(self, close_deg: float, near: float | None = None) -> float:
         """World theta that makes the fingers close along heading close_deg. Of the two that do
