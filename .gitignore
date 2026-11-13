@@ -2,7 +2,6 @@
 api-key.json
 .venv/
 __pycache__/
-logs/
 runs/
 *.jpg
 *.png
