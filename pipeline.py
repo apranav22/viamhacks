@@ -16,6 +16,7 @@ import csv
 import json
 import math
 import os
+import signal
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -255,9 +256,44 @@ class Mover:
             await self.gripper.open()
 
     async def grab(self):
-        if self._gate("close gripper"):
-            return await self.gripper.grab()
-        return None
+        """Close and wait until the fingers stop: gripper.grab() can return while they are still
+        moving, and an arm that lifts then closes on air. Returns the final finger position
+        (about 0 = closed on nothing), or None in a dry run."""
+        if not self._gate("close gripper"):
+            return None
+        await self.gripper.grab()
+        return await self.fingers_settled()
+
+    async def finger_pos(self) -> float:
+        return float((await self.gripper.do_command({"get": True}))["pos"])
+
+    async def fingers_settled(self, timeout_s=3.0) -> float:
+        last, steady, t_end = None, 0, time.monotonic() + timeout_s
+        while time.monotonic() < t_end:
+            pos = await self.finger_pos()
+            steady = steady + 1 if last is not None and abs(pos - last) < 3 else 0
+            if steady >= 3:
+                return pos
+            last = pos
+            await asyncio.sleep(0.05)
+        return last
+
+
+def ctrl_c_raises():
+    """Make Ctrl-C raise KeyboardInterrupt at once. asyncio.run's own handler only cancels the main
+    task on the first Ctrl-C, which does nothing while the script sits in input() at a prompt."""
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+async def halt(mover: "Mover"):
+    """Best-effort stop of the arm and gripper (after Ctrl-C: the RPC that was moving the arm is
+    abandoned, but the move itself keeps going on the robot)."""
+    for name, part in (("arm", mover.arm), ("gripper", mover.gripper)):
+        try:
+            await asyncio.wait_for(part.stop(), timeout=2)
+            print(f"  {name} stopped")
+        except Exception as e:
+            print(f"  could not stop the {name}: {type(e).__name__}: {e}  -> use the E-stop")
 
 
 async def tcp_pose(machine) -> Pose:
@@ -302,21 +338,50 @@ class JawFrame:
         return cls(o.theta, heading(x0), math.copysign(1, wrap90(turned.theta - o.theta)),
                    math.copysign(1, wrap90(heading(x1) - heading(x0))))
 
-    def theta_for(self, close_deg: float) -> float:
-        """World theta that makes the fingers close along heading close_deg, by the smallest turn."""
-        return self.theta0 + self.s_theta * wrap90((close_deg - self.close0) * self.s_close)
+    def theta_for(self, close_deg: float, near: float | None = None) -> float:
+        """World theta that makes the fingers close along heading close_deg. Of the two that do
+        (180 apart), the one nearest `near` (the current theta), else the smallest turn from theta0."""
+        theta = self.theta0 + self.s_theta * wrap90((close_deg - self.close0) * self.s_close)
+        if near is not None:
+            theta = min((theta - 180, theta, theta + 180), key=lambda t: abs(t - near))
+        return theta
 
 
-def grasp_theta(jaw: JawFrame, item: Item, g: dict) -> float:
-    """Fingers across the part: closing direction = long axis + jaw_offset_deg (90)."""
-    return jaw.theta_for(item.yaw_deg + g["jaw_offset_deg"]) if g["use_yaw"] else jaw.theta0
+def grasp_theta(jaw: JawFrame, item: Item, g: dict, extra_deg: float = 0, near: float | None = None) -> float:
+    """Fingers across the part: closing direction = long axis + jaw_offset_deg (90) + extra_deg
+    (90 on a second pass)."""
+    if not g["use_yaw"]:
+        return jaw.theta_for(jaw.close0 + extra_deg, near)
+    return jaw.theta_for(item.yaw_deg + g["jaw_offset_deg"] + extra_deg, near)
+
+
+STANDING_MM = 25  # a part this tall is standing up; grasp it halfway up instead of at the base
 
 
 def grasp_height(item: Item, table_z: float, g: dict) -> float:
-    """TCP height for the grasp: fingertips halfway up the item, never closer to the table than the
-    clearance. tcp_to_tip_mm is how far the real fingertips reach past the 150 mm gripper TCP."""
-    tips_z = max((item.top_z + table_z) / 2, table_z + g["min_table_clearance_mm"])
+    """TCP height for the grasp. A lying fastener is grasped with the closed fingertips a fixed
+    clearance above the table: its measured height is depth noise (the same screw read 14 and 6 mm),
+    and every lying fastener is taller than the clearance. tcp_to_tip_mm is how far the CLOSED
+    fingertips reach past the 150 mm gripper TCP; open, they sit ~7-10 mm higher, so the descent
+    with open fingers stays clear of the table."""
+    tips_z = table_z + g["min_table_clearance_mm"]
+    if item.top_z - table_z > STANDING_MM:
+        tips_z = (item.top_z + table_z) / 2
     return tips_z + g["tcp_to_tip_mm"]
+
+
+def held(pos, g: dict):
+    """From the finger position: True holding, False closed on nothing, None unknown (dry run)."""
+    return None if pos is None else pos > g["empty_below_pos"]
+
+
+def table_height(measured: float, g: dict) -> float:
+    """The table height to use: the configured one, unless the measurement disagrees a lot (then
+    something moved; trust the measurement). The median depth swings ~3 mm between runs."""
+    if abs(measured - g["table_z"]) > 6:
+        print(f"  table measured at z {measured:.1f}, far from the configured {g['table_z']}; using the measurement")
+        return measured
+    return g["table_z"]
 
 
 async def handle_item(machine, mover: Mover, item: Item, dest_name: str, poses: dict, table_z: float,
