@@ -1,0 +1,40 @@
+{
+ "_comment": "extra obstacles measured with wrist depth 14:30-14:50 (world mm, box center + dims); add to Pranav's world_state(table_z)",
+ "webcam-tripod": {
+  "center": [
+   -150,
+   -225,
+   190
+  ],
+  "dims": [
+   120,
+   100,
+   380
+  ]
+ },
+ "lamp": {
+  "center": [
+   -225,
+   -415,
+   200
+  ],
+  "dims": [
+   350,
+   110,
+   400
+  ]
+ },
+ "cardboard-box": {
+  "center": [
+   397,
+   -125,
+   72
+  ],
+  "dims": [
+   335,
+   276,
+   145
+  ],
+  "note": "x 235-560, y -258..+8, walls 100, divider flap 140; reject = near half"
+ }
+}
