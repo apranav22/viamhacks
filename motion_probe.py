@@ -37,8 +37,10 @@ from viam.proto.common import Pose, PoseInFrame
 from overview import Watcher, align, guarded, load_model
 from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Mover, cam_to_world, ctrl_c_raises, grasp_height,
                       grasp_theta, gripper_theta, halt, held, now_iso, scan, table_height, tcp_pose, world_state)
+from grasp import GOOD, classify, first_strategy, next_strategy
 from screws import WristView, color_frame, detect
 from station import connect
+from vh.probe_tel import ProbeTel
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
 RELOOK_MAX_SHIFT_MM = 60  # at hover, the nearest item within this distance is the same item
@@ -68,6 +70,8 @@ class Probe:
         self.n = 0
         self.failures = []
         self.watcher = None  # with --overview: also save its annotated frame after every step
+        self.tel = ProbeTel(run_id=os.path.basename(self.dir) + ("_live" if live else "_dry"))
+        self._frames = {}    # raw camera bytes from the last snapshot, for the dashboard
 
     def note(self, **kw):
         self.log.write(json.dumps({"t": now_iso(), **kw}) + "\n")
@@ -94,6 +98,7 @@ class Probe:
     async def frame(self, cam_name: str, tag: str):
         images, _ = await Camera.from_robot(self.machine, cam_name).get_images()
         img = next(i for i in images if "depth" not in i.name)
+        self._frames[cam_name] = img.data
         path = os.path.join(self.dir, f"{tag}-{cam_name}.jpg")
         Image.open(io.BytesIO(img.data)).convert("RGB").save(path)
         return os.path.basename(path)
@@ -110,6 +115,7 @@ class Probe:
         """Run one timed step; non-fatal failures are logged and the run goes on. The snapshot is
         taken after the timer stops, so it doesn't count toward the step's ms."""
         self.n += 1
+        self.tel.before_step(self.n, name)
         t0 = time.perf_counter()
         try:
             out, ok, err = await fn(), True, None
@@ -123,6 +129,8 @@ class Probe:
             self.watcher.save(os.path.join(self.dir, f"{tag}-tracked.jpg"), name)
             snap["tracked_xy"] = [round(v, 1) for v in self.watcher.position()]
         self.note(n=self.n, step=name, ok=ok, ms=round(ms), error=err, live=self.live, **snap)
+        self.tel.after_step(self.n, name, ok, ms, err, snap, self._frames)
+        self._frames = {}
         if not ok:
             self.failures.append((self.n, name, err, snap.get("frames")))
         if not ok and fatal:
@@ -211,8 +219,8 @@ async def look_color(machine, cam, poses: dict, table_z: float) -> SimpleNamespa
     rgb = np.asarray(Image.open(io.BytesIO(jpeg)).convert("RGB"))
     k = props.intrinsic_parameters
     view = WristView(k, rot, t, table_z)
-    items = [Item(x=x, y=y, top_z=table_z + 10, yaw_deg=yaw, bbox=bbox, pixels=px)
-             for x, y, px, yaw, bbox in detect(rgb, view, poses["pick_region"])]
+    items = [Item(x=x, y=y, top_z=table_z + 10, yaw_deg=yaw, bbox=bbox, pixels=px, length_mm=length, width_mm=width)
+             for x, y, px, yaw, bbox, length, width in detect(rgb, view, poses["pick_region"])]
     # rot / t / k / jpeg: what vh.probe_tel needs to draw the look on the dashboard
     return SimpleNamespace(items=sorted(items, key=lambda it: -it.pixels), table_z=table_z, rot=rot, t=t, k=k, jpeg=jpeg)
 
@@ -254,6 +262,7 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     mover.ws = world_state(s.table_z)
     theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)
+    probe.tel.scan(s, item, "survey scan", theta, grasp_z, jaw, g)
     above = item.top_z + g["approach_height_mm"]
     print(f"item at ({item.x:.0f}, {item.y:.0f}), top {item.top_z - s.table_z:.0f} mm above table "
           f"z={s.table_z:.1f}, yaw {item.yaw_deg:.0f} deg, {len(s.items)} in view")
@@ -274,22 +283,36 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
         await watcher.start(item.x, item.y)
         probe.watcher = watcher
 
-    # grasp attempts: each one looks again from hover; a retry turns the jaws 90 deg from the last try
-    attempts = 1 + g["retries"]
-    got = None
-    for attempt in range(1, attempts + 1):
-        extra = 90.0 * (attempt - 1)
+    # grasp attempts (grasp.py): look again from hover, aim, descend, close, lift lift_check_mm and
+    # classify by finger position. A failure changes what most likely caused it; retries re-aim with
+    # direct moves (no planner), and every rescan_after failures the part is found again from the
+    # survey pose, in case it was knocked away.
+    strat = first_strategy(g)
+    outcome = None
+    t_pick = time.perf_counter()
+    for attempt in range(1, g["max_attempts"] + 1):
+        if strat.rescan:
+            await probe.step(f"rescan: survey pose ({attempt})", lambda: mover.joints(poses["scan_joints_deg"], "survey"))
+            wide = await probe.step(f"rescan: look ({attempt})", lambda: look_color(machine, cam, poses, s.table_z))
+            if not wide.items:
+                raise RuntimeError("the part is gone from the pick region")
+            item = min(wide.items, key=lambda it: math.dist((it.x, it.y), (item.x, item.y)))
+            print(f"  rescan: part at ({item.x:.0f}, {item.y:.0f})")
+            await probe.step(f"rescan: hover ({attempt}, planner)", lambda: mover.to(item.x, item.y, above, theta, "hover"))
         look = None
         if args.live:
             item, look = await relook(probe, machine, cam, poses, item, s.table_z, attempt)
-        new_theta = grasp_theta(jaw, item, g, extra, near=theta)
+        new_theta = grasp_theta(jaw, item, g, strat.extra_deg, near=theta)
+        grasp_z = grasp_height(item, s.table_z, g, strat.clearance_mm)
         if look is not None:
-            probe.tel.scan(look, item, f"look ({attempt})", new_theta, grasp_height(item, s.table_z, g), jaw, g,
-                           table_z=s.table_z)
-        print(f"  attempt {attempt}/{attempts}: jaws close along {item.yaw_deg + g['jaw_offset_deg'] + extra:.0f} deg "
-              f"(+{extra:.0f}) -> theta {new_theta:.0f}")
+            probe.tel.scan(look, item, f"look ({attempt})", new_theta, grasp_z, jaw, g, table_z=s.table_z)
+        width = f"{item.width_mm:.1f}" if item.width_mm else "?"
+        print(f"  attempt {attempt}/{g['max_attempts']}: {strat}; part {width} mm wide; theta {new_theta:.0f}")
         theta = new_theta
-        await probe.step(f"aim ({attempt}, planner)", lambda: mover.to(item.x, item.y, above, theta, "aim"))
+        if attempt == 1:
+            await probe.step(f"aim ({attempt}, planner)", lambda: mover.to(item.x, item.y, above, theta, "aim"))
+        else:
+            await probe.step(f"aim ({attempt}, direct)", lambda: mover.reaim(item.x, item.y, above, theta, "aim"))
         if watcher:
             xy = await probe.step("wait until item still (overview)",
                                   lambda: watcher.wait_still(oc["still_s"], oc["still_timeout_s"]))
@@ -297,11 +320,12 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
             await probe.step("re-aim at hover (straight)", lambda: mover.straight(item.x, item.y, above, "re-aim"))
 
         await probe.step(f"open ({attempt})", mover.open)
-        grasp_z = grasp_height(item, s.table_z, g)
+        await mover.set_finger_speed(strat.speed)
         print(f"  grasp: tips {grasp_z - g['tcp_to_tip_mm'] - s.table_z:.1f} mm above table z {s.table_z:.1f} "
               f"-> TCP z {grasp_z:.1f} (tcp_to_tip {g['tcp_to_tip_mm']})")
         probe.note(step="grasp plan", attempt=attempt, x=item.x, y=item.y, theta=theta, tcp_z=round(grasp_z, 1),
-                   tips_above_table=round(grasp_z - g["tcp_to_tip_mm"] - s.table_z, 1), table_z=s.table_z)
+                   tips_above_table=round(grasp_z - g["tcp_to_tip_mm"] - s.table_z, 1), table_z=s.table_z,
+                   width_mm=item.width_mm, extra_deg=strat.extra_deg, speed=strat.speed)
         descend = lambda: mover.straight(item.x, item.y, grasp_z, "descend")
         if watcher:
             await probe.step(f"descend ({attempt}, straight, guarded)", lambda: guarded(
@@ -309,18 +333,25 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
         else:
             await probe.step(f"descend ({attempt}, straight)", descend)
         pos = await probe.step(f"grab ({attempt})", mover.grab)
-        await probe.step(f"lift ({attempt}, straight)", lambda: mover.straight(item.x, item.y, above, "lift"))
+        await probe.step(f"lift check ({attempt}, straight)",
+                         lambda: mover.straight(item.x, item.y, grasp_z + g["lift_check_mm"], "lift check"))
         pos_lifted = await mover.finger_pos() if args.live else None
-        got = held(pos_lifted, g)
-        print(f"  attempt {attempt}: fingers at {pos} after closing, {pos_lifted} after lifting -> "
-              f"{'HOLDING' if got else 'missed' if got is False else 'dry run'}")
-        probe.note(step="grasp result", attempt=attempt, pos_closed=pos, pos_lifted=pos_lifted, held=got,
-                   extra_deg=extra)
-        if got is not False:
+        outcome, why = classify(pos, pos_lifted, item.width_mm, g)
+        print(f"  attempt {attempt}: {outcome.upper()}: {why}")
+        probe.note(step="grasp result", attempt=attempt, pos_closed=pos, pos_lifted=pos_lifted, outcome=outcome,
+                   why=why, width_mm=item.width_mm, extra_deg=strat.extra_deg, clearance_mm=strat.clearance_mm,
+                   speed=strat.speed, ms_since_pick_start=round((time.perf_counter() - t_pick) * 1000))
+        if outcome == GOOD:
+            await probe.step(f"lift ({attempt}, straight)", lambda: mover.straight(item.x, item.y, above, "lift"))
             break
-    if got is False:
-        await probe.step("open (gave up)", mover.open)
-        raise RuntimeError(f"no grasp after {attempts} attempts")
+        # recover: open on the way back up to hover, then try again with what next_strategy changes
+        await probe.step(f"recover ({attempt}): open + up", lambda: asyncio.gather(
+            mover.open(), mover.straight(item.x, item.y, above, "back to hover")))
+        strat = next_strategy(strat, outcome, attempt, g)
+    await mover.set_finger_speed(g["finger_speed"])
+    if outcome != GOOD:
+        raise RuntimeError(f"no grasp after {g['max_attempts']} attempts (last: {outcome})")
+    print(f"  picked in {time.perf_counter() - t_pick:.1f} s, {attempt} attempt(s)")
 
     present_z = s.table_z + PRESENT_HEIGHT_MM
     await probe.step("to present height (planner)",
@@ -394,6 +425,7 @@ async def probe_or_touch(machine, mover: Mover, poses: dict, args):
     await probe.step("home (joints)", lambda: mover.joints(poses["scan_joints_deg"], "return to scan pose"),
                      fatal=False)
 
+    probe.tel.end(probe.n, len(probe.failures))
     print(f"\n{probe.n} steps, {len(probe.failures)} failed")
     for n, name, err, frames in probe.failures:
         print(f"  #{n} {name}: {err}\n      frames: {frames}")

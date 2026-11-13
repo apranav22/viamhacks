@@ -52,7 +52,9 @@ class WristView:
 
 
 def detect(rgb, view: WristView | None, region: dict | None) -> list:
-    """Parts on the white table: [(x, y, pixels, yaw_deg, bbox)]. World mm with a view, else pixels."""
+    """Parts on the white table: [(x, y, pixels, yaw_deg, bbox, length, width)]. World mm with a view,
+    else pixels. Length and width are the blob's extent along and across its long axis (for a
+    uniform bar, extent = sqrt(12 * variance)); width is what the jaws close on."""
     f = rgb.astype(np.float32)
     # the background is smooth, so blur at quarter resolution and scale back up (~10x faster)
     small = ndimage.gaussian_filter(f[::4, ::4], sigma=(BACKGROUND_SIGMA_PX / 4, BACKGROUND_SIGMA_PX / 4, 0))
@@ -73,17 +75,22 @@ def detect(rgb, view: WristView | None, region: dict | None) -> list:
                       # Not by darkness: a dark stainless screw (gray 54) is as dark as the finger (53)
         u, v = float(xs.mean()), float(ys.mean())
         evals, evecs = np.linalg.eigh(np.cov(np.stack([xs, ys])))
-        a = evecs[:, np.argmax(evals)]
+        a, b = evecs[:, np.argmax(evals)], evecs[:, np.argmin(evals)]
+        length_px, width_px = math.sqrt(12 * max(evals.max(), 0)), math.sqrt(12 * max(evals.min(), 0))
         if view is None:
             x, y = u, v
             yaw = math.degrees(math.atan2(a[1], a[0]))
+            length, width = length_px, width_px
         else:
             x, y = view.to_world(u, v)
             x2, y2 = view.to_world(u + 10 * a[0], v + 10 * a[1])
+            x3, y3 = view.to_world(u + 10 * b[0], v + 10 * b[1])
             yaw = math.degrees(math.atan2(y2 - y, x2 - x))
+            length = length_px * math.dist((x, y), (x2, y2)) / 10
+            width = width_px * math.dist((x, y), (x3, y3)) / 10
             if region and not (region["x_min"] < x < region["x_max"] and region["y_min"] < y < region["y_max"]):
                 continue
-        out.append((x, y, len(xs), yaw, (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))))
+        out.append((x, y, len(xs), yaw, (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())), length, width))
     return out
 
 

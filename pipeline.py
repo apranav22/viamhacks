@@ -77,6 +77,8 @@ class Item:
     yaw_deg: float
     bbox: tuple  # pixel (x0, y0, x1, y1)
     pixels: int
+    length_mm: float | None = None  # extent along the long axis, from the color look
+    width_mm: float | None = None   # extent across it: what the jaws close on
 
 
 @dataclass
@@ -253,6 +255,25 @@ class Mover:
                 x=p.x + x - tcp.x, y=p.y + y - tcp.y, z=p.z + z - tcp.z,
                 o_x=p.o_x, o_y=p.o_y, o_z=p.o_z, theta=p.theta))
 
+    async def reaim(self, x, y, z, theta, what):
+        """Move the TCP to (x, y, z) and turn it to world theta, still pointing down, by moving the arm
+        directly: no planner (0.3-17 s per call), for re-aiming at hover between grasp attempts. The
+        flange is on the TCP's axis (gripper = arm + 150 mm along it), so a turn about that axis
+        changes both thetas by the same amount."""
+        if self._gate(f"{what} (direct) -> ({x:.0f}, {y:.0f}, {z:.0f}) theta={theta:.0f}"):
+            tcp = await tcp_pose(self.machine)
+            p = await self.arm.get_end_position()
+            turn = (theta - tcp.theta + 180) % 360 - 180
+            await self.arm.move_to_position(Pose(
+                x=p.x + x - tcp.x, y=p.y + y - tcp.y, z=p.z + z - tcp.z,
+                o_x=p.o_x, o_y=p.o_y, o_z=p.o_z, theta=p.theta + turn))
+
+    async def set_finger_speed(self, speed: int):
+        """Closing speed of the G2 fingers (1-5000; the module's default is 2000). Slower flicks small
+        parts away less."""
+        if self.live:
+            await self.gripper.do_command({"set_gripper_speed": int(speed)})
+
     async def open(self):
         if self._gate("open gripper"):
             await self.gripper.open()
@@ -369,13 +390,13 @@ STANDING_MM = 40  # a part this tall is standing up; grasp it halfway up instead
                   # Not lower: from the hover pose, depth read a lying bolt as 26 mm tall
 
 
-def grasp_height(item: Item, table_z: float, g: dict) -> float:
+def grasp_height(item: Item, table_z: float, g: dict, clearance_mm: float | None = None) -> float:
     """TCP height for the grasp. A lying fastener is grasped with the closed fingertips a fixed
     clearance above the table: its measured height is depth noise (the same screw read 14 and 6 mm),
     and every lying fastener is taller than the clearance. tcp_to_tip_mm is how far the CLOSED
     fingertips reach past the 150 mm gripper TCP; open, they sit ~7-10 mm higher, so the descent
     with open fingers stays clear of the table."""
-    tips_z = table_z + g["min_table_clearance_mm"]
+    tips_z = table_z + (g["min_table_clearance_mm"] if clearance_mm is None else clearance_mm)
     if item.top_z - table_z > STANDING_MM:
         tips_z = (item.top_z + table_z) / 2
     return tips_z + g["tcp_to_tip_mm"]

@@ -73,7 +73,7 @@ Hard-won facts (each cost us an hour; don't relearn them):
 
 | Fact | Value |
 |---|---|
-| Fingers close along the gripper's **y** axis | `jaw_offset_deg` **0** (90 grips a screw end to end) |
+| Fingers close along the gripper's **y** axis | `jaw_offset_deg` **90**: closing direction = part's long axis + 90 (across it). Both `pipeline.JawFrame` and `vh.kinematics.ik` model gripper y as the closing axis; 0 aligns the jaws *with* the part and clamps it end to end (fingers stopped at 791 on an 85 mm bolt, 13:01). Ali's "offset 0" fix (13:19) was the same correction against the old x-axis `JawFrame`, since replaced. Round parts (nuts) grip either way, so they can't test this |
 | Closed fingertips past the gripper TCP | **20.5 mm** (open ≈ 13 mm; tips drop up to ~25 mm as the jaws close) |
 | Table top | z **−1.3 mm**; a depth scan's median swings ±3 mm and once read +3.6 |
 | `gripper.grab()` returns before the jaws settle | read `pos` again after it stops changing; ~0–15 = closed on nothing |

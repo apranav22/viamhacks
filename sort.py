@@ -16,7 +16,8 @@ One cycle:
 Moves between known poses are joint moves to recorded / IK-solved joint vectors (no motion planner: the planner took
 4-7 s for these legs and picked wrapped joint configurations), each checked against the workcell obstacles first
 (vh/kinematics.py: forward kinematics from the arm's own URDF). Descend / lift are Pranav's straight moves; grasp
-height, jaw direction, held check and retries come from pipeline.py and config/poses.json unchanged.
+height, jaw direction and held check come from pipeline.py and config/poses.json unchanged; the grasp check and
+retry strategy (what to change after a miss, a wrong clamp or a slip) from grasp.py.
 
 Every stage is sent to the dashboard as UDP telemetry (vh/telemetry.py: non-blocking, measured in microseconds).
 Every decision is written to runs/<run>/decisions.jsonl with ms timestamps (the judge log).
@@ -45,6 +46,7 @@ from viam.services.generic import Generic
 
 from viam.proto.common import GeometriesInFrame, WorldState
 from viam.proto.component.arm import JointPositions
+from grasp import GOOD, classify, expected_pos, first_strategy, next_strategy
 from pipeline import Mover, box, cam_to_world, grasp_height, held, world_state
 from screws import WristView, detect
 from station import connect
@@ -317,12 +319,24 @@ class Sorter:
         return new, tape
 
     async def pick(self, item):
-        """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command."""
+        """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command.
+        Each grasp is checked after a short lift (grasp.classify: good / empty / wrong / slipped, from the finger
+        position against the part's width) and the next attempt changes what most likely failed
+        (grasp.next_strategy): lower + slower after a miss or a slip, jaws turned 90 deg after a wrong clamp, and
+        every rescan_after failures back to the watch pose to find the part again."""
         self.state("PICK")
         t_cmd = None
-        theta_extra = 0.0
-        for attempt in range(1, 2 + G["retries"]):
-            heading = item[3] + G["jaw_offset_deg"] + theta_extra
+        strat = first_strategy(G)
+        for attempt in range(1, G["max_attempts"] + 1):
+            if strat.rescan:
+                self.tel.emit("recovery", level="L2", what=f"{attempt - 1} failed grasps: back to watch to find the part again")
+                await self.jmove(WATCH_J, f"rescan {attempt}", holding=False)
+                found, _, _, _ = await self.watch()
+                if found is None:
+                    break
+                item = found
+                self.state("PICK")
+            heading = item[3] + G["jaw_offset_deg"] + strat.extra_deg
             q, err, _ = ik(np.array([item[0], item[1], HOVER_Z]), seed=self.q or WATCH_J, jaw_heading_deg=heading)
             if attempt == 1:
                 sound("Ping")
@@ -339,29 +353,41 @@ class Sorter:
             turn = abs((new[3] - item[3] + 90) % 180 - 90)
             item = new
             if shift > 2.0 or turn > 4.0:
-                heading = item[3] + G["jaw_offset_deg"] + theta_extra
+                heading = item[3] + G["jaw_offset_deg"] + strat.extra_deg
                 q, _, _ = ik(np.array([item[0], item[1], HOVER_Z]), seed=self.q, jaw_heading_deg=heading)
                 await self.jmove(q, f"aim {attempt}", holding=False)
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
-            gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G)     # look_color's lying-part height
+            await self.mv.set_finger_speed(strat.speed)
+            width = item[6] if len(item) > 6 else None
+            gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G, strat.clearance_mm)   # look_color's lying-part height
+            print(f"  attempt {attempt}/{G['max_attempts']}: jaw +{strat.extra_deg:.0f}, tips {strat.clearance_mm:.1f} mm, "
+                  f"speed {strat.speed}, part {width or 0:.1f} mm wide", flush=True)
             await self.straight(item[0], item[1], gz, f"descend {attempt}")
             with self.tel.span(f"grab {attempt}", phase="grab", item=self.n):
                 pos = await self.mv.grab()
             self.state("LIFT")
-            await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}")
+            await self.straight(item[0], item[1], gz + G["lift_check_mm"], f"lift check {attempt}")
             pl = await self.mv.finger_pos()
-            ok = held(pl, G)
+            outcome, why = classify(pos, pl, width, G)
+            ok = outcome == GOOD
             self.tel.emit("gripper", pos=pl, holding=ok)
-            self.tel.emit("grasp_result", n=self.n, ok=bool(ok), pos=pl, holding=ok, attempt=attempt, expected_pos=None)
+            self.tel.emit("grasp_result", n=self.n, ok=ok, pos=pl, pos_closed=pos, holding=ok, attempt=attempt,
+                          outcome=outcome, why=why, expected_pos=round(expected_pos(width)) if width else None,
+                          extra_deg=strat.extra_deg, clearance_mm=strat.clearance_mm, speed=strat.speed)
+            print(f"  attempt {attempt}: {outcome}: {why}", flush=True)
             if ok:
+                await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}")
+                await self.mv.set_finger_speed(G["finger_speed"])
                 self.grasp_z = gz
                 return True, item, t_cmd
             with self.tel.span("open", phase="pick", item=self.n):
                 await self.release()
-            theta_extra += 90.0
-            self.tel.emit("recovery", level="L1", what=f"missed grasp {attempt}: retry with the jaws turned 90 deg")
+            await self.straight(item[0], item[1], HOVER_Z, f"recover {attempt}")
+            strat = next_strategy(strat, outcome, attempt, G)
+            self.tel.emit("recovery", level="L1", what=f"grasp {attempt} {outcome} ({why}): next {strat}")
+        await self.mv.set_finger_speed(G["finger_speed"])
         return False, item, t_cmd
 
     async def inspect(self):

@@ -46,3 +46,17 @@ random spot, latency 366-433 ms, cycle 12.5-17 s. Found: the cardboard pad gets 
 the TABLE); switched to a fixed pick zone on the bare table x 220-450, y 260-395. Releases now wait for the fingers to
 open (a nut was carried off once). Warning chime + "Robot arm moving" before every run, ping before each pick/place.
 ARM: released (at the watch pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/local-work · 15:30]
+No arm motion this session (read-only probes and dry runs only; the arm was at the watch pose, someone else driving).
+Done: grasp recovery (`grasp.py`, `tests/test_grasp.py`): after the close, lift `lift_check_mm` (20) and classify by
+finger position against the part's width from the color look: good / empty / wrong / slipped. Next attempt changes the
+likely cause: empty or slipped → 1 mm lower (floor 1 mm) at finger speed 600; wrong → jaws +90°; every 3 failures →
+re-find the part (watch pose in sort.py, survey pose in motion_probe.py); give up after 5. Retries re-aim without the
+planner (`Mover.reaim`, joint moves in sort.py). Wired into `motion_probe.py` and **sort.py's `pick()`** (Ali: please
+review; behaviour on a first-try good grasp is unchanged except the 20 mm lift check before the lift to LIFT_Z).
+`screws.detect` now also returns length and width (mm). `AGENTS.md` jaw row corrected: `jaw_offset_deg` is **90** with
+the current y-axis `JawFrame` and `vh.kinematics.ik` (0 clamps parts end to end; nuts can't show the difference).
+Fixed: the 9921ca9 merge had dropped motion_probe's ProbeTel setup while keeping three tel calls (crashed at start).
+Not done: none of the retry path has run on the arm. Gripper force: `get_gripper_torque` returns `{}` here, so not used.
+Next: live `motion_probe.py --live --step` and `sort.py --mode collect` on a bolt (not a nut) to see each outcome once.

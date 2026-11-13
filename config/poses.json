@@ -29,7 +29,14 @@
     "_table_z": "world z of the table top; the median of every scan except one (+1.5) on 2026-11-13",
     "empty_below_pos": 30,
     "_empty_below_pos": "finger position (0-850) under which the gripper closed on nothing; a held screw stopped at ~700",
-    "retries": 2,
+    "max_attempts": 5,
+    "rescan_after": 3,
+    "lift_check_mm": 20,
+    "slip_pos": 40,
+    "finger_speed": 2000,
+    "finger_speed_slow": 600,
+    "clearance_floor_mm": 1.0,
+    "_retry": "grasp retry policy (grasp.py), not measurements: lift lift_check_mm, then classify by finger position; a miss goes 1 mm lower (not below clearance_floor_mm) at finger_speed_slow, a wrong clamp turns the jaws 90 deg, every rescan_after failures re-find the part from the survey/watch pose, give up after max_attempts. finger_speed 2000 = the G2 module default. [claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/local-work · 2026-11-13]",
     "use_yaw": true,
     "jaw_offset_deg": 90
   }
