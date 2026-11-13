@@ -9,7 +9,15 @@
 | Our script runs on the station | Laptop RPCs add 0.5–1.5 s per item |
 | Picking is classical (camera → world pose → motion planner), no RL or demonstrations | See ARCHITECTURE |
 | Survey pose = `home-pose` | Straight down, ≈50 × 68 cm view, 1.06 mm/px, verified |
-| Pick every item; show its underside to a fixed camera | Tape can face the table (pending the camera test) |
+| Pick every item; check it at a checkpoint in front of the fixed camera on the way to the bins | Tape can face the table |
+| One item at a time; the judge may move it | Staff info; recovery L1/L2 built, L3 next |
+| Grasp by shape class (upright, lying, thin screw, nut flat/edge, washer, unknown) from the hover look | Different fasteners need different grasps; depth tells an upright bolt from a nut |
+| Live dashboard via fire-and-forget UDP, separate process | Measured 23–74 µs per event on the loop |
+
+## Status / next
+
+- **Built:** baseline cycle `run.py` (watch → hover → look → pick → home), dashboard, offline fake station, tests. Dry run and offline only; **no live pick yet**.
+- **Next:** bring-up on the arm (ARCHITECTURE "Bring-up"), then defect detection at the hover look + checkpoint, then L3.
 
 ## Who does what
 
@@ -34,7 +42,9 @@
 
 ## Open questions for staff
 
-1. May we move the `overview-cam` stand and put a white card behind a presentation spot?
+1. May we move the `overview-cam` stand to aim at our checkpoint?
+1. Are washers in the judge set? (not graspable top-down with the claw)
+1. How is recovery scored?
 2. How do items arrive, and what counts as "enters view"?
 3. Is the log read from the station; is JSON lines fine; which timestamp do they use for latency?
 4. Should the obstacles be enabled? The fragment's table is ~19 mm too low.

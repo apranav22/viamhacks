@@ -1,0 +1,286 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Track 3: Spot it, sort it</title>
+<style>
+:root{--bg:#f8fafc;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--acc:#2563eb}
+*{box-sizing:border-box} body{margin:0;font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:var(--ink);background:var(--bg)}
+header{background:linear-gradient(120deg,#0f172a,#1e3a8a);color:#fff;padding:42px 6vw 30px}
+header h1{margin:0 0 6px;font-size:34px} header p{margin:0;opacity:.85;max-width:900px}
+nav{position:sticky;top:0;z-index:5;background:#0f172aee;backdrop-filter:blur(6px);padding:10px 6vw;display:flex;gap:18px;flex-wrap:wrap}
+nav a{color:#cbd5e1;text-decoration:none;font-size:14px} nav a:hover{color:#fff}
+main{padding:10px 6vw 80px;max-width:1300px}
+section{margin:34px 0} h2{font-size:24px;margin:0 0 4px} .lead{color:var(--mute);margin:0 0 16px;max-width:900px}
+.grid{display:grid;gap:16px} .g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))} .g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px #0000000a}
+.card h3{margin:0 0 8px;font-size:17px} .card ul{margin:6px 0 0;padding-left:18px} .card li{margin:3px 0}
+.state{border-top:5px solid var(--acc)} .state.end{border-top-color:#16a34a}
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+.step{flex:1 1 105px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;position:relative}
+.step b{display:block;font-size:13px;letter-spacing:.04em;color:var(--acc)} .step span{font-size:14px}
+.step.mark{border:2px solid #f59e0b} .step.mark b{color:#b45309} .step.mark2{border:2px solid #a855f7} .step.mark2 b{color:#7c3aed}
+.lvl .pill{margin-bottom:8px}
+.arrow{align-self:center;color:#94a3b8;font-size:22px}
+.bar{display:flex;height:58px;border-radius:12px;overflow:hidden;box-shadow:inset 0 0 0 1px #0001}
+.seg{color:#fff;display:flex;flex-direction:column;justify-content:center;padding:0 12px;font-size:13px} .seg span{opacity:.9}
+.legend{list-style:none;padding:0;margin:12px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:6px 18px;font-size:14px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} th{background:#f1f5f9;font-size:13px;color:#334155}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.easy{background:#dcfce7;color:#166534} .medium{background:#fef3c7;color:#92400e} .hard{background:#fee2e2;color:#991b1b}
+.v-yes{background:#dcfce7;color:#166534} .v-no{background:#fee2e2;color:#991b1b} .v-stretch{background:#e0e7ff;color:#3730a3}
+.diagram{width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.diagram .small{font-size:13px;fill:#334155} .diagram .dark{fill:#0f172a} .diagram .mute{fill:#64748b} .diagram .tiny{font-size:11px}
+.big{font-size:20px;font-weight:650;margin:0} .callout{background:#eff6ff;border:1px solid #bfdbfe;border-radius:14px;padding:16px 20px}
+.callout.warn{background:#fff7ed;border-color:#fed7aa}
+figure{margin:0} figure img{width:100%;border-radius:10px;border:1px solid var(--line)} figcaption{font-size:13px;color:var(--mute);margin-top:6px}
+code{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:13px}
+.eq{font-family:ui-monospace,Menlo,monospace;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px 16px;font-size:14px;overflow:auto}
+</style></head><body>
+<header><h1>Track 3: Spot it, sort it</h1>
+<p>Six judge items, placed one at a time, five minutes. Find every defect (including one we've never seen), put each item where we said we would, survive a judge moving it, and prove it in a log.
+This page: one cycle from start to end, the path past the fixed camera, recovery levels, what the judges measure, where detection breaks, and whether 3D reconstruction helps.</p></header>
+<nav><a href="#states">Start → end</a><a href="#route">Route per item</a><a href="#recovery">Recovery levels</a><a href="#scoring">Scoring</a><a href="#asym">The core problem</a><a href="#cases">Cases</a><a href="#coverage">Coverage</a>
+<a href="#decide">Decision rule</a><a href="#recon">3D reconstruction?</a><a href="#evals">Our evals</a><a href="#station">What we see</a><a href="#open">Open questions</a></nav>
+<main>
+
+<section id="states"><h2>Start state → end state</h2><p class="lead"><b>One item at a time:</b> a judge places a single item, we decide and sort it, then the next one comes. Six cycles in five minutes.</p>
+<div class="grid g2">
+<div class="card state"><h3>Initial state (each cycle)</h3><ul>
+<li>Table empty in the pick zone; arm at home (= watch pose), gripper open, models warm on the GPU, our loop running on the station</li>
+<li>A judge places <b>one</b> fastener, any position and orientation; tape <b>possibly facing the table</b>; at least one item over the run has a <b>defect type we've never seen</b></li>
+<li>The judge may <b>move the item while the arm is on its way</b>, or later</li>
+<li>Box (good) and reject bin (defective / unsure) at fixed, taught positions; the fixed camera aimed at the checkpoint on the way to both</li></ul></div>
+<div class="card state end"><h3>Final state (after 6 cycles)</h3><ul>
+<li>All 6 items in the box or the reject bin, none dropped, pick zone empty</li>
+<li><b>Log: exactly one line per item</b>: number, decision, confidence, timestamp (+ our extra fields)</li>
+<li>Arm back home, gripper empty, no faults</li>
+<li>Diagnostics saved: per-device benchmarks, live latency stats, per-item views and heatmaps for the explanation</li></ul></div>
+</div>
+<h3 style="margin:22px 0 10px">One cycle</h3>
+<div class="flow">
+<div class="step"><b>WATCH</b><span>home view vs the empty table; new item + hand gone + stable ~0.3 s → t_seen</span></div><div class="arrow">→</div>
+<div class="step mark"><b>HOVER</b><span>move above it: first motion, latency clock stops</span></div><div class="arrow">→</div>
+<div class="step"><b>TOP LOOK</b><span>wrist close-up: initial guess (anomaly + tape); re-aim (L1)</span></div><div class="arrow">→</div>
+<div class="step"><b>PICK</b><span>grab; holding + jaw width check (L2)</span></div><div class="arrow">→</div>
+<div class="step mark2"><b>CHECKPOINT</b><span>on the way to the bins: fingertips at the fixed camera, ~0.3 s stop, ±45° tilt</span></div><div class="arrow">→</div>
+<div class="step"><b>DECIDE</b><span>final before the path splits</span></div><div class="arrow">→</div>
+<div class="step"><b>PLACE + LOG</b><span>box / reject, one log line, back to WATCH</span></div>
+</div>
+<p class="lead" style="margin-top:10px">Our part of a cycle: ≈15–20 s at the arm's 60 deg/s. Six cycles plus the judge placing each item fit in 5 minutes with room for a retry. Holding is monitored during every move after the grasp (L3).</p>
+</section>
+
+<section id="route"><h2>The route for one item</h2>
+<p class="lead">How I read the plan: both boxes sit on the line from the arm to the backboard, <b>reject first, good second</b>.
+The check happens <b>in the air directly above the reject box</b>, with the webcam looking past the part at the backboard.
+A defect is dropped right there (shortest path). Only a part that passes travels on to the good box. The reject path is a strict
+prefix of the good path, so a defect never costs extra motion.</p>
+<div class="flow"><div class="step"><b>WATCH</b><span>home pose; wrist cam sees the item land, hand gone</span></div><div class="arrow">→</div><div class="step mark"><b>① HOVER + LOOK</b><span>first motion (latency stops). Wrist close-up of the TOP face → initial guess</span></div><div class="arrow">→</div><div class="step"><b>② PICK</b><span>descend, grab across the shank, verify holding, lift</span></div><div class="arrow">→</div><div class="step mark2"><b>③ CHECKPOINT</b><span>above the reject box: part pointed at the webcam, 0.3 s still → BOTTOM face (+ side tilt)</span></div><div class="arrow">→</div><div class="step"><b>DECIDE</b><span>top + bottom vs the canonical good part (anomaly model) + tape check → log line</span></div><div class="arrow">→</div><div class="step"><b>④a DEFECT</b><span>open right here: it falls into the reject box</span></div><div class="arrow">→</div><div class="step"><b>④b GOOD</b><span>keep going +x, lower into the good box, open</span></div><div class="arrow">→</div><div class="step"><b>HOME</b><span>back to watch</span></div></div>
+<svg viewBox="0 0 900 345" class="diagram" role="img" aria-label="opposed views">
+<defs><marker id="oa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<text x="16" y="22" class="small" font-weight="700" fill="#0f172a">OPPOSED VIEWS (bolt cross-section)</text>
+<g font-size="12"><rect x="560" y="10" width="12" height="12" fill="#16a34a"/><text x="578" y="21" class="small">top face (wrist cam sees it)</text><rect x="740" y="10" width="12" height="12" fill="#2563eb"/><text x="758" y="21" class="small">bottom face (webcam)</text></g>
+<text x="20" y="52" class="small" font-weight="600">1. HOVER, before the grasp</text>
+<line x1="20" y1="262" x2="360" y2="262" stroke="#475569" stroke-width="3"/><text x="24" y="280" class="tiny mute">table</text>
+<circle cx="190" cy="246" r="16" fill="#cbd5e1"/><path d="M174.0,246.0 A16,16 0 0 1 206.0,246.0" fill="none" stroke="#16a34a" stroke-width="7"/><path d="M206.0,246.0 A16,16 0 0 1 174.0,246.0" fill="none" stroke="#2563eb" stroke-width="7"/>
+<rect x="160" y="62" width="60" height="22" rx="4" fill="#0f172a"/><text x="230" y="78" class="small">wrist cam</text>
+<line x1="190" y1="88" x2="190" y2="222" stroke="#16a34a" stroke-width="3" marker-end="url(#oa)"/>
+<text x="200" y="160" class="small">looks DOWN: top face</text>
+<text x="40" y="306" class="small" fill="#2563eb">bottom face hidden against the table</text>
+<path d="M370,170 C395,150 405,150 430,170" fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#oa)"/><text x="400" y="140" text-anchor="middle" class="tiny mute">grab, lift,</text><text x="400" y="153" text-anchor="middle" class="tiny mute">move ~1.5 s</text>
+<text x="450" y="52" class="small" font-weight="600">2. CHECKPOINT above the reject box (one stop, ~0.3 s still)</text>
+<rect x="452" y="150" width="46" height="34" rx="5" fill="#7c3aed"/><text x="452" y="204" class="small">webcam</text>
+<circle cx="596" cy="167" r="16" fill="#cbd5e1"/><path d="M596.0,151.0 A16,16 0 0 1 596.0,183.0" fill="none" stroke="#16a34a" stroke-width="7"/><path d="M596.0,183.0 A16,16 0 0 1 596.0,151.0" fill="none" stroke="#2563eb" stroke-width="7"/>
+<line x1="642" y1="147" x2="586" y2="147" stroke="#111827" stroke-width="6"/><line x1="642" y1="187" x2="586" y2="187" stroke="#111827" stroke-width="6"/>
+<rect x="642" y="130" width="120" height="74" rx="8" fill="#e2e8f0" stroke="#475569" stroke-width="2"/><text x="668" y="172" class="small dark">gripper</text>
+<rect x="740" y="98" width="48" height="20" rx="4" fill="#0f172a"/><text x="794" y="112" class="tiny dark">wrist cam</text>
+<line x1="738" y1="108" x2="520" y2="108" stroke="#0f172a" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#oa)"/>
+<text x="530" y="100" class="tiny dark">wrist cam faces the webcam (top image already taken)</text>
+<line x1="500" y1="167" x2="574" y2="167" stroke="#2563eb" stroke-width="3" marker-end="url(#oa)"/>
+<text x="506" y="232" class="small">webcam looks at the bottom face</text>
+<rect x="860" y="60" width="22" height="210" fill="#94a3b8"/><text x="852" y="290" text-anchor="end" class="tiny dark">backboard</text>
+<line x1="500" y1="250" x2="848" y2="250" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="506" y="266" class="tiny" fill="#7c3aed">webcam line of sight → gripper → backboard (clean background)</text>
+<text x="20" y="334" class="small" font-weight="600" fill="#0f172a">In the part&#39;s own frame the two view directions differ by exactly 180°, for any grasp angle.</text>
+</svg>
+<svg viewBox="0 0 880 660" class="diagram" role="img" aria-label="top view of the route">
+<defs><marker id="ra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<text x="16" y="20" class="small mute">MAP OF THE TABLE seen from above (a drawing angle, not a camera), to scale, world mm, arm base at 0,0. Arm → backboard is left → right.</text>
+<line x1="172.0" y1="38.8" x2="172.0" y2="619.6" stroke="#eef2f7"/><text x="174.0" y="633.6" class="tiny mute">x 0</text>
+<line x1="260.0" y1="38.8" x2="260.0" y2="619.6" stroke="#eef2f7"/><text x="262.0" y="633.6" class="tiny mute">x 100</text>
+<line x1="348.0" y1="38.8" x2="348.0" y2="619.6" stroke="#eef2f7"/><text x="350.0" y="633.6" class="tiny mute">x 200</text>
+<line x1="436.0" y1="38.8" x2="436.0" y2="619.6" stroke="#eef2f7"/><text x="438.0" y="633.6" class="tiny mute">x 300</text>
+<line x1="524.0" y1="38.8" x2="524.0" y2="619.6" stroke="#eef2f7"/><text x="526.0" y="633.6" class="tiny mute">x 400</text>
+<line x1="612.0" y1="38.8" x2="612.0" y2="619.6" stroke="#eef2f7"/><text x="614.0" y="633.6" class="tiny mute">x 500</text>
+<line x1="700.0" y1="38.8" x2="700.0" y2="619.6" stroke="#eef2f7"/><text x="702.0" y="633.6" class="tiny mute">x 600</text>
+<line x1="788.0" y1="38.8" x2="788.0" y2="619.6" stroke="#eef2f7"/><text x="790.0" y="633.6" class="tiny mute">x 700</text>
+<line x1="57.6" y1="584.4" x2="779.2" y2="584.4" stroke="#eef2f7"/><text x="44.4" y="588.4" class="tiny mute">y -300</text>
+<line x1="57.6" y1="496.4" x2="779.2" y2="496.4" stroke="#eef2f7"/><text x="44.4" y="500.4" class="tiny mute">y -200</text>
+<line x1="57.6" y1="408.4" x2="779.2" y2="408.4" stroke="#eef2f7"/><text x="44.4" y="412.4" class="tiny mute">y -100</text>
+<line x1="57.6" y1="320.4" x2="779.2" y2="320.4" stroke="#eef2f7"/><text x="44.4" y="324.4" class="tiny mute">y 0</text>
+<line x1="57.6" y1="232.4" x2="779.2" y2="232.4" stroke="#eef2f7"/><text x="44.4" y="236.4" class="tiny mute">y 100</text>
+<line x1="57.6" y1="144.4" x2="779.2" y2="144.4" stroke="#eef2f7"/><text x="44.4" y="148.4" class="tiny mute">y 200</text>
+<line x1="57.6" y1="56.4" x2="779.2" y2="56.4" stroke="#eef2f7"/><text x="44.4" y="60.4" class="tiny mute">y 300</text>
+<rect x="779.2" y="38.8" width="26.4" height="580.8" fill="#94a3b8"/><text x="773.2" y="56.4" text-anchor="end" class="small dark">backboard (grey divider)</text>
+<line x1="136.8" y1="492.88" x2="779.2" y2="151.309861100666" stroke="#a855f7" stroke-opacity=".35"/>
+<line x1="136.8" y1="492.88" x2="383.400854136211" y2="624.0" stroke="#a855f7" stroke-opacity=".35"/>
+<line x1="136.8" y1="492.88" x2="779.2" y2="492.88" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="6 5"/>
+<rect x="286.4" y="421.6" width="140.8" height="140.8" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/><text x="356.8" y="578.4" text-anchor="middle" class="small dark">1. REJECT box (nearest)</text>
+<rect x="524.0" y="421.6" width="140.8" height="140.8" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/><text x="594.4" y="578.4" text-anchor="middle" class="small dark">2. GOOD box (further)</text>
+<circle cx="172.0" cy="320.4" r="66.0" fill="#e2e8f0" stroke="#475569" stroke-width="2"/><text x="172.0" y="324.4" text-anchor="middle" class="small dark">arm base</text>
+<rect x="69.92" y="457.68" width="85.36" height="70.4" rx="4" fill="#7c3aed"/><text x="112.16" y="544.0799999999999" text-anchor="middle" class="small dark">webcam</text>
+<rect x="348.0" y="74.0" width="237.6" height="228.8" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="2" stroke-dasharray="7 5"/><text x="466.8" y="68.0" text-anchor="middle" class="small dark">pick zone: judge places ONE item</text>
+<rect x="444.4" y="183.4" width="36" height="10" rx="3" fill="#38bdf8" transform="rotate(-30 462.4 188.4)"/>
+<path d="M462.4,202.4 C442.4,285.2 389.76,396.48 353.76,454.48" fill="none" stroke="#2563eb" stroke-width="3.5" marker-end="url(#ra)"/>
+<circle cx="349.76" cy="466.48" r="11" fill="#fef3c7" stroke="#f59e0b" stroke-width="3"/><text x="349.76" y="470.48" text-anchor="middle" class="tiny dark">CP</text>
+<path d="M363.76,466.48 L586.4,466.48" fill="none" stroke="#16a34a" stroke-width="3.5" stroke-dasharray="9 5" marker-end="url(#ra)"/><circle cx="594.4" cy="466.48" r="7" fill="#16a34a"/>
+<path d="M349.76,479.48 L349.76,508.48" stroke="#dc2626" stroke-width="3.5" marker-end="url(#ra)"/>
+<text x="488.4" y="178.4" class="small" font-weight="600" fill="#0f172a">① hover + wrist look (top face) → first motion</text>
+<text x="342.4" y="267.6" class="small" font-weight="600" fill="#0f172a">② pick, lift</text>
+<text x="277.6" y="368.8" class="small" font-weight="600" fill="#0f172a">③ checkpoint (CP) ABOVE the reject box</text>
+<text x="277.6" y="383.8" class="small" font-weight="600" fill="#0f172a">    part faces the webcam → bottom face</text>
+<text x="229.76" y="524.48" class="small" font-weight="600" fill="#0f172a">④a defect → open here (drop)</text>
+<text x="524.0" y="408.4" class="small" font-weight="600" fill="#0f172a">④b good → carry on, drop</text>
+<text x="436.0" y="496.88" class="tiny" fill="#7c3aed">webcam line of sight</text>
+</svg>
+<svg viewBox="0 0 880 320" class="diagram" role="img" aria-label="cross-section along the webcam line">
+<text x="16" y="20" class="small mute">CROSS-SECTION through the webcam line (a drawing angle, not a camera), to scale. Up = z.</text>
+<line x1="40.0" y1="285.0" x2="805.6" y2="285.0" stroke="#475569" stroke-width="2"/><text x="48.8" y="301.0" class="tiny mute">table</text>
+<rect x="779.2" y="21.0" width="26.4" height="264.0" fill="#94a3b8"/><text x="773.2" y="47.400000000000006" text-anchor="end" class="small dark">backboard</text>
+<path d="M286.4,232.2 L286.4,285.0 L427.2,285.0 L427.2,232.2" fill="#fee2e2" stroke="#dc2626" stroke-width="2.5"/><text x="356.8" y="277.0" text-anchor="middle" class="small dark">reject box (h 60? assumed)</text>
+<path d="M524.0,197.0 L524.0,285.0 L664.8,285.0 L664.8,197.0" fill="#dcfce7" stroke="#16a34a" stroke-width="2.5"/><text x="594.4" y="277.0" text-anchor="middle" class="small dark">good box (h 100? assumed)</text>
+<line x1="136.8" y1="263.0" x2="779.2" y2="90.86943878224676" stroke="#a855f7" stroke-width="2" stroke-dasharray="6 5"/><text x="700.0" y="128.0910148227917" text-anchor="middle" class="tiny" fill="#7c3aed">webcam line of sight (15° up)</text>
+<rect x="84.0" y="236.6" width="66.0" height="48.4" rx="4" fill="#7c3aed"/><text x="117.44" y="301.0" text-anchor="middle" class="small dark">webcam</text>
+<polygon points="485.0,200.5 357.5,234.7 342.0,176.9 469.5,142.7" fill="#e2e8f0" stroke="#475569" stroke-width="2"/><text x="413.5111045350785" y="192.71794302323363" text-anchor="middle" class="small dark">gripper</text>
+<line x1="352.9" y1="217.7" x2="332.5" y2="223.2" stroke="#111827" stroke-width="6"/>
+<line x1="346.6" y1="193.9" x2="326.2" y2="199.4" stroke="#111827" stroke-width="6"/>
+<rect x="324.04" y="204.2" width="18" height="12" rx="3" fill="#38bdf8" stroke="#0369a1"/><text x="319.04" y="184.2" text-anchor="end" class="tiny" fill="#0369a1">held part, bottom face → webcam</text>
+<rect x="474.4" y="199.6" width="24" height="12" rx="3" fill="#0f172a"/><text x="502.4" y="209.6" class="tiny dark">wrist cam (faces the webcam)</text>
+<line x1="282.4" y1="222.91480081230404" x2="316.4" y2="222.91480081230404" stroke="#dc2626" stroke-width="2"/><text x="278.4" y="226.91480081230404" text-anchor="end" class="tiny" fill="#b91c1c">reject near wall must stay below ≈71 mm</text>
+<text x="57.6" y="95.80000000000001" class="small" font-weight="600" fill="#0f172a">③ checkpoint: TCP (202, −166, 90), 250 mm from the lens</text>
+</svg>
+<div class="grid g3" style="margin-top:16px">
+<div class="card"><h3>Why it's diametrically opposed by construction</h3>The wrist cam looks along the gripper's axis. At the hover that axis points
+down, so it images the <b>top</b>. The grasp keeps the part fixed in the fingers, and at the checkpoint the same axis points <b>at the webcam</b>,
+so the webcam looks back along it: the <b>bottom</b>. Opposite faces, one stop, no searching. Only the band under the finger pads is grazing
+in both; one optional tilt at the same stop covers it.</div>
+<div class="card"><h3>Why each camera faces where it does</h3><ul>
+<li><b>Webcam: no depth</b> (plain <code>rdk:builtin:webcam</code>, 640×480). It can only separate the part from the background by looks, so it faces the plain <b>backboard</b>.</li>
+<li><b>Wrist RealSense: has depth.</b> It doesn't need a clean background: keep only pixels within a set distance of the part (or above the table) and the busy scene behind is cut off.</li>
+<li>So the busy side of the room is always behind the depth camera's subject, and the plain side is always behind the webcam's subject.</li></ul></div>
+<div class="card"><h3>Constraints this layout creates</h3><ul>
+<li>The reject box sits <b>under the webcam's line of sight</b>. Its near wall must be lower than ≈71 mm or it hides the part. A low tray works; a tall box needs the checkpoint raised</li>
+<li>The good box sits behind the part in the image only below ~143 mm: boxes under ~14 cm stay out of the background</li>
+<li>Keep the laptop off the area left of the webcam (blocks a side view)</li></ul></div>
+<div class="card"><h3>Time per item (measured moves)</h3><table><tr><td>watch → hover</td><td>1.4 s</td></tr><tr><td>look + aim</td><td>0.9 s</td></tr><tr><td>descend + grab + lift</td><td>2.4 s</td></tr><tr><td>lift → checkpoint</td><td>≈1.5 s</td></tr><tr><td>still + capture + score</td><td>0.4 s</td></tr><tr><td>defect: open</td><td>0.8 s</td></tr><tr><td>good: → box, lower, open</td><td>≈2.3 s</td></tr><tr><td>→ home</td><td>1.2 s</td></tr></table>
+<p class="kv" style="margin-top:6px">≈ 11 s for a defect, ≈ 13 s for a good part. Six items ≈ 75 s of our time.</p></div>
+</div>
+<p class="lead" style="margin-top:10px"><b>Measured:</b> webcam lens, backboard, checkpoint pose (reached live), table height. <b>Assumed:</b> box positions and sizes (drawn
+15 × 16 cm, reject 6 cm tall, good 10 cm), pick zone. Tell me where the boxes actually go and I'll redraw and re-plan the checkpoint over the reject box.</p>
+</section>
+
+<section id="recovery"><h2>Recovery levels</h2>
+<p class="lead">Ordered by how likely the judge is to do it and how cheap it is for us. The weighted rubric doesn't list recovery separately; it most likely protects <b>execution (30%)</b>. Ask staff how it's scored.</p>
+<div class="grid g2" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+<div class="card lvl"><span class="pill easy">L1 · cheap · build first</span><h3>Item moved while the arm approaches</h3><ul><li>The hover close-up re-looks right before descending (already in the flow)</li><li>Shifted → re-aim; rotated → new grasp yaw</li><li>Gone from view → back to WATCH</li></ul></div>
+<div class="card lvl"><span class="pill easy">L2 · cheap</span><h3>Grasp missed (moved at the last moment)</h3><ul><li>After closing: <code>is_holding_something</code> + jaw position ≈ part width (fully closed = empty)</li><li>Empty → open, back to hover, re-look, retry ×2</li></ul></div>
+<div class="card lvl"><span class="pill medium">L3 · medium · build last</span><h3>Item taken out of the gripper in transit</h3><ul><li>No pressure sensor needed: the gripper reports an object-detected flag and its jaw position; the jaws close further when the part leaves</li><li>Poll both at ~10 Hz while the arm moves (a ~10 ms call on the station); lost → <code>arm.stop()</code></li><li>The checkpoint frame double-checks a part is there</li><li>Then back to WATCH, same item number, re-run</li></ul></div>
+<div class="card lvl"><span class="pill hard">Out of scope</span><h3>Items taken out of a bin, swapped mid-inspection</h3>Swaps are covered by L3 + re-deciding. Items moved after they land in a bin aren't ours to fix.</div>
+</div>
+<div class="callout" style="margin-top:16px"><b>Log with recovery:</b> exactly one line per item, written when the item is released into its bin. It holds the decision, confidence and timestamps, plus a <code>recoveries</code> count, so a retried item still produces one line.</div>
+</section>
+
+<section id="scoring"><h2>What the judges measure</h2><p class="lead">Reference sheet weights. Detection is scored from <b>our own log</b>: no log, no decision or latency points.</p>
+<div class="bar"><div class="seg" style="flex:30;background:#2563eb" title="precision + recall of defects, from our log"><b>Decision</b><span>30%</span></div><div class="seg" style="flex:30;background:#16a34a" title="item ends where we decided"><b>Execution</b><span>30%</span></div><div class="seg" style="flex:10;background:#f59e0b" title="item seen → first arm motion (correct items)"><b>Latency</b><span>10%</span></div><div class="seg" style="flex:10;background:#9333ea" title="device placement, measured via diagnostics"><b>Devices</b><span>10%</span></div><div class="seg" style="flex:20;background:#64748b" title="5-min explanation"><b>Design</b><span>20%</span></div></div><ul class="legend"><li><i style="background:#2563eb"></i><b>Decision 30%</b> precision + recall of defects, from our log</li><li><i style="background:#16a34a"></i><b>Execution 30%</b> item ends where we decided</li><li><i style="background:#f59e0b"></i><b>Latency 10%</b> item seen → first arm motion (correct items)</li><li><i style="background:#9333ea"></i><b>Devices 10%</b> device placement, measured via diagnostics</li><li><i style="background:#64748b"></i><b>Design 20%</b> 5-min explanation</li></ul>
+<div class="grid g3" style="margin-top:16px">
+<div class="card"><h3>Decision (30%) in practice</h3>With 6 items, every mistake is ~15–30% of this bucket. A false reject (good → reject) costs <b>precision</b>; a missed defect (defect → box) costs <b>recall</b>.</div>
+<div class="card"><h3>Execution (30%) is separate</h3>A wrong decision placed correctly still scores execution: the item ended where <i>we</i> decided. Grasp reliability is worth as much as detection.</div>
+<div class="card"><h3>Latency only counts correct items</h3>Inspection moves count as the response, so latency is the time to <i>notice</i> the part, not to classify it.</div>
+</div></section>
+
+<section id="asym"><h2>The core problem: defect and good are not symmetric</h2>
+<div class="grid g2">
+<div class="callout"><p class="big">“Defective” needs one piece of evidence.</p>One view with tape or a strong anomaly is enough. That's why the tape-up case is easy.</div>
+<div class="callout warn"><p class="big">“Good” needs the absence of evidence everywhere.</p>“I didn't see a defect” only means “good” if we looked at the whole surface, well enough to have seen one. The no-defect case and the hidden-tape case are <b>the same problem: coverage.</b></div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card"><h3>More views → fewer misses…</h3>Each extra view uncovers surface where a defect could hide, so recall goes up.</div>
+<div class="card"><h3>…but more chances to false-alarm</h3>Each view of a good part is another chance for a spurious high score. With N views, per-view false alarms add up: set per-view thresholds so the <b>whole item</b> stays within a false-alarm budget (e.g. per-view ≈ budget / N).</div>
+</div></section>
+
+<section id="cases"><h2>Cases, ranked by how they fail</h2><p class="lead">Separated items mean finding parts is simple blob detection on a white table. These are the detection cases we need to cover.</p>
+<table><tr><th>Case</th><th>Difficulty</th><th>Who can see it</th><th>How it fails</th><th>Mitigation</th></tr><tr><td><b>Tape facing up</b></td><td><span class="pill easy">easy</span></td><td>Wrist hover close-up (top)</td><td>None really; tape is high-contrast</td><td>Confident reject from the initial guess; checkpoint just confirms</td></tr><tr><td><b>Tape facing the table</b></td><td><span class="pill medium">medium</span></td><td>Checkpoint view (fingertips at the camera)</td><td>Top view says clean → would box it</td><td>Never box on the initial guess alone; decide at the checkpoint</td></tr><tr><td><b>Tape where the fingers grip</b></td><td><span class="pill hard">hard</span></td><td>Only grazing views / nobody</td><td>Pads cover it; looks clean everywhere</td><td>Grip bolts by the head; ±45° tilt; regrasp once if ‘good’</td></tr><tr><td><b>Tiny tape (e.g. bolt tip)</b></td><td><span class="pill medium">medium</span></td><td>Close-up views only</td><td>Too few pixels from the watch pose (1 mm/px)</td><td>Decide from close-ups, never from the watch frame</td></tr><tr><td><b>Good item</b></td><td><span class="pill hard">hard</span></td><td>Must see all surfaces</td><td>Any one view false-alarms → false reject</td><td>Coverage + per-view thresholds set jointly for a false-alarm budget</td></tr><tr><td><b>Unseen defect: appearance (marker, sticker, rust, paint)</b></td><td><span class="pill medium">medium</span></td><td>Anomaly model, any view</td><td>Tape rule misses it; subtle ones score low</td><td>PatchCore trained on good only; test on a held-out defect set</td></tr><tr><td><b>Unseen defect: shape (bent, wrong length, stripped thread)</b></td><td><span class="pill medium">medium</span></td><td>Silhouette + depth</td><td>Texture model may not care about shape</td><td>Primitive fit: length/width/straightness vs known part types</td></tr><tr><td><b>Judge moves the item during the approach</b></td><td><span class="pill medium">medium</span></td><td>Hover close-up</td><td>Grasp at a stale position</td><td>L1: re-look at hover, re-aim / new yaw; gone → back to watching</td></tr><tr><td><b>Judge moves it at the last moment</b></td><td><span class="pill medium">medium</span></td><td>Gripper state</td><td>Closes on nothing</td><td>L2: holding flag + jaw width; retry ×2</td></tr><tr><td><b>Judge takes it out of the gripper</b></td><td><span class="pill hard">hard</span></td><td>Gripper state + checkpoint frame</td><td>Arm carries nothing to a bin; log is wrong</td><td>L3: poll ~10 Hz during moves, stop, re-run as the same item</td></tr></table></section>
+
+<section id="coverage"><h2>Coverage: can two cameras see 360°?</h2>
+<p class="lead">Almost. A top-down grasp leaves the face that was on the table facing out past the fingertips. So <b>pointing the fingertips at the fixed camera shows exactly the hidden side</b>. Spinning about the gripper's own axis only rotates the picture; <b>tilting</b> shows the sides.</p>
+<svg viewBox="0 0 900 330" class="diagram" role="img" aria-label="coverage of a bolt shank cross-section">
+<line x1="20" y1="229" x2="460" y2="229" stroke="#94a3b8" stroke-width="3" stroke-dasharray="6 5"/>
+<text x="20" y="221" class="small mute">table (before the grasp)</text>
+<circle cx="300" cy="165" r="62" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+<text x="300" y="170" text-anchor="middle" class="small dark">shank cross-section</text>
+<path d="M369.3,125.0 A80,80 0 0 0 230.7,125.0" fill="none" stroke="#22c55e" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+<path d="M220.3,211.0 A92,92 0 0 0 379.7,211.0" fill="none" stroke="#3b82f6" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+<path d="M199.5,138.1 A104,104 0 0 0 326.9,265.5" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+<path d="M273.1,265.5 A104,104 0 0 0 400.5,138.1" fill="none" stroke="#f59e0b" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+<rect x="363" y="143" width="14" height="44" rx="3" fill="#ef4444"/>
+<rect x="223" y="143" width="14" height="44" rx="3" fill="#ef4444"/>
+<path d="M354.8,153.4 A56,56 0 0 0 348.5,137.0" fill="none" stroke="#a855f7" stroke-width="8"/>
+<path d="M251.5,137.0 A56,56 0 0 0 245.2,153.4" fill="none" stroke="#a855f7" stroke-width="8"/>
+<rect x="500" y="29" width="16" height="12" rx="2" fill="#22c55e"/><text x="524" y="40" class="small">wrist cam, top-down (before grasp)</text>
+<rect x="500" y="55" width="16" height="12" rx="2" fill="#3b82f6"/><text x="524" y="66" class="small">fingertips at camera (underside)</text>
+<rect x="500" y="81" width="16" height="12" rx="2" fill="#f59e0b"/><text x="524" y="92" class="small">tilted views ±45° (sides)</text>
+<rect x="500" y="107" width="16" height="12" rx="2" fill="#ef4444"/><text x="524" y="118" class="small">finger pads (contact patches hidden)</text>
+<rect x="500" y="133" width="16" height="12" rx="2" fill="#a855f7"/><text x="524" y="144" class="small">weak band: only grazing views</text>
+<text x="500" y="200" class="small mute">Arcs = surface seen at a useful angle</text>
+<text x="500" y="218" class="small mute">(within ~60° of the view direction).</text>
+<text x="500" y="246" class="small mute">Gripping across the shank puts the pads</text>
+<text x="500" y="264" class="small mute">exactly where every view is grazing.</text>
+<text x="500" y="292" class="small mute">Fix: grip the head, or regrasp once</text>
+<text x="500" y="310" class="small mute">for items that look good.</text>
+</svg>
+<div class="grid g3" style="margin-top:16px">
+<div class="card"><h3>Views per item</h3><ol style="margin:0;padding-left:18px"><li>Wrist close-up, top-down, before the grasp</li><li>Fingertips at the fixed camera (underside)</li><li>Tilt −45°</li><li>Tilt +45°</li></ol></div>
+<div class="card"><h3>The blind spot</h3>The finger contact patches sit at the shank's “equator”, which every view sees only at a grazing angle. Tape exactly there is our worst case.</div>
+<div class="card"><h3>Closing it</h3><ul><li>Grip bolts by the <b>head</b>, so the whole shank is free</li><li>For items that still look good: put down, regrasp rotated 90°, one more underside view (~6 s, only on ‘good’ items)</li></ul></div>
+</div></section>
+
+<section id="decide"><h2>Decision rule and confidence</h2>
+<div class="eq">reject  if  max over views ( anomaly_score_v / threshold_v ) ≥ 1   or   tape_fraction ≥ t_tape<br>
+box     if  all views below threshold   and   coverage ≥ C_min<br>
+else    → one more view (regrasp) if time allows, otherwise reject (unsure = reject)<br><br>
+confidence(reject) = how far the worst view is past its threshold (calibrated on validation scores)<br>
+confidence(box)    = coverage × how far the worst view is below its threshold</div>
+<p class="lead" style="margin-top:10px">Coverage comes from the primitive model below: the fraction of the part's surface seen at a useful angle and resolution.</p></section>
+
+<section id="recon"><h2>Is there alpha in 3D reconstruction (3DGS, NeRF, MERF)?</h2>
+<div class="callout warn"><p class="big">Not for detection. Reconstruction can only re-render what some camera already saw.</p>
+Our failure mode is <i>unobserved</i> surface. A radiance field doesn't create evidence for a face nobody imaged; it would hallucinate it. It also needs dozens of posed views and minutes of GPU per item, mostly in CUDA code. It isn't an OpenVINO model, so it doesn't help the device-placement story either.
+And depth won't find tape: the wrist camera <i>is</i> RGB-D, but tape is ~0.1 mm thick.</div>
+<p class="lead" style="margin-top:14px">The 3D idea that <b>does</b> pay is cheap and geometric: model each part type as primitives (cylinder shank, hex head/nut) and use that to account for coverage and catch shape defects.</p>
+<table><tr><th>Approach</th><th>What it gives</th><th>Cost</th><th>Why it matters (or not)</th><th>Verdict</th></tr><tr><td><b>3DGS / NeRF / MERF</b></td><td>Photoreal novel views from many posed images</td><td>30–100+ views, accurate poses, minutes of GPU per item; mostly CUDA code; not an OpenVINO model</td><td>Can only re-render what some camera saw. Hidden faces stay hidden (or get hallucinated). It doesn't add evidence.</td><td><span class="pill v-no">no</span></td></tr><tr><td><b>Primitive models + coverage map</b></td><td>Which % of each part's surface was seen, in which view, at what resolution</td><td>Cylinder / hex prism per part type, view poses we already know; ms of CPU</td><td>Turns ‘looks clean’ into ‘looked clean over 93% of the surface’ → honest confidence, tells us when to take another view</td><td><span class="pill v-yes">yes</span></td></tr><tr><td><b>Primitive fit for shape defects</b></td><td>Length, width, straightness, head size vs known types</td><td>Silhouette from the survey / close-up + depth; ms of CPU</td><td>Catches geometric unseen defects (bent, wrong length) a texture model may miss</td><td><span class="pill v-yes">yes</span></td></tr><tr><td><b>Unwrap the shank onto a strip (texture atlas)</b></td><td>One canonical ‘unrolled’ image per part from all views</td><td>View poses + cylinder model + blending; a few hours to build</td><td>Clean input for the anomaly model and a great demo visual; not needed to win</td><td><span class="pill v-stretch">stretch</span></td></tr></table></section>
+
+<section id="evals"><h2>Our evals (mirror the judging)</h2>
+<div class="grid g2" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+<div class="card"><h3>1. Offline replay (no arm needed)</h3>Every rehearsal saves all views of every item. Re-run detection with new models or thresholds over the whole history in seconds. Report:<ul>
+<li>Precision / recall / confusion per case (rows of the table above)</li><li>Per-view and per-item false-alarm rate on good parts</li><li>Score margins: how far good and defective sit from the threshold</li></ul></div>
+<div class="card"><h3>2. Rehearsal kits (arm in the loop)</h3>Scripted 6-item kits, timed 5-minute runs, a teammate as judge:<ul>
+<li>Kit A: tape up/down mix · Kit B: tape at the grip · Kit C: all good · Kit D: unseen defects · Kit E: the judge moves the item (L1 during approach, L2 at grasp, L3 out of the gripper)</li>
+<li>Score each run exactly like the judges: decision P/R from the log, execution, latency of correct items</li></ul></div>
+<div class="card"><h3>3. Held-out defect discipline</h3>Keep a set of defects <b>nobody trains or tunes on</b> (marker, sticker, bent bolt, paint, other-colored tape). It's our only honest stand-in for the judges' unseen type. Tuning on it means fooling ourselves.</div>
+<div class="card"><h3>4. Numbers for the pitch</h3>Per-device benchmark table (ov-diag), per-stage latency waterfall, confusion matrix per kit, coverage per item, and a short list of what failed and what we changed.</div>
+</div></section>
+
+<section id="station"><h2>What the station sees today</h2>
+<div class="grid g2">
+<figure><img src="img/survey_annotated.jpg" alt=""><figcaption>Watch pose (home): wrist cam straight down from ~64 cm, 1.06 mm/px. A multi-part test scene: every zinc part found with world XY and yaw. Stainless parts partly missed; touching parts merge; the gripper finger (bottom right) needs a mask.</figcaption></figure>
+<figure><img src="img/overview_now.jpg" alt=""><figcaption>overview-cam as placed: ~1 m away, low angle, busy background. Too far for the checkpoint views; we want the stand moved 20–30 cm from the checkpoint.</figcaption></figure>
+<figure><img src="img/cam_color.jpg" alt=""><figcaption>Wrist close-up at ~17 cm: threads are clearly visible; this is the scale for anomaly crops.</figcaption></figure>
+<figure><img src="img/home_color.jpg" alt=""><figcaption>The raw survey frame before segmentation.</figcaption></figure>
+</div></section>
+
+<section id="open"><h2>Open questions</h2>
+<div class="grid g3">
+<div class="card"><h3>For staff</h3><ul><li>How is recovery scored (inside execution, or separately)?</li><li>May we move the overview-cam stand to aim at our checkpoint?</li><li>Where can the judge place the item: anywhere in reach, or a marked zone?</li><li>Which log timestamp do they use for latency?</li></ul></div>
+<div class="card"><h3>For us to test</h3><ul><li>Webcam focus and resolution at 20 / 30 / 40 cm</li><li>Grasp by the head vs the shank, per part type</li><li>Jaw width when holding each part type vs fully closed (L2/L3 signal)</li><li>Per-view false-alarm rate on good parts</li></ul></div>
+<div class="card"><h3>Assumptions on this page</h3><ul><li>One item on the table at a time</li><li>Unsure = reject (reject bin = hold area)</li><li>Inspection moves count as the response</li><li>The judge may move the item before or after the grasp</li></ul></div>
+</div></section>
+</main></body></html>

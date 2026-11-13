@@ -26,17 +26,20 @@ import math
 import os
 import re
 import time
+from types import SimpleNamespace
 
+import numpy as np
 from PIL import Image
 from viam.components.arm import Arm
 from viam.components.camera import Camera
 from viam.proto.common import Pose, PoseInFrame
 
 from overview import Watcher, align, guarded, load_model
-from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Scan, Mover, cam_to_world, ctrl_c_raises, grasp_height,
+from pipeline import (LOG_DIR, POSES_PATH, Item, JawFrame, Mover, cam_to_world, ctrl_c_raises, grasp_height,
                       grasp_theta, gripper_theta, halt, held, now_iso, scan, table_height, tcp_pose, world_state)
 from screws import WristView, color_frame, detect
 from station import connect
+from vh.probe_tel import ProbeTel
 
 PRESENT_HEIGHT_MM = 250   # gripper TCP above the table while reorienting
 RELOOK_MAX_SHIFT_MM = 60  # at hover, the nearest item within this distance is the same item
@@ -66,6 +69,8 @@ class Probe:
         self.n = 0
         self.failures = []
         self.watcher = None  # with --overview: also save its annotated frame after every step
+        self.tel = ProbeTel(run_id=os.path.basename(self.dir) + ("_live" if live else "_dry"))
+        self._frames = {}    # raw camera bytes from the last snapshot, for the dashboard
 
     def note(self, **kw):
         self.log.write(json.dumps({"t": now_iso(), **kw}) + "\n")
@@ -92,6 +97,7 @@ class Probe:
     async def frame(self, cam_name: str, tag: str):
         images, _ = await Camera.from_robot(self.machine, cam_name).get_images()
         img = next(i for i in images if "depth" not in i.name)
+        self._frames[cam_name] = img.data
         path = os.path.join(self.dir, f"{tag}-{cam_name}.jpg")
         Image.open(io.BytesIO(img.data)).convert("RGB").save(path)
         return os.path.basename(path)
@@ -108,6 +114,7 @@ class Probe:
         """Run one timed step; non-fatal failures are logged and the run goes on. The snapshot is
         taken after the timer stops, so it doesn't count toward the step's ms."""
         self.n += 1
+        self.tel.before_step(self.n, name)
         t0 = time.perf_counter()
         try:
             out, ok, err = await fn(), True, None
@@ -121,6 +128,8 @@ class Probe:
             self.watcher.save(os.path.join(self.dir, f"{tag}-tracked.jpg"), name)
             snap["tracked_xy"] = [round(v, 1) for v in self.watcher.position()]
         self.note(n=self.n, step=name, ok=ok, ms=round(ms), error=err, live=self.live, **snap)
+        self.tel.after_step(self.n, name, ok, ms, err, snap, self._frames)
+        self._frames = {}
         if not ok:
             self.failures.append((self.n, name, err, snap.get("frames")))
         if not ok and fatal:
@@ -198,32 +207,39 @@ async def small_moves(probe: Probe, mover: Mover, n: int):
         await probe.step(f"small move {i + 1} ({dx:+d} mm)", go, fatal=False)
 
 
-async def look_color(machine, cam, poses: dict, table_z: float) -> list:
+async def look_color(machine, cam, poses: dict, table_z: float) -> SimpleNamespace:
     """Parts seen by the wrist cam from where the arm is, from color only: each pixel's ray cut with
     the table plane. Position and angle from the part's pixels; at hover (~0.45 mm/px) much better
     than scan(), whose angle comes from depth points too sparse at that range (one look turned the
     jaws 90 deg)."""
-    rgb, (rot, t), props = await asyncio.gather(color_frame(cam, True), cam_to_world(machine), cam.get_properties())
-    view = WristView(props.intrinsic_parameters, rot, t, table_z)
-    return [Item(x=x, y=y, top_z=table_z + 10, yaw_deg=yaw, bbox=bbox, pixels=px)
-            for x, y, px, yaw, bbox in detect(rgb, view, poses["pick_region"])]
+    images, (rot, t), props = await asyncio.gather(cam.get_images(filter_source_names=["color"]), cam_to_world(machine),
+                                                   cam.get_properties())
+    jpeg = images[0][0].data
+    rgb = np.asarray(Image.open(io.BytesIO(jpeg)).convert("RGB"))
+    k = props.intrinsic_parameters
+    view = WristView(k, rot, t, table_z)
+    items = [Item(x=x, y=y, top_z=table_z + 10, yaw_deg=yaw, bbox=bbox, pixels=px)
+             for x, y, px, yaw, bbox in detect(rgb, view, poses["pick_region"])]
+    # rot / t / k / jpeg: what vh.probe_tel needs to draw the look on the dashboard
+    return SimpleNamespace(items=sorted(items, key=lambda it: -it.pixels), table_z=table_z, rot=rot, t=t, k=k, jpeg=jpeg)
 
 
 async def relook(probe: Probe, machine, cam, poses: dict, item, table_z: float, attempt: int):
-    """Look again (from wherever the arm is) and return the item nearest the last estimate; its
-    position and angle replace the old ones. Keeps the old item if nothing is near."""
-    seen = await probe.step(f"look ({attempt})", lambda: look_color(machine, cam, poses, table_z))
-    near = [it for it in seen if math.dist((it.x, it.y), (item.x, item.y)) < RELOOK_MAX_SHIFT_MM]
+    """Look again (from wherever the arm is) and return (item, look): the item nearest the last
+    estimate, whose position and angle replace the old ones; the old item if nothing is near."""
+    look = await probe.step(f"look ({attempt})", lambda: look_color(machine, cam, poses, table_z))
+    near = [it for it in look.items if math.dist((it.x, it.y), (item.x, item.y)) < RELOOK_MAX_SHIFT_MM]
     if not near:
         print("  item not seen; keeping the last estimate")
-        probe.note(step="look", attempt=attempt, seen=False, parts_seen=len(seen))
-        return item
+        probe.note(step="look", attempt=attempt, seen=False, parts_seen=len(look.items))
+        probe.tel.scan(look, None, f"look ({attempt}): item not seen", table_z=table_z)
+        return item, look
     new = min(near, key=lambda it: math.dist((it.x, it.y), (item.x, item.y)))
     shift = math.dist((new.x, new.y), (item.x, item.y))
     print(f"  look: item at ({new.x:.0f}, {new.y:.0f}), {shift:.1f} mm from the last estimate, yaw {new.yaw_deg:.0f}")
     probe.note(step="look", attempt=attempt, seen=True, shift_mm=round(shift, 1), x=new.x, y=new.y,
                yaw_deg=new.yaw_deg, top_z=new.top_z, pixels=new.pixels)
-    return new
+    return new, look
 
 
 async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
@@ -236,9 +252,7 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     base_theta = jaw.theta0
     # color only, from the survey pose: no depth needed (the table height is configured), and depth
     # sometimes comes back empty
-    s = Scan(color=None, table_z=g["table_z"], items=[])
-    s.items = sorted(await probe.step("scan (color)", lambda: look_color(machine, cam, poses, s.table_z)),
-                     key=lambda it: -it.pixels)
+    s = await probe.step("scan (color)", lambda: look_color(machine, cam, poses, g["table_z"]))
     if not s.items:
         print(f"no item in the pick region; put a part on the table")
         probe.note(step="no item", table_z=s.table_z)
@@ -247,6 +261,7 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     mover.ws = world_state(s.table_z)
     theta = grasp_theta(jaw, item, g)
     grasp_z = grasp_height(item, s.table_z, g)
+    probe.tel.scan(s, item, "survey scan", theta, grasp_z, jaw, g)
     above = item.top_z + g["approach_height_mm"]
     print(f"item at ({item.x:.0f}, {item.y:.0f}), top {item.top_z - s.table_z:.0f} mm above table "
           f"z={s.table_z:.1f}, yaw {item.yaw_deg:.0f} deg, {len(s.items)} in view")
@@ -272,9 +287,13 @@ async def run(probe: Probe, mover: Mover, machine, poses: dict, args):
     got = None
     for attempt in range(1, attempts + 1):
         extra = 90.0 * (attempt - 1)
+        look = None
         if args.live:
-            item = await relook(probe, machine, cam, poses, item, s.table_z, attempt)
+            item, look = await relook(probe, machine, cam, poses, item, s.table_z, attempt)
         new_theta = grasp_theta(jaw, item, g, extra, near=theta)
+        if look is not None:
+            probe.tel.scan(look, item, f"look ({attempt})", new_theta, grasp_height(item, s.table_z, g), jaw, g,
+                           table_z=s.table_z)
         print(f"  attempt {attempt}/{attempts}: jaws close along {item.yaw_deg + g['jaw_offset_deg'] + extra:.0f} deg "
               f"(+{extra:.0f}) -> theta {new_theta:.0f}")
         theta = new_theta
@@ -367,6 +386,7 @@ async def probe_or_touch(machine, mover: Mover, poses: dict, args):
     cams = [c for c in args.snap_cams.split(",") if c]
     probe = Probe(machine, mover, args.live, cams)
     print(f"motion probe {'LIVE' if args.live else 'dry run'} at {now_iso()} -> {probe.dir}")
+    probe.tel.start(args.live, vars(args))
     probe.note(step="start", live=args.live, args=vars(args), grasp=poses["grasp"], **await probe.snapshot("00-start"))
     try:
         try:
@@ -382,6 +402,7 @@ async def probe_or_touch(machine, mover: Mover, poses: dict, args):
     await probe.step("home (joints)", lambda: mover.joints(poses["scan_joints_deg"], "return to scan pose"),
                      fatal=False)
 
+    probe.tel.end(probe.n, len(probe.failures))
     print(f"\n{probe.n} steps, {len(probe.failures)} failed")
     for n, name, err, frames in probe.failures:
         print(f"  #{n} {name}: {err}\n      frames: {frames}")

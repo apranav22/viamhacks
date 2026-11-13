@@ -3,3 +3,4 @@ numpy
 scipy
 pillow
 python-dotenv
+opencv-python-headless  # optional: 10x faster morphology in vh/perception.py
