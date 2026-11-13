@@ -75,6 +75,10 @@ STABLE_MM, STABLE_DEG = 3.0, 8.0
 STANDING_MM = 15                    # taller than this: upright (a flat nut is 8-10 mm; a short bolt on its end is 22 mm)
 HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or screw upright): depth needs >~20 cm range
 ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
+# Per --background: surface z (poses.json grasp.surface_z, touch-measured) and pick zone. The cardboard pad spans
+# world x ~104-415 (flap seam at ~415), y ~162-546 from the wrist image, so its zone stops 25 mm short of the seam.
+SURFACE_Z = G.get("surface_z", {"white": G["table_z"]})
+ZONES = {"white": ZONE, "cardboard": {"x_min": 190, "x_max": 390, "y_min": 260, "y_max": 410}}
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
 TAPE_FRAC = 0.02                    # share of the part crop that is tape-blue to call it "known: tape"
@@ -105,7 +109,7 @@ def say(text):
 
 
 def iso(t):
-    return datetime.fromtimestamp(t).isoformat(timespec="milliseconds")
+    return datetime.fromtimestamp(t).astimezone().isoformat(timespec="milliseconds")   # with UTC offset: the station is MST
 
 
 def tape_fraction(rgb):
@@ -192,6 +196,9 @@ class Sorter:
         self.dir = ROOT / "runs" / self.run_id
         self.dir.mkdir(parents=True)
         self.tel = Telemetry(host=args.dash_host, run_id=self.run_id)
+        if args.anomaly_bundle and str(args.anomaly_bundle) == "active":     # set from the training dashboard
+            args.anomaly_bundle = Path((ROOT / "models" / "ACTIVE").read_text().strip())
+            print(f"active anomaly bundle: {args.anomaly_bundle}", flush=True)
         self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device) if args.anomaly_bundle else None
         if self.anomaly:
             loaded = self.anomaly.warm(args.type, args.background)  # compile and warm BEFORE any arm motion
@@ -680,7 +687,7 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
-    p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json; without a model, sort mode rejects as uncertain")
+    p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json, or 'active' (models/ACTIVE, set from the training dashboard); without a model, sort mode rejects as uncertain")
     p.add_argument("--anomaly-device", choices=["CPU", "GPU", "NPU"], default="CPU")
     p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
@@ -689,6 +696,12 @@ async def main():
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
+    global TZ, HOVER_Z, ZONE        # every pick height, the planner's table and the zone follow the pick surface
+    if a.background not in SURFACE_Z:
+        raise SystemExit(f"no measured surface_z for {a.background!r} in config/poses.json")
+    TZ, ZONE = SURFACE_Z[a.background], ZONES[a.background]
+    HOVER_Z = TZ + 10 + G["approach_height_mm"]
+    print(f"surface {a.background}: z {TZ} mm, pick zone {ZONE}", flush=True)
     ik(np.array([300.0, 300.0, 200.0]))          # warm up scipy (first call ~0.4 s)
     async with await connect() as m:
         await Sorter(m, a).run()

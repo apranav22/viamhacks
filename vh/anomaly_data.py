@@ -36,6 +36,9 @@ def collect_samples(run_dirs, part_type, background):
                 skipped.append({"pick": pick, "reason": "missing meta.json (legacy data needs curation)"})
                 continue
             meta = json.loads((folder / "meta.json").read_text())
+            if meta.get("background", "white") != background:     # picks before 16:10 have no field: bare table (white)
+                skipped.append({"pick": pick, "reason": f"collected on {meta.get('background', 'white')}, not {background}"})
+                continue
             pose = row.get("pose", meta.get("pose"))
             if pose not in {"lying", "upright"}:
                 skipped.append({"pick": pick, "reason": "unknown held pose"})
@@ -62,6 +65,19 @@ def build_dataset(run_dirs, output, part_type, background, seed=17):
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite dataset: {output}")
     records, skipped = collect_samples(run_dirs, part_type, background)
+    # The wrist cam went 640x480 -> 1280x720 (+ fixed exposure) at 17:05: never mix top views across that change.
+    # Keep the resolution of the newest pick; webcam views are unaffected (same 1080p webcam throughout).
+    tops = [r for r in records if r['view'] == 'top']
+    if tops:
+        def size(r):
+            with Image.open(r['image']) as im:
+                return im.size
+        # by file time, not run name: station run names are MST, laptop ones EST (2 h apart)
+        newest = size(max(tops, key=lambda r: Path(r['image']).stat().st_mtime))
+        for r in tops:
+            if size(r) != newest:
+                records.remove(r)
+                skipped.append({'pick': r['pick_id'], 'view': 'top', 'reason': f'wrist frame {size(r)} != newest {newest}'})
     good = [r['pick_id'] for r in records if r['label'] == 'good']
     splits = split_picks(good, seed)
     output.mkdir(parents=True)

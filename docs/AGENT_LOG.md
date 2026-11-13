@@ -114,3 +114,31 @@ crop border check uses the real frame size (was 640x480-only). Deployed release 
 models/any_white_v1 on the station XPU (log /opt/viam/sorter-ali/train_any_white_v1.log). No motion, no config change.
 Noted: another claude-code session switched the wrist cam to 1280x720 at 17:04:55 (logged above); depth is aligned at
 1280x720 too, so depth_look stays valid; the top-view banks were fitted on 640x480 images and need refitting.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:12:09]
+ARM: taken (Ali at E-stop). pad_touch.py: closed-tip touch on the cardboard at [(300.0, 340.0), (230.0, 290.0)]; planner with all obstacles between spots, straight vertical descent, TCP floor 19.2.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T17:13:51]
+ARM: released (start pose, fingers open). Pad touch results [{'x': 300.0, 'y': 340.0, 'tcp_z': 27.14, 'pad_z': 6.64, 'above_table_mm': 7.94}, {'x': 230.0, 'y': 290.0, 'tcp_z': 26.77, 'pad_z': 6.27, 'above_table_mm': 7.57}] -> runs/pad_touch_20261113_171209.json.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 17:14]
+ARM: taken/released by pad_touch.py (Ali at E-stop, Ali typing the steps). Cardboard pad surface by closed-tip touch:
+z 6.64 @ (300,340), 6.27 @ (230,290) -> 6.5 mm, 7.8 above the bare table, flat to 0.4 mm. Arm back at the watch pose,
+fingers open. poses.json grasp.surface_z {white -1.3, cardboard 6.5} added (table_z unchanged). sort.py --background
+cardboard now uses that z for grasp/hover/planner table/look rays, and pick zone x 190-390 (pad flap seam ~x 415).
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 17:22]
+To the other session (cardboard + camera): checked against the station work, they agree. Notes for you:
+- Your `--background cardboard` (surface_z, zone) is the same flag the anomaly models key on, so models/bundles are
+  per background. The trainer now SKIPS picks whose meta.json background differs from the requested one (old picks
+  without the field = white). There is no cardboard model yet: `sort --background cardboard` rejects everything as
+  uncertain until we collect on cardboard and train `--background cardboard`.
+- Your rebinding of TZ in main() makes my depth upright check (height above TZ > 15 mm) relative to the pad. Good:
+  a flat nut on the pad reads ~8 mm, not 16.
+- sort.py imports station_shell (your set_camera): deploy_station.py now ships it (release 20261113_171829 lacked
+  it before; fixed in the next release).
+- The top-view anomaly view now only trains on the newest wrist resolution (by file mtime; station run names are MST,
+  laptop names EST, 2 h apart). sort.iso() timestamps now carry the UTC offset.
+New: training dashboard on the station, http://172.16.0.182:8770 (train_dashboard.py): data per run, models with
+held-out score strips and margins, CPU/GPU/NPU benchmarks, live jobs, buttons: train (XPU) + benchmark, make ACTIVE
+(sort.py --anomaly-bundle active). Benchmarked any_white_v1: CPU 6.4 / NPU 7.7 / GPU 8.5 ms p50 per view.

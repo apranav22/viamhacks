@@ -26,6 +26,8 @@
     "tcp_to_tip_mm": 20.5,
     "_tcp_to_tip": "how far the CLOSED fingertips reach past the gripper TCP (arm + 150 mm): motion_probe.py --live --touch 400,0 --closed on the bare table, 2026-11-13. Open they reach ~13 mm: the linkage carries the tips ~7-10 mm down as the fingers close, so the grasp is planned for the closed tips and the open fingers descend well clear of the table",
     "table_z": -1.3,
+    "surface_z": {"white": -1.3, "cardboard": 6.5},
+    "_surface_z": "world z of the pick surface per --background. cardboard: closed-tip touch with pad_touch.py, 2026-11-13 17:12, (300,340)=6.64 and (230,290)=6.27 (spread 0.4 mm): pad 7.8 mm above the bare table; runs/pad_touch_20261113_171209.json. Wrist depth read +4 (noise +-7), use the touch value. [claude-code/claude-opus-5-5 · op Ali]",
     "_table_z": "world z of the table top; the median of every scan except one (+1.5) on 2026-11-13",
     "empty_below_pos": 30,
     "_empty_below_pos": "finger position (0-850) under which the gripper closed on nothing; a held screw stopped at ~700",
