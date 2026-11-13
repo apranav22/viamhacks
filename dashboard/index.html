@@ -69,7 +69,11 @@ svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{colo
     <div class="p"><h2>Gripper</h2><div id="grip" class="empty">No gripper reading yet.</div></div>
   </section>
   <section class="p c4"><h2>Overhead camera <span class="kv" id="ovsub"></span></h2>
-    <div class="view"><img id="ovimg" alt=""><svg id="ovov" viewBox="0 0 640 480" preserveAspectRatio="none"></svg></div></section>
+    <div class="view"><img id="ovimg" alt=""><svg id="ovov" viewBox="0 0 640 480" preserveAspectRatio="none"></svg><div id="ovbanner" class="banner"></div></div>
+    <div class="grid2" id="ovkv" style="margin-top:8px"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="candnote" placeholder="note (optional)" style="flex:1;background:#0d1528;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 8px">
+      <button id="markbtn" style="background:#1e3a5f;border:1px solid #2b5c99;color:#fff;border-radius:6px;padding:5px 12px;cursor:pointer;font-weight:600">Save pose as present candidate</button></div>
+    <div id="cands" style="margin-top:8px;max-height:210px;overflow:auto"></div></section>
   <section class="p c4"><h2>Table map (top view, world mm)</h2><svg id="map" viewBox="0 0 400 380"></svg></section>
   <section class="p c4"><h2>Loop performance</h2><svg id="perf" viewBox="0 0 400 110"></svg><div class="grid2" id="perfkv" style="margin-top:8px"></div></section>
   <section class="p c12"><h2>Timeline <span class="kv">spans and moves, current and previous item</span></h2><svg id="tl" viewBox="0 0 900 230" style="max-height:260px"></svg></section>
@@ -77,12 +81,12 @@ svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{colo
   <section class="p c12"><h2>Events</h2><div class="log" id="log"></div></section>
 </main>
 <script>
-const STATES=["WATCH","HOVER","LOOK","PICK","LIFT","HOME","RELEASE"];
+const DEFAULT_STATES=["WATCH","HOVER","LOOK","PICK","LIFT","HOME","RELEASE"]; let STATES=DEFAULT_STATES;
 const $=id=>document.getElementById(id);
 let S;
 let PV={cams:{},arm:null,status:"–"};   // idle preview: survives run resets
 function reset(){S={state:"IDLE",stateT:Date.now()/1e3,item:null,times:{},tab:"live",watch:null,look:null,refId:null,depth:null,
-  cycles:[],spans:[],moves:[],lat:[],perf:[],tele:null,lastPkt:0,map:{},grip:{},masks:[],live:false};}
+  cycles:[],spans:[],moves:[],lat:[],perf:[],tele:null,lastPkt:0,map:{},grip:{},masks:[],live:false,snap:{}};}
 reset();
 const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const f1=v=>v==null?"–":(+v).toFixed(1), f0=v=>v==null?"–":Math.round(+v);
@@ -118,24 +122,47 @@ function ovJaws(L){ if(!L||!L.jaw_px) return ""; const [[ax,ay],[bx,by]]=L.jaw_p
 function render(){
   let svg=`<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#64748b88" stroke-width="3"/></pattern></defs>`+ovMasks();
   const B=$("banner"); B.className="banner"; let sub="";
-  if(S.tab==="live"&&!runActive()&&PV.cams["cam"]){const c=PV.cams["cam"]; showFrame(c.frame&&c.frame.id);
-    sub=`idle preview · ${f0(c.rpc_ms)} ms frame`;}
+  if(S.tab==="live"&&!runActive()&&PV.cams["cam"]){const c=PV.cams["cam"]; showFrame(c.frame&&c.frame.id); const d=c.det||{};
+    (d.items||[]).forEach((it,i)=>{svg+=ovBlob(it,i?"#facc15":"#22c55e",it.xy?`(${f0(it.xy[0])}, ${f0(it.xy[1])}) mm`:`${it.area} px`);});
+    if(d.hand){B.className="banner hand";B.textContent="HAND IN VIEW";} else if((d.items||[]).length){B.className="banner placed";B.textContent=`${d.items.length} DETECTED`;}
+    sub=`idle preview · ${f0(c.rpc_ms)} ms frame · detect ${f1(c.det_ms)} ms${d.error?" · "+d.error:""}`;}
+  else if(S.tab==="live"&&!S.watch&&S.snap["cam"]){const c=S.snap["cam"]; showFrame(c.frame&&c.frame.id); sub=`run snapshot after: ${c.step}`;}
   else if(S.tab==="live"&&S.watch){const w=S.watch; showFrame(w.frame&&w.frame.id);
     const col=w.hand?"#ef4444":w.placed?"#22c55e":"#f59e0b";
     if(w.item) svg+=ovBlob(w.item,col,w.item.xy?`(${f0(w.item.xy[0])}, ${f0(w.item.xy[1])}) mm`:"");
     if(w.hand){B.className="banner hand";B.textContent="HAND IN VIEW";} else if(w.placed){B.className="banner placed";B.textContent="PLACED";} else if(w.item){B.className="banner wait";B.textContent="SETTLING";}
     sub=`watch · ${f0(w.rpc_ms)} ms frame · ${f1(w.proc_ms)} ms perception`;}
   else if(S.tab==="look"&&S.look){const L=S.look; showFrame(L.frame&&L.frame.id);
-    if(L.item) svg+=ovBlob(L.item,"#22d3ee",L.shape||"")+ovJaws(L); else {B.className="banner hand";B.textContent="ITEM GONE (L1)";}
-    sub=`hover look · item ${L.n}`;}
+    (L.others||[]).forEach(o=>{const [x0,y0,x1,y1]=o.bbox; svg+=`<rect x="${x0-3}" y="${y0-3}" width="${x1-x0+6}" height="${y1-y0+6}" fill="none" stroke="#94a3b8" stroke-dasharray="4 3" rx="3"/>`;});
+    if(L.item) svg+=ovBlob(L.item,"#22d3ee",L.item.xy?`(${f0(L.item.xy[0])}, ${f0(L.item.xy[1])})`:(L.shape||""))+ovJaws(L); else {B.className="banner hand";B.textContent="ITEM NOT SEEN";}
+    sub=`${L.label||"hover look"} · item ${L.n}`;}
   else if(S.tab==="ref"&&S.refId){showFrame(S.refId); sub="empty-table reference (ignored as background)";}
   else if(S.tab==="height"&&S.depth){showHeight(S.depth); svg=""; sub="height above the table from depth (hover look)";}
   $("ov").innerHTML=svg; $("camsub").textContent=sub;
 }
 
 /* ---- overhead camera (idle preview; run frames once the pipeline sends them) ---- */
-function renderOv(){ const c=PV.cams["overview-cam"]; if(!c) return; showOv(c.frame&&c.frame.id);
-  $("ovsub").textContent=runActive()?"paused during the run":`live · ${f0(c.rpc_ms)} ms frame`; }
+function renderOv(){ const run=runActive()&&S.snap["overview-cam"], c=run?S.snap["overview-cam"]:PV.cams["overview-cam"]; if(!c) return;
+  showOv(c.frame&&c.frame.id); const d=run?null:(c.det||{}), B=$("ovbanner"); B.className="banner"; let svg="";
+  if(d){ if(d.claws){const [x0,y0,x1,y1]=d.claws; svg+=`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" fill="none" stroke="#a78bfa" stroke-dasharray="6 4" stroke-width="2"/><text x="${x0+3}" y="${y0+14}" fill="#c4b5fd" font-size="14" font-weight="700" paint-order="stroke" stroke="#000" stroke-width="3">dark (claws?)</text>`;}
+    (d.parts||[]).forEach((pt,i)=>{const [x0,y0,x1,y1]=pt.bbox, col=pt.tape>0.15?"#3b82f6":"#22d3ee";
+      svg+=`<rect x="${x0-3}" y="${y0-3}" width="${x1-x0+6}" height="${y1-y0+6}" fill="none" stroke="${col}" stroke-width="${i?1.5:3}" rx="3"/><text x="${x0}" y="${Math.max(y0-8,14)}" fill="${col}" font-size="15" font-weight="700" paint-order="stroke" stroke="#000" stroke-width="3">${i?"":"part "}${Math.max(x1-x0,y1-y0)} px${pt.tape>0.15?" · tape "+Math.round(100*pt.tape)+"%":""}</text>`;});
+    svg+=`<path d="M310,240 h20 M320,230 v20" stroke="#ffffff88" stroke-width="2"/>`;
+    if(d.parts&&d.parts.length){B.className="banner placed";B.textContent="PART IN VIEW";} else {B.className="banner wait";B.textContent="NO PART";}
+    const q=(v,lo,hi)=>v==null?"":v<lo?"bad":v>hi?"ok":"warn";
+    $("ovkv").innerHTML=`<div class="m">part size<b class="${q(d.part_px,40,90)}">${d.part_px?d.part_px+" px":"–"}</b></div>
+      <div class="m">part sharpness (Laplacian var)<b class="${q(d.part_sharp,40,150)}">${d.part_sharp!=null?f0(d.part_sharp):"–"}</b></div>
+      <div class="m">part brightness · frame<b class="${q(d.part_bright,60,90)}">${d.part_bright!=null?f0(d.part_bright):"–"} · ${f0(d.bright)} (clip ${d.clipped}%)</b></div>
+      <div class="m">offset from center<b>${d.part_center_off?d.part_center_off.join(", ")+" px":"–"}</b></div>`;}
+  $("ovov").innerHTML=svg;
+  $("ovsub").textContent=run?`run snapshot after: ${c.step}`:`live · ${f0(c.rpc_ms)} ms frame · detect ${f1(c.det_ms)} ms`; }
+async function loadCands(){ try{ const r=await fetch("/candidates"); if(!r.ok) return; renderCands(await r.json()); }catch(e){} }
+function renderCands(list){ if(!list.length){$("cands").innerHTML=`<div class="empty">No present candidates saved yet. Jog the arm (holding a part) over the overhead camera, then save.</div>`;return;}
+  $("cands").innerHTML=`<table><thead><tr><th>id</th><th>TCP x, y, z · θ</th><th>part</th><th>sharp</th><th>bright</th><th>note</th></tr></thead><tbody>`+
+  list.slice().reverse().map(c=>{const o=c.overhead||{}; return `<tr><td><a style="color:#93c5fd" href="/cand/${c.id}-overhead.jpg" target="_blank">${c.id}</a></td>
+    <td>${c.tcp.slice(0,3).map(f0).join(", ")} · ${f0(c.tcp[6])}°</td><td>${o.part_px?o.part_px+" px":"–"}</td><td>${o.part_sharp!=null?f0(o.part_sharp):"–"}</td><td>${o.part_bright!=null?f0(o.part_bright):"–"}</td><td>${esc(c.note||"")}</td></tr>`;}).join("")+`</tbody></table>`;}
+$("markbtn").onclick=async()=>{ const r=await fetch("/mark",{method:"POST",body:JSON.stringify({note:$("candnote").value})}); const j=await r.json();
+  if(j.error){alert(j.error);return;} $("candnote").value=""; loadCands(); };
 
 /* ---- cycle chain ---- */
 function renderChain(){
@@ -160,9 +187,9 @@ function renderLat(){ const L=S.lat[S.lat.length-1]; if(!L) return;
 function renderMeas(){ const L=S.look; if(!L||!L.m){return;} const m=L.m, g=L.grasp||{};
   $("meas").className=""; $("meas").innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="shape">${esc(L.shape)}</span><span class="kv">${esc(L.shape_note||"")}</span></div>
   <div class="grid2"><div class="m">center (world)<b>${f0(m.x)}, ${f0(m.y)} mm</b></div><div class="m">height above table<b>${f1(m.height)} mm</b></div>
-  <div class="m">length × width<b>${f1(m.length)} × ${f1(m.width)} mm</b></div><div class="m">long-axis yaw<b>${f0(m.yaw_long)}°</b></div>
-  <div class="m">grasp: fingertips at<b>z ${f1(g.tip_z)} mm</b></div><div class="m">jaws close along<b>${f0(g.jaw_heading)}° · ${f1(g.expected_width)} mm</b></div>
-  <div class="m">depth coverage<b>${f0(100*m.depth_frac)} %</b></div><div class="m">graspable<b class="${g.ok?"ok":"bad"}">${g.ok?"yes":"no · "+esc(g.reason||"")}</b></div></div>`;}
+  ${m.length!=null?`<div class="m">length × width<b>${f1(m.length)} × ${f1(m.width)} mm</b></div>`:`<div class="m">top z (world)<b>${f1(m.top_z)} mm</b></div>`}<div class="m">long-axis yaw<b>${f0(m.yaw_long)}°</b></div>
+  <div class="m">grasp: fingertips at<b>z ${f1(g.tip_z)} mm</b></div><div class="m">jaws close along<b>${f0(g.jaw_heading)}°${g.expected_width!=null?" · "+f1(g.expected_width)+" mm":""}${g.intended!=null?` <span class="kv">(intended ${f0(g.intended)}°)</span>`:""}</b></div>
+  ${g.theta!=null?`<div class="m">gripper theta<b>${f0(g.theta)}°</b></div>`:`<div class="m">depth coverage<b>${m.depth_frac!=null?f0(100*m.depth_frac)+" %":"–"}</b></div>`}<div class="m">graspable<b class="${g.ok?"ok":"bad"}">${g.ok?"yes":"no · "+esc(g.reason||"")}</b></div></div>`;}
 function renderGrip(){ const G=S.grip, A=PV.arm; if(!runActive()&&A){G.pos=A.pos; G.holding=A.holding;}
   if(G.pos==null&&!G.cmd) return; const pos=G.pos??null;
   $("grip").className=""; $("grip").innerHTML=`<div style="display:flex;justify-content:space-between"><span class="kv">jaw position <b>${pos==null?"–":f0(pos)}</b> / 850 ${G.expected?`· expected ≈ <b>${f0(G.expected)}</b>`:""}</span>
@@ -182,10 +209,10 @@ function renderMap(){ const M=S.map; let s=`<rect x="0" y="0" width="400" height
   if(PV.arm){const a=PV.arm.tcp; s+=`<circle cx="${MY(a[1])}" cy="${MX(a[0])}" r="6" fill="#e2e8f0" opacity=".8"/><text x="${MY(a[1])+9}" y="${MX(a[0])+4}" fill="#cbd5e1" font-size="10">gripper z ${f0(a[2])}</text>`;}
   if(M.watch){s+=`<circle cx="${MY(M.watch[1])}" cy="${MX(M.watch[0])}" r="9" fill="none" stroke="#f59e0b" stroke-width="2"/>`;}
   if(M.hover){s+=`<path d="M${MY(M.hover[1])-8},${MX(M.hover[0])} h16 M${MY(M.hover[1])},${MX(M.hover[0])-8} v16" stroke="#93c5fd" stroke-width="2"/>`;}
-  if(M.m){const m=M.m, r=Math.PI/180*m.yaw_long, hx=Math.cos(r)*m.length/2, hy=Math.sin(r)*m.length/2;
-    s+=`<line x1="${MY(m.y-hy)}" y1="${MX(m.x-hx)}" x2="${MY(m.y+hy)}" y2="${MX(m.x+hx)}" stroke="#22d3ee" stroke-width="${Math.max(3,m.width*0.5)}" stroke-linecap="round" opacity=".85"/>`;
+  if(M.m){const m=M.m, r=Math.PI/180*m.yaw_long, L2=(m.length||40)/2, hx=Math.cos(r)*L2, hy=Math.sin(r)*L2;
+    s+=`<line x1="${MY(m.y-hy)}" y1="${MX(m.x-hx)}" x2="${MY(m.y+hy)}" y2="${MX(m.x+hx)}" stroke="#22d3ee" stroke-width="${Math.max(3,(m.width||10)*0.5)}" stroke-linecap="round" opacity=".85"/>`;
     if(M.watch) s+=`<line x1="${MY(M.watch[1])}" y1="${MX(M.watch[0])}" x2="${MY(m.y)}" y2="${MX(m.x)}" stroke="#f59e0b" stroke-dasharray="3 3"/>`;}
-  if(M.g){const g=M.g, r=Math.PI/180*g.jaw_heading, d=(g.expected_width/2+10), ax=Math.cos(r)*d, ay=Math.sin(r)*d;
+  if(M.g){const g=M.g, r=Math.PI/180*g.jaw_heading, d=((g.expected_width||20)/2+10), ax=Math.cos(r)*d, ay=Math.sin(r)*d;
     s+=`<line x1="${MY(g.y-ay)}" y1="${MX(g.x-ax)}" x2="${MY(g.y+ay)}" y2="${MX(g.x+ax)}" stroke="#f472b6" stroke-width="2"/>
     <circle cx="${MY(g.y-ay)}" cy="${MX(g.x-ax)}" r="3.5" fill="#f472b6"/><circle cx="${MY(g.y+ay)}" cy="${MX(g.x+ax)}" r="3.5" fill="#f472b6"/>`;}
   s+=`<g font-size="10" fill="#94a3b8"><circle cx="300" cy="352" r="5" fill="none" stroke="#f59e0b" stroke-width="2"/><text x="310" y="355">watch estimate</text>
@@ -195,18 +222,19 @@ function renderMap(){ const M=S.map; let s=`<rect x="0" y="0" width="400" height
   $("map").innerHTML=s;}
 
 /* ---- timeline ---- */
-const SPCOL={look:"#22d3ee",hover:"#60a5fa",pick:"#a78bfa",home:"#64748b"};
-function renderTL(){ const items=[...new Set(S.spans.map(s=>s.item).concat(S.moves.map(m=>m.item)))].filter(x=>x!=null).slice(-2);
+const SPCOL={look:"#22d3ee",hover:"#60a5fa",pick:"#a78bfa",home:"#64748b",SURVEY:"#64748b",SCAN:"#22d3ee",HOVER:"#60a5fa",RELOOK:"#38bdf8",DESCEND:"#a78bfa",GRAB:"#f472b6",LIFT:"#c084fc",PRESENT:"#f59e0b",PLACE:"#22c55e",HOME:"#64748b"};
+function renderTL(){ const items=[...new Set(S.spans.map(s=>s.item))].filter(x=>x!=null).slice(-2);
   if(!items.length){$("tl").innerHTML=`<text x="12" y="30" fill="#64748b" font-size="13">No spans yet.</text>`;return;}
-  const sp=S.spans.filter(s=>items.includes(s.item)), mv=S.moves.filter(m=>items.includes(m.item));
-  const t0=Math.min(...sp.map(s=>s.t0),...mv.map(m=>m.t)), t1=Math.max(...sp.map(s=>s.t0+s.ms/1e3),...mv.map(m=>m.t),t0+1);
-  const X=t=>110+(t-t0)/(t1-t0)*770; let s=""; const rows={};
-  let row=0; for(const it of items){ for(const name of ["hover","look","pick","home"]){rows[it+name]=row++;} }
-  for(const [k,r] of Object.entries(rows)){const y=14+r*26; s+=`<text x="6" y="${y+13}" fill="#8090b8" font-size="11">#${k.match(/^\d+/)[0]} ${k.replace(/^\d+/,"")}</text><line x1="110" y1="${y+18}" x2="880" y2="${y+18}" stroke="#16213d"/>`;}
-  for(const x of sp){const r=rows[x.item+x.name]; if(r==null) continue; const y=14+r*26, w=Math.max(2,X(x.t0+x.ms/1e3)-X(x.t0));
-    s+=`<rect x="${X(x.t0)}" y="${y}" width="${w}" height="16" rx="3" fill="${x.error?"#ef4444":SPCOL[x.name]||"#94a3b8"}"><title>${x.name} ${f0(x.ms)} ms ${x.error||""}</title></rect>`;
-    if(w>40) s+=`<text x="${X(x.t0)+4}" y="${y+12}" fill="#0a0f1e" font-size="10" font-weight="700">${f0(x.ms)} ms</text>`;}
-  for(const m of mv){s+=`<line x1="${X(m.t)}" y1="8" x2="${X(m.t)}" y2="222" stroke="#93c5fd33"/><text x="${X(m.t)+2}" y="226" fill="#93c5fd" font-size="9">${esc(m.label)}</text>`;}
+  const sp=S.spans.filter(s=>items.includes(s.item));
+  const t0=Math.min(...sp.map(s=>s.t0)), t1=Math.max(...sp.map(s=>s.t0+s.ms/1e3),t0+1);
+  const rows={}; let row=0; for(const x of sp){const k=x.item+"|"+x.name; if(rows[k]==null) rows[k]=row++;}
+  const rh=Math.min(26,Math.max(12,600/Math.max(row,1))), H=20+row*rh+16; $("tl").setAttribute("viewBox",`0 0 900 ${H}`); $("tl").style.maxHeight=Math.min(H*1.6,640)+"px";
+  const X=t=>190+(t-t0)/(t1-t0)*690; let s="";
+  for(const [k,r] of Object.entries(rows)){const y=10+r*rh; const [it,name]=k.split("|"); s+=`<text x="6" y="${y+rh*0.62}" fill="#8090b8" font-size="${Math.min(11,rh*0.7)}">#${it} ${esc(name.slice(0,30))}</text><line x1="190" y1="${y+rh-2}" x2="880" y2="${y+rh-2}" stroke="#16213d"/>`;}
+  for(const x of sp){const r=rows[x.item+"|"+x.name], y=10+r*rh, w=Math.max(2,X(x.t0+x.ms/1e3)-X(x.t0));
+    s+=`<rect x="${X(x.t0)}" y="${y}" width="${w}" height="${rh-4}" rx="3" fill="${x.error?"#ef4444":SPCOL[x.phase]||SPCOL[x.name]||"#94a3b8"}"><title>${esc(x.name)} ${f0(x.ms)} ms ${esc(x.error||"")}</title></rect>`;
+    s+=`<text x="${X(x.t0)+w+4}" y="${y+rh*0.62}" fill="#cbd5e1" font-size="${Math.min(10,rh*0.65)}">${f0(x.ms)} ms${x.error?" ✗":""}</text>`;}
+  const tot=(t1-t0); s+=`<text x="880" y="${H-4}" fill="#64748b" font-size="10" text-anchor="end">${tot.toFixed(1)} s total</text>`;
   $("tl").innerHTML=s;}
 
 /* ---- perf ---- */
@@ -233,18 +261,22 @@ function onEvent(ev){
   if(ev.k==="preview_status"){ PV.status=ev.state+(ev.error?": "+ev.error:""); $("pv").textContent=ev.state==="live"?`live ${ev.fps} fps`:ev.state; $("pv").className=ev.state==="error"?"bad":ev.state==="live"?"ok":"warn"; if(ev.error) $("pv").title=ev.error; return; }
   S.lastPkt=Date.now()/1e3;
   switch(ev.k){
-    case "run": reset(); S.live=ev.live; S.masks=(ev.config||{}).MASK_RECTS||[]; $("run").textContent=ev.run; $("mode").textContent=ev.live?"LIVE MOTION":"DRY RUN"; $("mode").className="badge "+(ev.live?"live":"dry");
+    case "run": reset(); STATES=ev.states||DEFAULT_STATES; S.live=ev.live; S.masks=(ev.config||{}).MASK_RECTS||[]; $("run").textContent=ev.run; $("mode").textContent=ev.live?"LIVE MOTION":"DRY RUN"; $("mode").className="badge "+(ev.live?"live":"dry");
       $("log").innerHTML=""; log(ev,`run started: ${ev.cmd}${ev.live?" LIVE":" (dry run)"}${ev.step?" step":""} release=${ev.release}`); break;
     case "connected": log(ev,`connected in ${ev.ms} ms · home ${JSON.stringify(ev.home_deg)}`); break;
     case "state": S.state=ev.state; S.stateT=ev.t; if(ev.item!=null){S.item=ev.item; (S.times[ev.item]=S.times[ev.item]||{})[ev.state]=ev.t;}
-      if(ev.state==="WATCH"&&S.tab!=="live") setTab("live"); if(ev.state==="LOOK") {} log(ev,`→ ${ev.state}${ev.item!=null?" (item "+ev.item+(ev.attempt>1?", attempt "+ev.attempt:"")+")":""}`); break;
+      if((ev.state==="WATCH"||ev.state==="SURVEY")&&S.tab!=="live") setTab("live"); if(ev.state==="LOOK") {} log(ev,`→ ${ev.state}${ev.item!=null?" (item "+ev.item+(ev.attempt>1?", attempt "+ev.attempt:"")+")":""}`); break;
     case "watch": S.watch=ev; if(ev.item&&ev.item.xy) S.map.watch=ev.item.xy; S.perf.push({t:ev.t,rpc:ev.rpc_ms,proc:ev.proc_ms}); if(S.perf.length>300) S.perf.shift(); break;
     case "reference": S.refId=ev.frame&&ev.frame.id; log(ev,`empty-table reference captured${ev.blobs&&ev.blobs.length?` (${ev.blobs.length} fixed object(s) ignored)`:""}`); break;
     case "placed": log(ev,`placed at (${f0(ev.x)}, ${f0(ev.y)}) mm`); break;
-    case "look": S.look=ev; if(ev.m){S.map.m=ev.m; S.map.g=ev.grasp;} setTab("look"); log(ev,ev.item?`look: ${ev.shape} · ${f1(ev.m.length)}×${f1(ev.m.width)} mm, h ${f1(ev.m.height)} mm, yaw ${f0(ev.m.yaw_long)}°`:"look: item not under the camera"); break;
+    case "look": S.look=ev; if(ev.m){S.map.m=ev.m; S.map.g=ev.grasp;} setTab("look"); log(ev,ev.item?`${ev.label||"look"}: (${f0(ev.m.x)}, ${f0(ev.m.y)}) h ${f1(ev.m.height)} mm, yaw ${f0(ev.m.yaw_long)}°${ev.grasp?`, jaws ${f0(ev.grasp.jaw_heading)}° θ ${f0(ev.grasp.theta)}°`:""}`:`${ev.label||"look"}: item not seen`); break;
     case "depth": S.depth={id:ev.frame&&ev.frame.id, shape:(ev.frame.mime.match(/h=(\d+);w=(\d+)/)||[0,60,80]).slice(1).map(Number)}; break;
     case "move": S.moves.push({t:ev.t,label:ev.label,item:S.item}); if(ev.label==="hover"&&ev.target) S.map.hover=[ev.target.x,ev.target.y];
       log(ev,`move ${ev.label}${ev.dry_run?" (dry)":""}: ${ev.component} ${ev.target?`(${f0(ev.target.x)}, ${f0(ev.target.y)}, ${f0(ev.target.z)}) θ ${f0(ev.target.theta)}°`:"joints "+JSON.stringify(ev.joints)}${ev.linear?" linear":""}`); break;
+    case "snap": S.snap[ev.cam]=ev; if(ev.cam==="overview-cam") renderOv(); else if(S.tab==="live") render(); break;
+    case "candidate": loadCands(); log(ev,`present candidate ${ev.id} saved at (${ev.tcp.slice(0,3).map(f0).join(", ")})`); break;
+    case "note": log(ev,`note: ${ev.step||""} ${JSON.stringify(Object.fromEntries(Object.entries(ev).filter(([k])=>!["k","t","s","run","_q"].includes(k))))}`); break;
+    case "error": log(ev,"error: "+ev.msg); break;
     case "span": S.spans.push(ev); if(S.spans.length>200) S.spans.shift(); if(ev.error) log(ev,`${ev.name} failed: ${ev.error}`); break;
     case "latency": S.lat.push(ev); log(ev,`latency item ${ev.n}: ${ev.ms_to_motion} ms to first motion (placing ${ev.ms_to_stable} ms)`); break;
     case "first_motion": log(ev,"arm started moving"); break;
@@ -272,5 +304,5 @@ setInterval(()=>{ const now=Date.now()/1e3, age=S.lastPkt?now-S.lastPkt:null, ok
   $("link").className="dot"+(ok?" ok":""); $("linktxt").textContent=age==null?"no telemetry yet":ok?"telemetry live":`last packet ${age.toFixed(0)} s ago`;
   $("state").textContent=S.state; $("item").textContent=S.item??"–"; $("elapsed").textContent=S.state==="IDLE"?"–":(now-S.stateT).toFixed(1)+" s";
   if(S.state!=="IDLE") renderChain(); },200);
-renderAll(); connect();
+renderAll(); connect(); loadCands();
 </script></body></html>

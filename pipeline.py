@@ -146,7 +146,9 @@ async def scan(machine, cam: Camera, region: dict) -> Scan:
                           bbox=(int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())),
                           pixels=int(blob.sum())))
     items.sort(key=lambda it: -it.pixels)
-    return Scan(color=img, table_z=table_z, items=items)
+    out = Scan(color=img, table_z=table_z, items=items)
+    out.jpeg, out.rot, out.t, out.k = color.data, rot, t, k   # for the dashboard (vh/probe_tel.py)
+    return out
 
 
 async def classify(anomaly: Vision | None) -> tuple:

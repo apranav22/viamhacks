@@ -14,6 +14,8 @@ records the run (events.jsonl + key frames) under runs/<run>/dash. Stdlib only.
 """
 
 import argparse
+import os
+import sys
 import asyncio
 import itertools
 import json
@@ -27,6 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(ROOT))
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
 PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
 KEEP_PREVIEW = 24
@@ -46,6 +49,7 @@ class Hub:
         self.last_packet = 0.0
         self.stats = {"packets": 0, "events": 0, "frames": 0, "incomplete": 0}
         self.run_state, self.run_last = "IDLE", 0.0
+        self.latest = {}                       # newest idle-preview frame/detection per camera + arm state
 
     def run_active(self):
         """A run is active while it keeps sending telemetry and hasn't said IDLE."""
@@ -195,8 +199,22 @@ def replay(hub, folder, speed):
 PREVIEW_IDS = itertools.count(PREVIEW_BASE)          # never collides with the run's frame ids
 
 
+def load_creds(key_file):
+    """api-key.json, else VIAM_ADDRESS / VIAM_API_KEY / VIAM_API_KEY_ID from the environment or .env."""
+    if Path(key_file).exists():
+        return json.loads(Path(key_file).read_text())
+    env = dict(os.environ)
+    if (ROOT / ".env").exists():
+        for line in (ROOT / ".env").read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                env.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    return {"address": env["VIAM_ADDRESS"], "api_key": env["VIAM_API_KEY"], "api_key_id": env["VIAM_API_KEY_ID"]}
+
+
 async def preview_loop(hub, key_file, cams, fps):
-    """Idle preview: poll cameras + arm/gripper state while no run is active. Read-only."""
+    """Idle preview: poll cameras + arm/gripper state while no run is active, and run the cheap live
+    detectors on the frames (vh/live_detect.py) in this process. Read-only on the robot."""
     import viam.components.arm  # noqa: F401
     import viam.components.camera  # noqa: F401
     import viam.components.gripper  # noqa: F401
@@ -205,19 +223,24 @@ async def preview_loop(hub, key_file, cams, fps):
     from viam.components.gripper import Gripper
     from viam.proto.common import Pose, PoseInFrame
     from viam.robot.client import RobotClient
+    from vh import live_detect
+    from vh.geometry import Intrinsics, frame_to_world
 
     def status(state, **kw):
         hub.event({"k": "preview_status", "t": time.time(), "state": state, **kw})
 
     while True:
+        m = None
         try:
-            creds = json.loads(Path(key_file).read_text())
+            creds = load_creds(key_file)
             m = await RobotClient.at_address(creds["address"], RobotClient.Options.with_api_key(
                 api_key=creds["api_key"], api_key_id=creds["api_key_id"]))
             arm, grip = Arm.from_robot(m, "arm"), Gripper.from_robot(m, "gripper")
             handles = {c: Camera.from_robot(m, c) for c in cams}
+            intr = await Intrinsics.from_camera(handles["cam"]) if "cam" in handles else None
             status("live", fps=fps)
             tick, paused = 0, False
+            T, T_tcp, T_time = None, None, 0.0
             while True:
                 if hub.run_active():
                     if not paused:
@@ -235,28 +258,75 @@ async def preview_loop(hub, key_file, cams, fps):
                     tc = time.perf_counter()
                     imgs, _ = await cam.get_images(filter_source_names=["color"] if name == "cam" else None)
                     img = next((i for i in imgs if "jpeg" in i.mime_type), imgs[0])
+                    rpc = round(1000 * (time.perf_counter() - tc))
+                    td = time.perf_counter()
+                    try:
+                        if name == "cam":
+                            det = await asyncio.to_thread(live_detect.wrist, img.data, T, intr)
+                        elif name == "overview-cam":
+                            det = await asyncio.to_thread(live_detect.overhead, img.data)
+                        else:
+                            det = None
+                    except Exception as e:
+                        det = {"error": f"{type(e).__name__}: {e}"[:160]}
+                    det_ms = round(1000 * (time.perf_counter() - td), 1)
                     fid = next(PREVIEW_IDS)
                     hub._store_frame(fid, img.data, img.mime_type)
-                    hub.event({"k": "preview", "t": time.time(), "cam": name, "rpc_ms": round(1000 * (time.perf_counter() - tc)),
+                    hub.latest[name] = (img.data, det)
+                    hub.event({"k": "preview", "t": time.time(), "cam": name, "rpc_ms": rpc, "det_ms": det_ms, "det": det,
                                "frame": {"id": fid, "len": len(img.data), "mime": img.mime_type, "ok": True}})
                 if tick % 2 == 0:
                     tcp, joints, gpos, holding = await asyncio.gather(
                         m.transform_pose(PoseInFrame(reference_frame="gripper", pose=Pose(o_z=1)), "world"),
                         arm.get_joint_positions(), grip.do_command({"get": True}), grip.is_holding_something())
                     p = tcp.pose
-                    hub.event({"k": "arm_state", "t": time.time(),
-                               "tcp": [round(p.x, 1), round(p.y, 1), round(p.z, 1), round(p.o_x, 3), round(p.o_y, 3), round(p.o_z, 3), round(p.theta, 1)],
-                               "joints": [round(v, 1) for v in joints.values], "pos": gpos.get("pos"),
-                               "holding": holding.is_holding_something})
+                    ev = {"k": "arm_state", "t": time.time(),
+                          "tcp": [round(p.x, 1), round(p.y, 1), round(p.z, 1), round(p.o_x, 3), round(p.o_y, 3), round(p.o_z, 3), round(p.theta, 1)],
+                          "joints": [round(v, 1) for v in joints.values], "pos": gpos.get("pos"),
+                          "holding": holding.is_holding_something}
+                    hub.latest["arm_state"] = ev
+                    hub.event(dict(ev))
+                    # cam -> world for the wrist detections: refresh when the arm moved or every 5 s
+                    now_tcp = ev["tcp"]
+                    if intr and (T_tcp is None or max(abs(a - b) for a, b in zip(now_tcp, T_tcp)) > 0.5
+                                 or time.time() - T_time > 5):
+                        T, _ = await frame_to_world(m, "cam")
+                        T_tcp, T_time = now_tcp, time.time()
                 tick += 1
                 await asyncio.sleep(max(0.0, 1.0 / fps - (time.perf_counter() - t0)))
         except Exception as e:
             status("error", error=f"{type(e).__name__}: {e}"[:200])
             try:
-                await m.close()
+                if m:
+                    await m.close()
             except Exception:
                 pass
             await asyncio.sleep(5)
+
+
+def save_candidate(hub, note=""):
+    """Snapshot the current arm pose + overhead frame + its metrics as a secondary-capture candidate."""
+    arm = hub.latest.get("arm_state")
+    ov = hub.latest.get("overview-cam")
+    if not arm or not ov:
+        return {"error": "no live arm state / overhead frame yet (is the preview running and idle?)"}
+    d = ROOT / "runs" / "present_candidates"
+    d.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%H%M%S")
+    (d / f"{stamp}-overhead.jpg").write_bytes(ov[0])
+    if hub.latest.get("cam"):
+        (d / f"{stamp}-wrist.jpg").write_bytes(hub.latest["cam"][0])
+    rec = {"id": stamp, "t": time.time(), "note": note, "tcp": arm["tcp"], "joints_deg": arm["joints"],
+           "gripper_pos": arm["pos"], "holding": arm["holding"], "overhead": ov[1]}
+    with (d / "candidates.jsonl").open("a") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    hub.event({"k": "candidate", **rec})
+    return rec
+
+
+def list_candidates():
+    f = ROOT / "runs" / "present_candidates" / "candidates.jsonl"
+    return [json.loads(l) for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
 
 
 def make_handler(hub):
@@ -286,11 +356,32 @@ def make_handler(hub):
                     return self._send(404, b"gone", "text/plain")
                 mime, blob = got
                 return self._send(200, blob, "application/octet-stream" if not mime or not mime.startswith("image/") else mime)
+            if path == "/candidates":
+                return self._send(200, json.dumps(list_candidates()).encode(), "application/json")
+            if path.startswith("/cand/"):
+                name = path.rsplit("/", 1)[1]
+                f = ROOT / "runs" / "present_candidates" / name
+                if not name.replace("-", "").replace(".", "").isalnum() or not f.exists():
+                    return self._send(404, b"not found", "text/plain")
+                return self._send(200, f.read_bytes(), "image/jpeg")
             if path == "/health":
                 body = dict(hub.stats, last_packet_age=round(time.time() - hub.last_packet, 2) if hub.last_packet else None)
                 return self._send(200, json.dumps(body).encode(), "application/json")
             if path == "/events":
                 return self.sse()
+            return self._send(404, b"not found", "text/plain")
+
+        def do_POST(self):
+            if self.path.split("?")[0] == "/mark":
+                n = int(self.headers.get("Content-Length") or 0)
+                note = ""
+                if n:
+                    try:
+                        note = str(json.loads(self.rfile.read(n)).get("note", ""))[:200]
+                    except ValueError:
+                        pass
+                rec = save_candidate(hub, note)
+                return self._send(200 if "error" not in rec else 409, json.dumps(rec).encode(), "application/json")
             return self._send(404, b"not found", "text/plain")
 
         def sse(self):
@@ -347,7 +438,7 @@ def main():
         threading.Thread(target=replay, args=(hub, a.replay, a.speed), daemon=True).start()
     else:
         threading.Thread(target=udp_loop, args=(hub, a.udp_host, a.udp_port), daemon=True).start()
-        if not a.no_preview and Path(a.key).exists():
+        if not a.no_preview:
             threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps)),
                              daemon=True).start()
     srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub))
