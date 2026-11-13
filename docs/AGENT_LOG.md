@@ -54,3 +54,6 @@ ARM: taken. Upright parts: depth height check at a high hover, grasp halfway up,
 Collect run 152536: 5 picks of a short taped hex bolt standing on its threads (was labelled socket_thin_long; relabelled
 hex_bolt_short in decisions.jsonl). Upright threshold 40 -> 15 mm: the 22 mm bolt was gripped as 'lying' and the webcam
 only saw its head. ARM: released (watch pose, open); team is arranging parts on the table.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · ali/pipeline · 16:00]
+ARM: taken (Ali: go). --refs, then collect: clean long stainless button-head screw, 8 picks.

@@ -71,7 +71,7 @@ PM = np.array(CP["webcam"]["P_world_to_px"])
 STABLE_MM, STABLE_DEG = 3.0, 8.0
 STANDING_MM = 15                    # taller than this: upright (a flat nut is 8-10 mm; a short bolt on its end is 22 mm)
 HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or screw upright): depth needs >~20 cm range
-ZONE = {"x_min": 220, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
+ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
 TAPE_FRAC = 0.02                    # share of the part crop that is tape-blue to call it "known: tape"
@@ -359,7 +359,7 @@ class Sorter:
         theta_extra = 0.0
         self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)
         squat = round_part(item)
-        hz = HOVER_HIGH_Z if squat else HOVER_Z
+        hz = HOVER_HIGH_Z      # every part: from the low hover a long part runs off the bottom of the wrist frame
         for attempt in range(1, 2 + G["retries"]):
             heading = item[3] + G["jaw_offset_deg"] + theta_extra
             q, err, _ = ik(np.array([item[0], item[1], hz]), seed=self.q or WATCH_J, jaw_heading_deg=heading)
@@ -499,7 +499,7 @@ class Sorter:
         q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=random.uniform(0, 180))
         await self.jmove(q, "over pad", holding=self.upright or True)
         # set it down (upright parts stay upright) or let go 20-35 mm up so it lands on a random face / tips over
-        how = random.choice(["set", "drop", "drop"]) if not self.args.set_only else "set"
+        how = random.choice(["set", "drop"]) if self.args.drops else "set"   # round parts roll ~12 cm when dropped
         drop = 3.0 if how == "set" else random.uniform(20, 35)
         self.meta["placed_next"] = {"x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
         await self.straight(x, y, self.grasp_z + drop, "lower")
@@ -609,7 +609,8 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
-    p.add_argument("--set-only", action="store_true", help="collect: always set the part down gently (no drops)")
+    p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
+                   "only for parts that don't roll (hex nuts, hex bolts)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
