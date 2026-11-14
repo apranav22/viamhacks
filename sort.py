@@ -57,9 +57,6 @@ from vh.config import POSES, CHECKPOINT as CP
 G = POSES["grasp"]
 TZ = G["table_z"]
 WATCH_J = CP["watch_pose"]["joints_deg"]
-NORMAL_SPEED = 60.0                 # arm joint speed, deg/s: the module default, used for approach, descent and grasp
-MAX_SPEED = 180.0                   # the UFACTORY 850's joint-speed limit (and the module's): --fast-carry's ceiling
-SECURE_SLIP_POS = 15                # a grip is confirmed if the fingers closed at most this much more during the lift
 LIFT_Z = 280.0                      # TCP height before swinging to the checkpoint: clears the box walls (100) + flap (140)
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
 VIEW_ORDER = ["front", "yaw-20", "yaw+35", "pitch-25"]   # this order keeps every leg clear of the box
@@ -231,15 +228,6 @@ class Sorter:
         with self.tel.span(label, phase=label.split()[0], item=self.n):
             await self.mv.straight(x, y, z, label)
         self.q = None
-
-    async def set_arm_speed(self, deg_s, why):
-        """Arm joint speed via the module's set_speed DoCommand (lasts until changed or the module restarts)."""
-        if getattr(self, "speed", None) == deg_s:
-            return
-        await self.arm.do_command({"set_speed": float(deg_s)})
-        self.speed = deg_s
-        self.tel.emit("note", step="arm speed", deg_s=deg_s, why=why)
-        print(f"  arm speed -> {deg_s:.0f} deg/s ({why})", flush=True)
 
     async def release(self):
         """Open and wait until the fingers are really open: gripper.open() can return while they are still closed,
@@ -450,7 +438,6 @@ class Sorter:
         self.state("PICK")
         t_cmd = None
         theta_extra = 0.0
-        self.grip_secure = False
         self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)
         squat = round_part(item)
         # The top image now comes from the camera-centred look pose, so the gripper hover only has to be high where the
@@ -515,12 +502,8 @@ class Sorter:
             await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}")
             pl = await self.mv.finger_pos()
             ok = held(pl, G)
-            # confirmed: held, and the fingers didn't keep closing while the part was lifted 250 mm (a screw read
-            # 32 after the grab and 26 after the lift at 20:0x, and was lost)
-            self.grip_secure = bool(ok) and pos is not None and pos - pl <= SECURE_SLIP_POS
             self.tel.emit("gripper", pos=pl, holding=ok)
-            self.tel.emit("grasp_result", n=self.n, ok=bool(ok), pos=pl, pos_closed=pos, holding=ok, secure=self.grip_secure,
-                          attempt=attempt, expected_pos=None)
+            self.tel.emit("grasp_result", n=self.n, ok=bool(ok), pos=pl, holding=ok, attempt=attempt, expected_pos=None)
             if ok:
                 self.grasp_z = gz
                 return True, item, t_cmd
@@ -678,11 +661,6 @@ class Sorter:
                 return False
             return True
         self.last_miss = None
-        if self.args.fast_carry and self.grip_secure:
-            await self.set_arm_speed(self.args.fast_carry, "grip confirmed: carrying at full speed")
-        elif self.args.fast_carry:
-            self.tel.emit("note", step="fast carry skipped", why="grip not confirmed: fingers kept closing during the lift")
-            print("  grip not confirmed (fingers kept closing during the lift): carrying at normal speed", flush=True)
         decision, reason, at, scores = await self.inspect()
         t_dec = time.time()
         rec.update(decision=decision, reason=reason, decided_at_view=at, scores=scores, t_decided=iso(t_dec),
@@ -704,7 +682,6 @@ class Sorter:
                 await self.release()
         elif decision == "collect":
             await self.place_back()
-        await self.set_arm_speed(NORMAL_SPEED, "released: back to normal speed for the next approach")
         rec["t_released"] = iso(time.time())
         self.state("RETURN")
         await self.jmove(WATCH_J, "return", holding=False)
@@ -760,17 +737,11 @@ class Sorter:
         if a.refs:
             await self.capture_refs()
         count = a.reps if a.mode == "collect" else a.items
-        self.speed = None
-        await self.set_arm_speed(NORMAL_SPEED, "run start")
         try:
             for _ in range(count):
                 if not await self.cycle():
                     break
         finally:
-            try:
-                await self.set_arm_speed(NORMAL_SPEED, "run end")   # also after an error: never leave the arm fast
-            except Exception as e:
-                print(f"  could not restore the arm speed ({e}); set it by hand: arm DoCommand set_speed {NORMAL_SPEED:.0f}")
             self.state("IDLE")
             print("telemetry", self.tel.report(), "->", self.dir)
 
@@ -792,15 +763,9 @@ async def main():
     p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
     p.add_argument("--decide", choices=["all", "top"], default="all",
                    help="sort: which anomaly views can reject (top = wrist top view only; webcam scores logged as evidence)")
-    p.add_argument("--fast-carry", type=float, default=MAX_SPEED, metavar="DEG_S",
-                   help=f"arm joint speed while carrying a CONFIRMED grip (held, fingers steady through the lift), from "
-                        f"lift to release; normal {NORMAL_SPEED:.0f} deg/s otherwise. Default {MAX_SPEED:.0f} (the arm's "
-                        f"limit); 0 = off")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
-    if not 0 <= a.fast_carry <= MAX_SPEED:
-        raise SystemExit(f"--fast-carry must be 0 (off) .. {MAX_SPEED:.0f} deg/s")
     global TZ, HOVER_Z, ZONE        # every pick height, the planner's table and the zone follow the pick surface
     if a.background not in SURFACE_Z:
         raise SystemExit(f"no measured surface_z for {a.background!r} in config/poses.json")
