@@ -652,3 +652,14 @@ Queued on the station (starts when no sort.py runs, Arc GPU): train_anomaly --th
 top view test picks 25/28 defects caught vs 23/28 for max-margin, good rejected 1/36 both. Use with --anomaly-bundle
 models/each_cardboard_cvp95_v1/bundle.json once it finishes; it shows up in the dashboard Models tab like the others.
 Earlier log times from me between "11:40" and "12:30" were ~45 min fast; real times 10:55-11:25.
+
+[claude-code/claude-fable-5-2 · op aayus (git: aayus@sticker) · sticker · aayush/integration · 2026-11-14 12:05]
+Trainable bake-off (exp_trainable_eval.py, exp/trainable_top/, top view cardboard, same folds as exp_backbone_eval):
+defects caught at margin 1.03: EfficientAD-S 21/28, ResNet-18 PatchCore 10/28, PaDiM 2/28, SuperSimpleNet 2/28.
+EfficientAD's 7 misses are all socket_m16. Same in-sample-threshold caveat as my 11:10 correction; held-out good from
+lopsided runs still exceed threshold (socket_m16, hex_bolt_short) for every model. EfficientAD: 63 s train per fold on
+an RTX 4070 Ti, 13 ms GPU / 465 ms CPU torch; OpenVINO export + station timing NOT done yet.
+Station: train_anomaly --threshold cv-p95 started 12:03 on the Arc GPU (arm idle) -> models/each_cardboard_cvp95_v1;
+it includes today's coverage runs, so hex_bolt_partial gets under/end_a/end_b models (61 good picks). Obliques are not
+in the dataset builder (meta["oblique"], not meta["views"]).
+DINOv3-S OpenVINO on the station at 224 px: CPU 23.7 / GPU 3.4 / NPU 4.8 ms.
