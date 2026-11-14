@@ -229,8 +229,16 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        from data_explorer import handle as explore
+        if explore(self, RUNS):
+            return
         if self.path == "/":
             return self.send(200, PAGE, "text/html; charset=utf-8")
+        if self.path == "/supervision":
+            return self.send(200, (ROOT / 'quality_supervision.html').read_bytes(), 'text/html; charset=utf-8')
+        if self.path == "/api/quality":
+            from monitor_quality import snapshot
+            return self.send(200, json.dumps(snapshot(SHARED), allow_nan=False))
         if self.path == "/api/state":
             models, active = scan_models()
             return self.send(200, json.dumps({"host": os.uname().nodename, "now": time.time(), "data": scan_data(),
@@ -258,7 +266,7 @@ pre{background:#060a15;padding:8px;border-radius:6px;max-height:260px;overflow:a
 button,input,select{background:#1a2442;color:var(--ink);border:1px solid #2b3a63;border-radius:6px;padding:4px 9px;font:inherit}
 button{cursor:pointer}button.on{background:#14532d;border-color:var(--gr)}.tag{padding:1px 7px;border-radius:9px;background:#1e293b;font-size:11px}
 .model{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}</style></head><body>
-<header><h1>Training · Intel station</h1><span id="host" class="mute"></span><span id="active" class="tag"></span><span id="judged"></span><span style="flex:1"></span><span id="ts" class="mute"></span></header>
+<header><h1>Training · Intel station</h1><a href="/supervision" style="color:#22d3ee">Quality supervision</a><a href="/explore" style="color:#22d3ee">Browse collected images & live activity</a><span id="host" class="mute"></span><span id="active" class="tag"></span><span id="judged"></span><span style="flex:1"></span><span id="ts" class="mute"></span></header>
 <main>
 <section class="p"><h2>Train a new bundle</h2>
  name <input id="nm" size="18"> type <input id="ty" value="any" size="10"> background <select id="bg"><option>white</option><option>cardboard</option></select>

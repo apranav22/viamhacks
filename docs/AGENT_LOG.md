@@ -377,3 +377,26 @@ socket_thin_long good x20 done: station runs/20261113_173920_collect (20/20). AR
 
 [pi/unknown · op Ali · Alis-MacBook-Air.local · ali/live-dashboard · 19:50]
 Operator requested all current viamhacks changes pushed. Snapshotting current code/site/dashboard and chronological agent log; 41 unittest tests pass (1 skipped); pipeline script tests pass separately. New docs/THRESHOLD_FINDINGS.md consolidates experiments, threshold leakage caveats, collection defects, live misses, false rejects and safety incidents. Latest station backup c20ea540 adds 3 runs (34 picks). No motion/config changes during this handoff.
+
+[codex/unknown · op Vedant · local workstation · vedant/dashboard-progress]
+Added evidence-based project dashboard with six stage progress bars, explicit pending checks, source commit and links to station live/training dashboards. Built site/index.html and verified local HTTP rendering structure (six stage cards, seven progress bars, 16/26 documented checks). No station deployment, robot connection, motion or camera setting change. Station publication pending headless access.
+
+[codex/unknown · op Vedant · local workstation · vedant/dashboard-progress]
+Implemented /explore in training dashboard: saved-image filters, per-pick full views/metadata, four-image comparison, CSV selection, four-second polling, independent Linux collection/training/evaluation/sorting/replay indicators; unknown/disconnected states explicit. Read-only explorer imports no robot SDK. deploy_station.py includes explorer files. deploy_explorer.py stages beside existing services on 8771 and reads shared station runs/models without copying credentials or replacing current release. Verified fixture HTTP/index/new-frame/symlink/traversal/process checks and JS syntax. NOT DEPLOYED: headless LAN access blocked and escalation rejected; no browser used.
+
+[codex/unknown · op Vedant Desai · local workstation · vedant/dashboard-progress · 2026-11-14 UTC]
+Update to preceding entry: explorer 896d886 subsequently deployed through user-approved isolated Viam browser shell
+to /opt/viam/sorter-vedant-explorer/browser-896d886 on :8771; verified 1944 real station images / 218 picks / 22 runs.
+No robot commands or existing-service restarts. Added docs/QUALITY_HANDOFF.md and CLAUDE.md pointer at Vedant's request:
+teacher proposals vs confirmed truth, per-pick confusion matrix, persistent failure monitoring, training stages and
+architecture view. Those new features remain pending; no automatic Claude ingestion or improved accuracy claimed.
+
+[codex/unknown · op Vedant Desai · local workstation · vedant/dashboard-progress · 2026-11-14 UTC]
+Vedant clarified: Claude is the operational teacher/supervisor on ANOTHER machine; that instance must PULL these
+ideas, read AGENTS.md + QUALITY_HANDOFF.md, consume model-quality reports, and guide improvements. Implemented
+monitor_quality.py (stdlib, no robot/GPU), atomic quality/latest.json with heartbeat/change reports, saved
+anomaly-only whole-pick confusion metrics, overlap/missing-view/unknown-label exclusions and job-failure alerts.
+Added /api/quality + /supervision with clickable TP/TN/FP/FN, image links, metrics and actual log-derived job stages.
+Integrated explorer links and deployment file lists. Five semantic tests and Python/JS syntax checks passed.
+Not deployed; active remote Claude consumption/acknowledgment NOT verified. Full review store, live-sorting
+label joins and architecture animation remain pending. No model training/activation, motion or config changes.
