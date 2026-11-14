@@ -35,7 +35,7 @@ from station_shell import execute, upload         # noqa: E402
 BASE = "/opt/viam/sorter-ali"
 CHUNK = 1_500_000
 CODE = ["sort.py", "pipeline.py", "screws.py", "tracking.py", "overview.py", "station.py", "station_shell.py", "train_anomaly.py",
-        "replay_anomaly.py", "benchmark_anomaly.py", "train_dashboard.py", "requirements.txt", "requirements-anomaly.txt"]
+        "replay_anomaly.py", "benchmark_anomaly.py", "train_dashboard.py", "data_explorer.py", "data_explorer.html", "requirements.txt", "requirements-anomaly.txt"]
 DIRS = ["vh", "config"]
 SKIP = ("__pycache__", ".pyc", "backup-")
 
