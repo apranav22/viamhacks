@@ -73,6 +73,9 @@ UPRIGHT_ORDER = ["end", "side0", "side+120", "side-120"]   # over the far (good)
 PM = np.array(CP["webcam"]["P_world_to_px"])
 STABLE_MM, STABLE_DEG = 3.0, 8.0
 STANDING_MM = 15                    # taller than this: upright (a flat nut is 8-10 mm; a short bolt on its end is 22 mm)
+STUCK_OPEN_POS = 800                # fully open reads 837-840; fingers stopping below this on open = a part jammed
+SHAKE_DEG, SHAKE_CYCLES = 20.0, 2   # wrist (joint 6) swing each way, and how many back-and-forths
+SHAKE_MIN_Z = 160.0                 # TCP height before shaking: clear of the pad, the box walls (100) and flap (140)
 HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or screw upright): depth needs >~20 cm range
 ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
 # Per --background: surface z (poses.json grasp.surface_z, touch-measured) and pick zone. The cardboard pad spans
@@ -261,18 +264,67 @@ class Sorter:
             await self.mv.straight(x, y, z, label)
         self.q = None
 
-    async def release(self):
+    async def release(self, shake=False):
         """Open and wait until the fingers are really open: gripper.open() can return while they are still closed,
-        and the next move then carries the part away (the taped nut fell under the watch pose that way)."""
-        await self.gripper.open()
-        t0 = time.monotonic()
-        while time.monotonic() - t0 < 3.0:
+        and the next move then carries the part away (the taped nut fell under the watch pose that way).
+        Then make sure nothing stays on the gripper: fingers that stop short of open (< STUCK_OPEN_POS) mean a part
+        is jammed, so close and open once more, then shake. shake=True shakes anyway: a taped part can cling to a
+        finger pad while the fingers open fully, which the finger position can't show."""
+        pos = await self.open_fully()
+        if pos < STUCK_OPEN_POS:
+            self.tel.emit("recovery", level="L2", what=f"fingers stopped at {pos:.0f} on open: part jammed? close + open again")
+            print(f"  fingers stopped at {pos:.0f} on open: closing and opening again", flush=True)
+            await self.mv.grab()
+            pos = await self.open_fully()
+        if pos < STUCK_OPEN_POS or shake:
+            await self.shake_free("fingers still short of open" if pos < STUCK_OPEN_POS else "shake after release")
             pos = await self.mv.finger_pos()
-            if pos > 700:
-                return pos
-            await asyncio.sleep(0.05)
-        self.tel.emit("error", msg=f"fingers still at {pos} 3 s after open")
+            if pos < STUCK_OPEN_POS:
+                self.tel.emit("error", msg=f"fingers at {pos:.0f} after shaking: part stuck on the gripper")
+                print(f"  fingers at {pos:.0f} after shaking: part may be stuck on the gripper", flush=True)
         return pos
+
+    async def open_fully(self, timeout_s=3.0):
+        """Open; return the finger position once they are open (>= STUCK_OPEN_POS) or have stopped moving."""
+        await self.gripper.open()
+        t0, last, steady = time.monotonic(), None, 0
+        while time.monotonic() - t0 < timeout_s:
+            pos = await self.mv.finger_pos()
+            if pos >= STUCK_OPEN_POS:
+                return pos
+            steady = steady + 1 if last is not None and abs(pos - last) < 3 and time.monotonic() - t0 > 0.5 else 0
+            if steady >= 3:
+                return pos                          # stopped short: something is in the way
+            last = pos
+            await asyncio.sleep(0.05)
+        self.tel.emit("error", msg=f"fingers still at {pos} {timeout_s:.0f} s after open")
+        return pos
+
+    async def shake_free(self, why):
+        """Swing the wrist (joint 6) back and forth with the fingers open, so a part stuck to a finger pad falls off
+        over where it was being released. Rises to SHAKE_MIN_Z first: the place-back release is a few mm above the
+        pad. Every swing is a checked joint move (jmove)."""
+        self.tel.emit("recovery", level="L2", what=f"shake: {why}")
+        print(f"  shake: {why}", flush=True)
+        q = await self.joints()
+        p, _ = fk_tcp(q)
+        if p[2] < SHAKE_MIN_Z:
+            await self.straight(float(p[0]), float(p[1]), SHAKE_MIN_Z, "rise to shake")
+            q = await self.joints()
+        for i in range(SHAKE_CYCLES):
+            for sign in (1, -1):
+                swing = list(q)
+                swing[5] += sign * SHAKE_DEG
+                await self.jmove(swing, f"shake {i + 1}", holding=True)
+        await self.jmove(q, "shake done", holding=True)
+
+    def should_shake(self, reason=None):
+        """--shake: never | tape (a part rejected for tape, or any release in a tape collect run) | always."""
+        if self.args.shake == "always":
+            return True
+        if self.args.shake == "never":
+            return False
+        return (self.args.mode == "collect" and self.args.label == "tape") or "tape" in (reason or "")
 
     async def wrist_jpeg(self):
         imgs, _ = await self.cam.get_images(filter_source_names=["color"])
@@ -617,7 +669,7 @@ class Sorter:
         self.meta["placed_next"] = {"x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
         await self.straight(x, y, self.grasp_z + drop, "lower")
         with self.tel.span(f"release ({how})", phase="place", item=self.n):
-            await self.release()
+            await self.release(shake=self.should_shake())
         await self.straight(x, y, HOVER_Z, "retreat")
 
     async def cycle(self):
@@ -677,12 +729,12 @@ class Sorter:
         if decision == "reject":
             self.state("DROP", decision="reject")
             with self.tel.span("release (reject)", phase="drop", item=self.n):
-                await self.release()
+                await self.release(shake=self.should_shake(reason))
         elif decision == "good":
             self.state("DROP", decision="good")
             await self.jmove(self.good_j_up if self.upright else self.good_j, "to good", holding=self.upright or True)
             with self.tel.span("release (good)", phase="drop", item=self.n):
-                await self.release()
+                await self.release(shake=self.should_shake())
         elif decision == "collect":
             await self.place_back()
         rec["t_released"] = iso(time.time())
@@ -766,6 +818,10 @@ async def main():
     p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
     p.add_argument("--decide", choices=["all", "top"], default="all",
                    help="sort: which anomaly views can reject (top = wrist top view only; webcam scores logged as evidence)")
+    p.add_argument("--shake", choices=["never", "tape", "always"], default="tape",
+                   help="after a release, swing the wrist to throw off a part stuck to a finger pad: never | tape (parts "
+                        "rejected for tape, or a tape collect run; tape is sticky) | always. Fingers stopping short of "
+                        "open always trigger it")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
