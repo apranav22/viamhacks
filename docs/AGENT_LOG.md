@@ -400,3 +400,24 @@ Added /api/quality + /supervision with clickable TP/TN/FP/FN, image links, metri
 Integrated explorer links and deployment file lists. Five semantic tests and Python/JS syntax checks passed.
 Not deployed; active remote Claude consumption/acknowledgment NOT verified. Full review store, live-sorting
 label joins and architecture animation remain pending. No model training/activation, motion or config changes.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T19:55:32]
+ARM: taken for operator-approved SINGLE lower grasp: socket_thin_short, in-memory clearance 1 mm instead of 2; no persistent config change.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T19:56:01]
+Single lower-grasp test: 1 mm clearance, TCP descent z 28; missed, no retries. Run 20261113_175533_collect. ARM: released at watch pose (200.3,309.9,330.1); no loop left running. Persistent clearance unchanged. No further lowering without diagnosis.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:02:42]
+ARM: taken for user-approved one-grasp retention test with E-stop attended; same temporary 1 mm clearance, reading settled fingers before and after lift. No persistent config changes.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:03:10]
+Retention probe 20261113_180244_collect: finger pos settled after grab 32, before lift 32, after lift 26; below holding threshold, one grasp stopped; TCP watch (200.3,309.9,330.1), no loop, persistent clearance remains 2 mm. ARM: released. Operator visual observation on previous run: screw rose then slipped; current run drop timing not visually verified.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:07:45]
+ARM: taken for one head-biased socket_thin_short grasp; user requested address slip and capture, E-stop operator confirmed. In-memory 1 mm clearance unchanged, dynamic wider-end target from top image; stop if geometry ambiguous. No config change.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:09:07]
+ARM: taken for 8 supervised socket_thin_short head-targeted collect picks after single held/placed test. In-memory 1 mm clearance only; operator confirmed E-stop attendance. Stop on first missed grasp; review webcam frames before accepting.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:10:17]
+8-pick head-target capture aborted at item 2 before descend: computed target (145,476) outside pad zone, after 1 logged collect. Arm.stop on exception; no loop. Arm stationary at camera look TCP (121.3,438.2,64.3), gripper open 839, NOT at watch. Item 1 pos 33 before and after lift; item 2 watch image places screw near pad boundary rather than expected set coordinate (329,324). Possible slip during transfer, NOT verified; do not count without manual image review. Operator observation requested before recovery. ARM: stopped at look pose; not released/home.
