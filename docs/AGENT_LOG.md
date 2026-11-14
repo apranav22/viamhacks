@@ -547,3 +547,9 @@ ARM: taken (Pranav: "can you do a run", hands-off). Ali's loops stopped and arm 
 watch pose, gripper open, one hex bolt lying on the cardboard pad. sort.py --mode collect --reps 3 --background cardboard
 --assume-lying, --fast-carry 180 (default on this branch): 180 deg/s only after a confirmed grip, 60 otherwise; sort.py
 restores 60 at run end. Revert by hand if needed: arm DoCommand {"set_speed": 60}.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 10:44]
+10:39 run (runs/20261114_103921_collect, 3 picks, hex bolt on cardboard): 3/3 confirmed grips carried at 180 deg/s, all
+placed back; cycles 12.0 / 13.5 / 20.8 s (the last waited at WATCH for the bolt to settle), latency 439-4351 ms. Arm
+back at 60 deg/s at run end. ARM: released (watch pose, gripper open). Since then (c508de6, not yet run on the arm):
+every move at 180 deg/s + 1145 deg/s^2, straight moves as IK waypoint chains, finger speed 5000 after a confirmed grip.
