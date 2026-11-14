@@ -77,3 +77,30 @@ strokes on part pixels) are for validation only.
 
 Per pick on disk: `runs/<run>/item_NNN/` watch.jpg, top_N.jpg, web_<view>.jpg (1080p), crop_<view>.jpg, meta.json
 (bboxes, yaw, pose, height, jaw, crop boxes, joints, how it was placed next); the run's decisions.jsonl has labels.
+
+## Sharing the data with the team (19:27, [claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline])
+
+Collected runs lived in two places only (Ali's laptop `runs/`, the station's `/opt/viam/sorter-ali/runs/`), with no
+backup and no way in for teammates. The shared home is now **one private Hugging Face dataset repo**, managed by
+`sync_data.py`. Layout in the repo = layout on disk (`runs/<run>/item_NNN/...`, `models/<name>/...`) plus
+`index.json` (per run: host, items, labels, types, backgrounds, excluded, content fingerprint).
+
+```sh
+pip install huggingface_hub==2.4.0 && hf auth login     # once per laptop; account must be in the team org
+python sync_data.py status                               # what's shared, what's only here, what differs
+python sync_data.py pull                                 # every shared run you don't have (or 'pull "*_18*"')
+python sync_data.py push                                 # your finished runs (skips runs written < 2 min ago)
+python sync_data.py push --models any_cardboard_v2       # share a trained bundle too
+python sync_data.py pull --revision <commit>             # exact snapshot a model was trained on
+# station (after the next deploy ships it; huggingface_hub is installed in .venv):
+/opt/viam/sorter-ali/.venv/bin/python3.12 /opt/viam/sorter-ali/current/sync_data.py push
+```
+
+Rules it enforces: unchanged runs are skipped (cheap, idempotent); a run edited later (e.g. a new `exclude.json`) is
+re-pushed; a run name already shared from another host with different content is refused (name collision); `pull` never
+overwrites a local run that differs from the shared copy; nothing is ever deleted in the repo; `dash/` is not uploaded.
+Runs from before 15:31 have no `meta.json`: they are shared as-is, with labels from `decisions.jsonl` (index
+`without_meta`). Every push prints its commit: record it with a model to know exactly which data trained it.
+
+Run names use the clock of the machine that collected them (laptop EST, station MST/Phoenix), so name order is not
+time order across machines; the timestamps inside `decisions.jsonl` carry their offset.

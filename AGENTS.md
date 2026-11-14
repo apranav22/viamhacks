@@ -106,6 +106,7 @@ Next:      the single most useful next step
 |---|---|
 | `docs/CONTEXT.md` · `PLAN.md` · `ARCHITECTURE.md` · `NOTES.md` | event + scoring, decisions, design, findings |
 | `docs/DATA_PLAN.md` | part classes, data splits, holdout defects |
+| `sync_data.py` | share runs/ and models/ with the team (private HF dataset repo): `status` · `pull` · `push` (DATA_PLAN.md, end) |
 | `docs/AGENT_LOG.md` | who is doing what, arm taken/released, config changes |
 | `pipeline.py`, `motion_probe.py`, `overview.py` (Pranav) | scan, grasp, motion primitives, present views |
 | `vh/`, `run.py` (Ali) | perception, geometry, telemetry; baseline cycle |
