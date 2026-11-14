@@ -23,6 +23,38 @@ def tensor(image, size):
     return np.ascontiguousarray(np.asarray(image, dtype=np.float32).transpose(2, 0, 1)[None] / 255)
 
 
+def cross_run_good_scores(train, dataset_dir, args, mean, std):
+    """Score each training run's good picks with a bank built from the OTHER training runs (CPU, torch).
+    Returns [] with fewer than two runs. Same backbone, layers, coreset ratio and k as the exported model."""
+    import torch
+    from anomalib.models.image.patchcore.torch_model import PatchcoreModel
+    by_run = {}
+    for s in train:
+        by_run.setdefault(s.get('source_run') or s['pick_id'].split('/')[0], []).append(s)
+    if len(by_run) < 2:
+        return []
+    mean, std = mean.cpu(), std.cpu()
+    load = lambda s: (torch.from_numpy(tensor(dataset_dir / s['image'], args.size)) - mean) / std
+    out = []
+    for run, held in sorted(by_run.items()):
+        fold = [s for s in train if s not in held]
+        if len(fold) < 3:
+            continue
+        m = PatchcoreModel(layers=['layer2', 'layer3'], backbone='resnet18', pre_trained=True, num_neighbors=1)
+        for p in m.parameters():
+            p.requires_grad_(False)
+        m.train()
+        m.feature_extractor.eval()
+        with torch.no_grad():
+            for s in fold:
+                m(load(s))
+            m.subsample_embedding(sampling_ratio=args.coreset_ratio)
+            m.eval()
+            out += [float(m(load(s)).pred_score.reshape(-1)[0]) for s in held]
+        print(f'  cv: {len(held)} good of {Path(str(run)).name} scored against {len(fold)} others', flush=True)
+    return out
+
+
 def fit_group(samples, dataset_dir, out_dir, args):
     import torch
     import openvino as ov
@@ -96,6 +128,17 @@ def fit_group(samples, dataset_dir, out_dir, args):
 
     cal_scores = [score(s)[0] for s in cal]
     threshold = max(max(cal_scores) * args.margin, 1e-6)
+    calibration, cv_scores = 'prototype-good-max-margin', []
+    if args.threshold == 'cv-p95':
+        cv_scores = cross_run_good_scores(train, dataset_dir, args, mean, std)
+        if len(cv_scores) >= args.cv_min:
+            # held-out good scores (each training run scored by a bank built WITHOUT it) + calibration good scores.
+            # 2026-11-14 replay (tools/threshold_replay.py): p95 of held-out good caught 25/28 defects vs 10/28 for the
+            # max-good rule at 6/59 vs 3/59 good rejected (ResNet-18, folds with >= 10 good picks).
+            threshold = max(float(np.percentile(cv_scores + cal_scores, args.percentile)), 1e-6)
+            calibration = f'cross-run-good-p{args.percentile:g}'
+        else:
+            calibration = f'prototype-good-max-margin (cv-p95 fallback: {len(cv_scores)} held-out good < {args.cv_min})'
     results = []
     max_difference = 0.0
     for sample in test:
@@ -114,7 +157,8 @@ def fit_group(samples, dataset_dir, out_dir, args):
                  train_pick_ids=sorted({s['pick_id'] for s in train}),
                  calibration_pick_ids=sorted({s['pick_id'] for s in cal}),
                  test_pick_ids=sorted({s['pick_id'] for s in test}),
-                 calibration='prototype-good-max-margin', margin=args.margin,
+                 calibration=calibration, margin=args.margin, cv_good_scores=[round(v, 5) for v in cv_scores],
+                 threshold_max_margin=max(max(cal_scores) * args.margin, 1e-6),
                  bank_size=int(model.memory_bank.shape[0]), backbone='resnet18', num_neighbors=1,
                  fit_execution={'feature_device': feature_device, 'coreset_device': 'cpu', 'export_device': 'cpu'},
                  max_torch_openvino_score_difference=max_difference, test_results=results)
@@ -131,6 +175,10 @@ def main():
     p.add_argument('--coreset-ratio', default=0.1, type=float)
     p.add_argument('--train-device', choices=['cpu', 'xpu'], default='cpu', help='Frozen feature extraction device; coreset/export stay on CPU')
     p.add_argument('--margin', default=1.15, type=float)
+    p.add_argument('--threshold', choices=['max-margin', 'cv-p95'], default='max-margin',
+                   help='cv-p95: percentile of cross-run held-out good scores + calibration (falls back to max-margin)')
+    p.add_argument('--percentile', default=95.0, type=float)
+    p.add_argument('--cv-min', default=10, type=int, help='cv-p95 needs at least this many held-out good scores')
     a = p.parse_args()
     if a.out.exists():
         p.error('Choose a new output folder; existing bundles are never overwritten')
