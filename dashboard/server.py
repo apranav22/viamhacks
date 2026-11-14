@@ -24,6 +24,7 @@ import itertools
 import json
 import socket
 import struct
+import subprocess
 import threading
 import time
 from collections import OrderedDict, deque
@@ -35,6 +36,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 from dashboard.history import History, finite_json
+from dashboard.runner import Runner
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
 PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
 KEEP_PREVIEW = 24
@@ -403,7 +405,8 @@ def list_candidates():
     return [json.loads(l) for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
 
 
-def make_handler(hub, history=None):
+def make_handler(hub, history=None, runner=None):
+    """runner: dashboard.runner.Runner to allow starting capture / detection runs, None to disable the buttons."""
     history = history or History(ROOT / 'runs', ROOT / 'docs' / 'run_notes.json')
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
@@ -429,7 +432,7 @@ def make_handler(hub, history=None):
             arg = lambda key: query.get(key, [''])[0]
             if path in ("/", "/index.html"):
                 return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
-            if path in ('/app.js', '/state.js', '/style.css', '/viewport.css', '/models.js'):
+            if path in ('/app.js', '/state.js', '/style.css', '/viewport.css', '/models.js', '/control.js'):
                 mime = 'text/css' if path.endswith('.css') else 'text/javascript'
                 return self._send(200, (HERE / path[1:]).read_bytes(), mime + '; charset=utf-8')
             if path in ('/explore', '/history'):
@@ -481,6 +484,11 @@ def make_handler(hub, history=None):
                     return self._send(404, b"gone", "text/plain")
                 mime, blob = got
                 return self._send(200, blob, "application/octet-stream" if not mime or not mime.startswith("image/") else mime)
+            if path in ('/api/run/status', '/api/run/options'):
+                if runner is None:
+                    return self._send(200, json.dumps({'enabled': False}).encode(), 'application/json')
+                data = runner.status() if path.endswith('status') else runner.options()
+                return self._send(200, json.dumps({'enabled': True, **data}).encode(), 'application/json')
             if path == "/candidates":
                 return self._send(200, json.dumps(list_candidates()).encode(), "application/json")
             if path.startswith("/cand/"):
@@ -497,7 +505,36 @@ def make_handler(hub, history=None):
                 return self.sse()
             return self._send(404, b"not found", "text/plain")
 
+        def same_origin(self):
+            """Run control only from this dashboard's own page: JSON body and Origin (if sent) matching Host."""
+            origin = self.headers.get("Origin")
+            if origin and urlsplit(origin).netloc != self.headers.get("Host"):
+                return False
+            return (self.headers.get("Content-Type") or "").startswith("application/json")
+
+        def run_control(self, path):
+            if runner is None:
+                return self._send(403, b'{"error":"run control is disabled on this dashboard"}', "application/json")
+            if not self.same_origin():
+                return self._send(403, b'{"error":"cross-origin or non-JSON request refused"}', "application/json")
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                spec = json.loads(self.rfile.read(n) or b"{}") if n <= 10000 else None
+                if not isinstance(spec, dict):
+                    raise ValueError("bad request body")
+                data = runner.start(spec) if path.endswith("start") else runner.stop()
+                code = 409 if "error" in data else 200
+            except (ValueError, PermissionError) as e:
+                data, code = {"error": str(e)}, 400
+            except RuntimeError as e:
+                data, code = {"error": str(e)}, 409
+            except (OSError, subprocess.SubprocessError) as e:
+                data, code = {"error": f"could not launch: {e}"}, 500
+            return self._send(code, json.dumps(data).encode(), "application/json")
+
         def do_POST(self):
+            if self.path.split("?")[0] in ("/api/run/start", "/api/run/stop"):
+                return self.run_control(self.path.split("?")[0])
             if self.path.split("?")[0] == "/mark":
                 n = int(self.headers.get("Content-Length") or 0)
                 note = ""
@@ -563,6 +600,8 @@ def main():
                     help="active-run preview FPS per camera, >0 and <=2 (default: 1)")
     ap.add_argument("--preview-cams", default="cam,overview-cam")
     ap.add_argument("--key", default=str(ROOT / "api-key.json"))
+    ap.add_argument("--no-run-control", action="store_true",
+                    help="hide the Start capture / Start detection buttons (also off with --no-preview and --replay)")
     a = ap.parse_args()
     hub = Hub(a.record or None if not a.replay else None)
     hub.is_replay = bool(a.replay)
@@ -574,7 +613,8 @@ def main():
             threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps,
                                                                          a.preview_during_run, a.run_preview_fps)),
                              daemon=True).start()
-    srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub, History(a.runs_dir, ROOT / 'docs' / 'run_notes.json')))
+    runner = None if (a.replay or a.no_preview or a.no_run_control) else Runner(hub)
+    srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub, History(a.runs_dir, ROOT / 'docs' / 'run_notes.json'), runner))
     srv.daemon_threads = True
     print(f"dashboard: http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}  "
           f"({'replaying ' + a.replay if a.replay else f'telemetry on udp :{a.udp_port}'})")

@@ -548,3 +548,9 @@ Verified: 80 Python tests OK (1 optional skip), 9 JS reducer tests, sort.py --he
 Not done: no deployment from this branch, no motion. config/webcam_refs stays gitignored (local images).
 Robot: untouched by this change.
 Next: deploy from a clean checkout of ali/clean-base before the next station collection with --views coverage.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/clean-base · 2026-11-14 11:11]
+Done: dashboard run control (operator request): Live tab "Start a run" panel for a capture run (sort.py --mode collect) or live anomaly detection (--mode sort), local or station (deployed release via station_run.py). dashboard/runner.py whitelists options, requires the E-stop confirmation per run, refuses while a run is active / another sort.py runs, appends ARM taken/released here; Stop button. Same-origin JSON only; hidden with --no-run-control/--no-preview/--replay.
+Verified: 89 Python tests OK (9 new, fake sort.py; 1 optional skip), 9 JS tests. Not clicked in a browser, no live run started from it yet.
+Robot: untouched.
+Next: first real use = a 2-pick capture from the panel with the operator watching.
