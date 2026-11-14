@@ -744,3 +744,8 @@ Station run log: runs/20261114_103053_sort (station clock). Fixed the same laten
 start of pick). Added demo.py: read-only check, then station_run.py start with fixed demo settings incl. --assume-lying
 (avoids that crash path; parts must be laid flat). ARM: released. 12:32 demo.py check: arm MOVING, 90 deg from the
 watch pose: someone else is running a planner pick loop (moves 12:32:29-12:32:40); not started.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:35]
+ARM: taken for the demo (Pranav: "do a demo"; confirmed the other pick loop, last move 12:32:40, is stopped, a person at
+the E-stop, one part lying flat). demo.py check passed (still, at the watch pose, nothing running). python demo.py start
+(station release 20261114_120758, sort 6, v4, type auto, decide top, coverage, cardboard, --assume-lying).
