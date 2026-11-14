@@ -165,7 +165,10 @@ class UprightPick(unittest.TestCase):
         async def grab():
             return 300.0
 
-        s.jmove, s.look, s.depth_look, s.straight = jmove, look, depth, straight
+        async def lay_flat(it):
+            straights.append(("lay flat", None)); s.laid_flat = True
+
+        s.jmove, s.look, s.depth_look, s.straight, s.lay_flat = jmove, look, depth, straight, lay_flat
         s.look_joints = lambda it: sort.WATCH_J
         s.mv = SimpleNamespace(finger_pos=lambda: _const(800.0), grab=grab)
         with unittest.mock.patch.object(sort, "round_part", lambda it: True), \
@@ -176,16 +179,16 @@ class UprightPick(unittest.TestCase):
     def high_tips(self, h=0.0):
         return round(max(h, sort.longest_part_mm("auto")) - (sort.G["tip_to_sensor_mm"] - 8.0), 1)
 
-    def test_low_first_and_nothing_hit(self):
+    def test_low_first_and_nothing_hit_then_laid_flat(self):
         s, ok, moves, straights = self.pick([21.0])
-        self.assertTrue(ok)
-        self.assertEqual(straights, [("descend 1", 10.5), ("lift 1", straights[1][1])])
+        self.assertFalse(ok)                                     # not inspected upright: laid flat, picked lying next
+        self.assertEqual(straights, [("descend 1", 10.5), ("lift 1", straights[1][1]), ("lay flat", None)])
         self.assertNotIn(("do", {"clear_error": True}), s.arm.calls)
 
     def test_hit_on_the_way_down_retries_higher_once(self):
         s, ok, moves, straights = self.pick([21.0, 21.0], hits={"descend 1"})
-        self.assertTrue(ok)
-        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "back up 1", "descend 1.high", "lift 1"])
+        self.assertFalse(ok)
+        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "back up 1", "descend 1.high", "lift 1", "lay flat"])
         self.assertEqual(straights[2][1], self.high_tips())
         self.assertIn(("do", {"clear_error": True}), s.arm.calls)
         self.assertIn("aim upright 1.high", moves)
@@ -203,6 +206,43 @@ class UprightPick(unittest.TestCase):
     def test_no_retry_when_low_was_already_safe(self):
         with self.assertRaises(sort.ArmFault):                   # 80 mm read: halfway keeps it clear; a fault is real
             self.pick([80.0], hits={"descend 1"})
+
+
+class LayFlat(unittest.TestCase):
+    """lay_flat(): a tilted pose over the spot, slow descent, slow small opening, retreat along the tool axis."""
+
+    def test_gentle_lay_down(self):
+        held_q = ik(np.array([275.0, 350.0, sort.LIFT_Z]), seed=sort.VIEW_J["front"], jaw_heading_deg=90)[0]
+        arm = FakeArm(held_q)
+        s = sorter(arm)
+        s.upright, s.state, s.grasp_z_upright = 23.0, lambda *a, **k: None, 50.0
+        gcalls = []
+
+        class Grip:
+            async def do_command(self, cmd):
+                gcalls.append(cmd)
+                return {"gripper_speed": 2000} if "get_gripper_speed" in cmd else {}
+
+        s.gripper = Grip()
+        s.mv = SimpleNamespace(finger_pos=lambda: _const(300.0))
+        straights = []
+        real_straight = s.straight
+
+        async def straight(x, y, z, label, holding, tcp_limit=None):
+            straights.append((label, tcp_limit))
+            await real_straight(x, y, z, label, holding, tcp_limit)
+
+        s.straight = straight
+        asyncio.run(s.lay_flat((275.0, 350.0, 0, 0.0, None)))
+        self.assertTrue(s.laid_flat and s.rewatch)
+        self.assertEqual([lbl for lbl, _ in straights], ["lay down", "lay retreat"])
+        self.assertTrue(all(lim == sort.LAY_TCP_MM_S for _, lim in straights))
+        self.assertEqual(gcalls, [{"get_gripper_speed": True}, {"set_gripper_speed": sort.LAY_OPEN_SPEED},
+                                  {"set": 300.0 + sort.LAY_OPEN_BY}, {"set_gripper_speed": 2000}])
+        p, z = sort.fk_tcp(arm.calls[[c[0] for c in arm.calls].index("through")][1][-1])     # end of the lay-down chain
+        self.assertAlmostEqual(float(np.degrees(np.arccos(-z[2]))), sort.LAY_TILT_DEG, delta=1.0)
+        end = p + z * (sort.G["tcp_to_tip_mm"] + 23.0)
+        self.assertAlmostEqual(float(end[2]), sort.TZ + sort.LAY_CLEAR_MM[0], delta=1.0)  # low end just over the pad
 
 
 class Moves(unittest.TestCase):

@@ -100,6 +100,18 @@ HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame chang
 REF_STEADY_FRAC = 0.002             # outside-pad change between consecutive frames: scene is steady
 REF_STALE_S = 3.0                   # a "hand" not moving at all this long = stale reference; re-take it
 STILL_TRIES = 5                     # still-frame gate: frames to try before using the last one (logged as not still)
+# Upright parts are picked up and laid down flat (Pranav, 2026-11-14), then picked lying on the next look. The gripper
+# tilts so the part, held in line, points down-and-out at LAY_TILT_DEG from vertical, its low end LAY_CLEAR_MM over the
+# pad (closest path-clear one, table included), and lets go gently: slow descent, fingers opened slowly and only a
+# little, slow retreat along the tool axis, so the part isn't dropped or flicked and doesn't roll. Policy values, checked
+# offline over the pick zone (tilt 60: -y / +x / -x clear at 13 mm everywhere).
+LAY_TILT_DEG = 60.0
+LAY_CLEAR_MM = (13.0, 20.0, 30.0, 45.0)
+LAY_DIRS = ((0, -1), (1, 0), (-1, 0), (0, 1))     # tilt directions to try, in order
+LAY_TCP_MM_S = 150.0                # tool-speed cap for the last approach and the retreat
+LAY_OPEN_SPEED = 300                # gripper speed (1-5000) for letting go
+LAY_OPEN_BY = 80                    # open this far (0-850 units) past the grip position: just enough to let go
+LAY_MAX = 2                         # lay-flat attempts in a row before stopping (it keeps landing upright)
 # Webcam crops are the whole gripper window: the blue-zinc socket_m16 reads up to 2.2% "tape" there (18:17 run, 153
 # views; 18:50 a clean socket screw was rejected at 1.9%). Top view: part-only bbox, good parts <= 0.08%.
 TAPE_FRAC_WEB = 0.04
@@ -109,8 +121,8 @@ TAPE_FRAC = 0.01                    # share of the part crop that is tape-blue t
 # v4l2 controls reset when the camera/module restarts, so every run sets and records them.
 WRIST_V4L2 = {"brightness": 8, "auto_exposure": 1, "exposure_time_absolute": 100, "white_balance_automatic": 1}
 WRIST_DEV = "/dev/video4"
-STATES_SORT = ["WATCH", "PICK", "LIFT", "INSPECT", "DECIDE", "DROP", "RETURN"]
-STATES_COLLECT = ["WATCH", "PICK", "LIFT", "INSPECT", "PLACE", "RETURN"]
+STATES_SORT = ["WATCH", "PICK", "LIFT", "LAY FLAT", "INSPECT", "DECIDE", "DROP", "RETURN"]
+STATES_COLLECT = ["WATCH", "PICK", "LIFT", "LAY FLAT", "INSPECT", "PLACE", "RETURN"]
 
 
 def sound(name="Ping"):
@@ -281,7 +293,7 @@ class Sorter:
                 raise ArmFault(f"{label}: arm ended {err:.1f} deg from its target (controller: {info}); check the "
                                f"machine logs for C60 / C31 / C1 before rerunning")
 
-    async def straight(self, x, y, z, label, holding):
+    async def straight(self, x, y, z, label, holding, tcp_limit=None):
         """TCP in a straight line to (x, y, z), orientation kept. With --tcp-limit: IK waypoints every 30 mm along the
         line (joint path within 2 mm of it), checked against every obstacle except the table (the grasp height is the
         table guard, as before), one move_through_joint_positions call at the fastest speed under the tool-speed limit.
@@ -308,7 +320,7 @@ class Sorter:
                 self.tel.emit("error", msg=f"{label}: straight path blocked ({c} mm, {where}); not moving")
                 raise PathBlocked(f"{label}: straight path would hit {where} ({c} mm)")
         limit = self.args.tcp_limit_holding if holding else self.args.tcp_limit
-        speed = safe_chain_speed([q0] + qs, limit, self.args.run_accel)
+        speed = safe_chain_speed([q0] + qs, min(limit, tcp_limit or limit), self.args.run_accel)
         await self.set_joint_speed(speed)
         self.tel.emit("move", label=label, component="arm", joints=[round(v, 1) for v in qs[-1]], target={"x": x, "y": y, "z": z},
                       clearance_mm=worst, joint_speed=speed, waypoints=len(qs), line_dev_mm=dev)
@@ -660,6 +672,7 @@ class Sorter:
             with self.tel.span(f"grab {attempt}", phase="grab", item=self.n):
                 pos = await self.mv.grab()
             if self.upright:
+                self.grasp_z_upright = gz
                 self.upright = (gz - G["tcp_to_tip_mm"]) - TZ      # what hangs below the tips once lifted
             self.state("LIFT")
             await self.straight(item[0], item[1], LIFT_Z, f"lift {attempt}", holding=self.upright or True)
@@ -667,6 +680,9 @@ class Sorter:
             ok = held(pl, G)
             self.tel.emit("gripper", pos=pl, holding=ok)
             self.tel.emit("grasp_result", n=self.n, ok=bool(ok), pos=pl, holding=ok, attempt=attempt, expected_pos=None)
+            if ok and self.upright:
+                await self.lay_flat(item)
+                return False, item, t_cmd
             if ok:
                 self.grasp_z = gz
                 return True, item, t_cmd
@@ -719,6 +735,71 @@ class Sorter:
         gz = TZ + tips + G["tcp_to_tip_mm"]
         await self.straight(x, y, gz, f"descend {attempt}.high", holding=False)
         return gz
+
+    def lay_pose(self, x, y, hang):
+        """(q_above, q_low, tcp_low, axis, clear_mm) for laying a part held in line (hang mm past the tips) down flat
+        at (x, y): first tilt direction and smallest LAY_CLEAR_MM whose joint path from here (to 60 mm above, then
+        down) clears every obstacle, the pad included. None when nothing is clear."""
+        a = math.radians(LAY_TILT_DEG)
+        for d in LAY_DIRS:
+            axis = np.array([d[0] * math.sin(a), d[1] * math.sin(a), -math.cos(a)])
+            head = math.degrees(math.atan2(d[1], d[0])) + 90           # jaws across the tilt: fingers clear of the pad
+            for clear in LAY_CLEAR_MM:
+                low = np.array([x, y, TZ + clear]) - axis * (hang + G["tcp_to_tip_mm"])
+                try:
+                    q_low, e1, a1 = ik(low, axis=axis, seed=self.q, jaw_heading_deg=head)
+                    q_up, e2, a2 = ik(low + np.array([0, 0, 60.0]), axis=axis, seed=q_low, jaw_heading_deg=head)
+                except ValueError:
+                    continue
+                if max(e1, e2) > 1 or max(a1, a2) > 1:
+                    continue
+                if (check_path(self.q, q_up, self.obs, holding=hang, margin=0)[0]
+                        and check_path(q_up, q_low, self.obs, holding=hang, margin=0)[0]):
+                    return q_up, q_low, low, axis, clear
+        return None
+
+    async def lay_flat(self, item):
+        """An upright part is held in line: tilt it over the spot it stood on, lower it slowly until its low end is just
+        above the pad, open the fingers slowly and a little, back off slowly. The next look picks it up lying."""
+        self.state("LAY FLAT")
+        hang = self.upright
+        await self.joints()
+        pose = self.lay_pose(item[0], item[1], hang)
+        self.laid_flat = True
+        self.rewatch = True
+        if pose is None:
+            # no clear tilted pose: stand it back where it was, gently (it stays upright; next look tries again)
+            self.skip_reason = "upright part: no clear pose to lay it flat; set back down upright"
+            self.tel.emit("recovery", level="L1", what=self.skip_reason)
+            print("  " + self.skip_reason)
+            await self.straight(item[0], item[1], self.grasp_z_upright + 3, "set back", holding=hang, tcp_limit=LAY_TCP_MM_S)
+            await self.gentle_open()
+            await self.straight(item[0], item[1], HOVER_Z, "retreat", holding=False, tcp_limit=LAY_TCP_MM_S)
+            return
+        q_up, q_low, low, axis, clear = pose
+        self.tel.emit("note", step="lay flat", tilt=LAY_TILT_DEG, axis=[round(float(c), 3) for c in axis], end_clear_mm=clear,
+                      hang=round(hang, 1))
+        print(f"  laying it flat: tilt {LAY_TILT_DEG:.0f} deg, low end {clear:.0f} mm over the pad")
+        await self.jmove(q_up, "lay tilt", holding=hang)
+        await self.straight(*low, "lay down", holding=hang, tcp_limit=LAY_TCP_MM_S)
+        await self.gentle_open()
+        back = low - axis * 40.0                                       # straight back out along the tool axis
+        await self.straight(*back, "lay retreat", holding=False, tcp_limit=LAY_TCP_MM_S)
+        self.skip_reason = f"upright part laid flat (tilt {LAY_TILT_DEG:.0f}, end {clear:.0f} mm over the pad): picked lying next"
+
+    async def gentle_open(self):
+        """Let go without flicking the part: slow fingers, opened only LAY_OPEN_BY past the grip, then the old speed."""
+        g = self.gripper
+        pos = await self.mv.finger_pos()
+        old = (await g.do_command({"get_gripper_speed": True})).get("gripper_speed")
+        await g.do_command({"set_gripper_speed": LAY_OPEN_SPEED})
+        try:
+            with self.tel.span("release (gentle)", phase="place", item=self.n):
+                await g.do_command({"set": float(min(850.0, pos + LAY_OPEN_BY))})
+                await asyncio.sleep(0.3)                       # the part settles before the fingers move away
+        finally:
+            if old:
+                await g.do_command({"set_gripper_speed": old})
 
     async def oblique_looks(self, item, look_q):
         """--views coverage: wrist-cam looks tilted +-OBLIQUE_DEG about the part's long axis (vh/coverage.py), then back
@@ -899,7 +980,7 @@ class Sorter:
         if item is None:
             return False
         (self.idir / "watch.jpg").write_bytes(watch_jpg)
-        self.not_seen, self.skip_reason, self.rewatch = False, None, False
+        self.not_seen, self.skip_reason, self.rewatch, self.laid_flat = False, None, False, False
         ok, item, t_cmd = await self.pick(item)
         lat = {"n": self.n, "t_appeared": t_app, "t_stable": t_stable, "t_cmd": t_cmd, "t_moving": t_cmd,
                "ms_to_stable": round((t_stable - t_app) * 1000), "ms_to_cmd": round((t_cmd - t_app) * 1000),
@@ -910,7 +991,7 @@ class Sorter:
         if not ok:
             rec.update(decision="none", reason=self.skip_reason or ("part not seen from hover" if self.not_seen else "could not grasp"),
                        t_decided=iso(time.time()))
-            if self.args.mode == "sort" and self.skip_reason and getattr(self, "top_image", None) and self.top_bbox:
+            if self.args.mode == "sort" and self.skip_reason and not self.laid_flat and getattr(self, "top_image", None) and self.top_bbox:
                 # left in place (refused by the upright guard), but the top image was taken: decide from it, mark not moved
                 top, _ = await self.infer_crop(self.top_image, self.top_bbox, "top")
                 f = top.fields()
@@ -1011,8 +1092,14 @@ class Sorter:
         self.joint_speed = self.joint_accel = None
         await self.set_joint_speed(NORMAL_SPEED, a.run_accel if a.tcp_limit else NORMAL_ACCEL)
         try:
-            for _ in range(count):
+            done, laid = 0, 0
+            while done < count:
                 if not await self.cycle():
+                    break
+                laid = laid + 1 if self.laid_flat else 0
+                done += 0 if self.laid_flat else 1      # a part laid flat is picked (and counted) on the next cycle
+                if laid >= LAY_MAX:
+                    print(f"  STOP: laid flat {laid}x in a row and it is still upright; check the part")
                     break
         except BaseException:
             try:   # AGENTS.md: on any error during motion, arm.stop() first

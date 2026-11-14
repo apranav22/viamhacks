@@ -663,3 +663,15 @@ Camera noise with the arm still at the watch pose (read-only, 12:00): webcam fra
 the same frame for 100-200 ms (duplicate grabs), so the wrist gate could never pass.
 --background now defaults to cardboard (Pranav: always the pad).
 ARM: released (watch pose, gripper open 839, bolt lying on the pad).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:20]
+Upright parts are now picked up and laid down flat (Pranav: "pick it up and put it down flat", "release it gently so it
+doesnt roll"), then picked lying on the next cycle (a laid-flat cycle doesn't count as an item; 2 in a row and still
+upright -> stop). After the guarded upright grasp + lift: tilt 60 deg (tool axis down-and-out; -y, +x, -x, +y tried in
+order), part's low end 13/20/30/45 mm over the pad (first joint path clear of every obstacle INCLUDING the pad, checked
+offline clear at 13 mm over the whole zone for -y/+x/-x), last approach and retreat capped at 150 mm/s, fingers opened
+at gripper speed 300 by only 80 units past the grip, 0.3 s pause, retreat 40 mm along the tool axis, speed restored.
+No clear pose: set it back down upright, gently. Sort mode no longer judges a laid-flat part from its top image.
+HF check (Pranav asked): the newest uploads (station 20261114_0908..0938_collect, Ali's coverage views, deployed
+station code without the still-frame gate) don't contain our changes; their sharpness is flat across the morning.
+NOT run on the arm.
