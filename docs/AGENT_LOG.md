@@ -596,3 +596,5 @@ For Ali (motion), read-only check of ali/clean-base ce6f73b poses with vh.kinema
   relative to self.q would cut those swings. Not changed; suggestion only.
 - --views coverage with --decide all rejects every part as "uncertain": no anomaly bank exists for under/end_a/end_b or
   the obliques (station bundles cover top/front/yaw-20/yaw+35/pitch-25 only). Use --decide top until banks exist.
+- Type features, held-out runs (112 picks, 5 multi-run types): size rule 78, size+colour 93, ResNet-18 103, DINOv2-S 95,
+  DINOv2-S + ResNet-18 concatenated 107. The shipped classifier is ResNet-18 only; the combination is +4 picks.
