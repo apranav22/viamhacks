@@ -640,3 +640,15 @@ Device placement, measured on the station (Core Ultra X7 358H / Arc B390 iGPU / 
 => Placement story: anomaly banks on NPU (10 ms, frees CPU), type classifier on GPU (1 ms), CPU for capture/decode/loop.
 Pulled HF: only 4 runs from today (11 collect picks, hex_bolt_partial); new end/under collection not synced yet.
 Candidate bundle models/cand_cvp95_v1 (train_anomaly --threshold cv-p95) training on this PC; not activated.
+
+[claude-code/claude-fable-5-2 · op aayus (git: aayus@sticker) · sticker · aayush/integration · 2026-11-14 12:00]
+For Ali: branch aayush/integration = ali/clean-base fc60802 + aayush/dinov2-eval (clean merge except one import line).
+NOT deployed: your station releases (20261114_113843, no source commit) look newer than what is pushed, and a collect run
+was live, so I did not overwrite them. To take it: merge aayush/integration (or cherry-pick d136199 confidence + type
+classifier, ab9eaa3 + 3b5509c thresholds), then deploy as usual. It adds: `confidence` on every good/reject log line;
+--type-clf (models/type_clf_v1 is already in the station's shared models/); tools/device_bench.py, device_agreement.py.
+Queued on the station (starts when no sort.py runs, Arc GPU): train_anomaly --threshold cv-p95 -> models/each_cardboard_cvp95_v1
+(log /opt/viam/sorter-ali/train_cvp95.log). Rule = min(p95 of cross-run good, max-margin): on this PC's same-data candidate,
+top view test picks 25/28 defects caught vs 23/28 for max-margin, good rejected 1/36 both. Use with --anomaly-bundle
+models/each_cardboard_cvp95_v1/bundle.json once it finishes; it shows up in the dashboard Models tab like the others.
+Earlier log times from me between "11:40" and "12:30" were ~45 min fast; real times 10:55-11:25.
