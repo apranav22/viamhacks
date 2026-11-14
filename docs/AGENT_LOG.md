@@ -675,3 +675,22 @@ No clear pose: set it back down upright, gently. Sort mode no longer judges a la
 HF check (Pranav asked): the newest uploads (station 20261114_0908..0938_collect, Ali's coverage views, deployed
 station code without the still-frame gate) don't contain our changes; their sharpness is flat across the morning.
 NOT run on the arm.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:08]
+ARM: taken (Pranav: "do the test ... i have the bolt upright ready"; operator confirmed the other driver, planner moves
+again at 12:05:52, has stopped, and a person is at the E-stop). Checks: teleop off, still over 3 s, at the watch pose,
+gripper open (838), no loop on the station. Test: sort.py --mode collect --reps 1 (cardboard default, depth look on),
+commit b5267f0: upright guard (low first) -> lay flat -> pick lying.
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:13]
+Upright test (runs/20261114_120815_collect, hex bolt standing on its head): NOT detected as upright. round_part on the
+watch frame: bbox aspect 1.09 but fill 0.45 (< 0.55) -> treated as a long lying part, no depth look. Grasped like a
+lying part (closed tips 2 mm over the pad) around the head, lifted in line, inspected with the lying views, set back
+down standing. Cycle 12.05 s, no controller error. Near miss: a ~62 mm bolt's top ~2 mm under the sensor at that grasp.
+ARM: released (watch pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:25]
+Correction: test 2 at 11:58 (runs/20261114_115832_collect) was ALSO the hex bolt standing on its head (top image), not
+lying as logged at 12:01; it went through the lying path the same way (no depth look). Fix: squat is now decided from
+the close-up top image, length along the axis < 2.0 x width across it (detect(ends=True) returns the width points);
+standing bolt 1.32 / 1.45, lying bolts 3.8-9.4 on today's top images. Squat -> high hover + depth look -> upright guard
+-> lay flat. Not run on the arm yet.

@@ -3,6 +3,7 @@ on a Sorter with fake arm / cameras. python3 -m unittest tests/test_sort_offline
 
 import asyncio
 import io
+import math
 import sys
 import tempfile
 import unittest
@@ -206,6 +207,25 @@ class UprightPick(unittest.TestCase):
     def test_no_retry_when_low_was_already_safe(self):
         with self.assertRaises(sort.ArmFault):                   # 80 mm read: halfway keeps it clear; a fault is real
             self.pick([80.0], hits={"descend 1"})
+
+
+class SquatFromTheCloseUp(unittest.TestCase):
+    """detect(ends=True) also returns the blob's extent across its axis; length / width tells squat from long."""
+
+    def ratio(self, w, h, angle=0):
+        img = Image.new("RGB", (640, 480), (150, 110, 70))
+        blob = Image.new("L", (w, h), 255).rotate(angle, expand=True)
+        img.paste((220, 220, 225), (320 - blob.width // 2, 240 - blob.height // 2), blob)
+        it = max(sort.detect(np.asarray(img), None, None, ends=True), key=lambda b: b[2])
+        L = math.dist(*it[5]); W = math.dist(*it[6])
+        return L / W
+
+    def test_long_part_even_diagonal(self):
+        self.assertGreater(self.ratio(80, 16), sort.SQUAT_RATIO)
+        self.assertGreater(self.ratio(80, 16, angle=45), sort.SQUAT_RATIO)   # round_part's fill test was ~0.3 here
+
+    def test_head_on_view_is_squat(self):
+        self.assertLess(self.ratio(30, 24), sort.SQUAT_RATIO)
 
 
 class LayFlat(unittest.TestCase):

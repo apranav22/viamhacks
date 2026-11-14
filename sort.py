@@ -81,6 +81,10 @@ UPRIGHT_ORDER = ["end", "side0", "side+120", "side-120"]   # over the far (good)
 PM = np.array(CP["webcam"]["P_world_to_px"])
 STABLE_MM, STABLE_DEG = 3.0, 8.0
 STANDING_MM = 15                    # taller than this: upright (a flat nut is 8-10 mm; a short bolt on its end is 22 mm)
+# Squat from the close-up top image: length along the part's axis < SQUAT_RATIO x width across it. 2026-11-14 top images:
+# a hex bolt standing on its head read 1.32 and 1.45 (perspective adds the shank), lying bolts 3.8-9.4; hex_bolt_short
+# lying (21.7 x 13.2 mm, part_sizes.json) ~1.6 and nuts ~1.0 also get the depth look, as before.
+SQUAT_RATIO = 2.0
 HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or screw upright): depth needs >~20 cm range
 ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
 # Per --background: surface z (poses.json grasp.surface_z, touch-measured) and pick zone. The cardboard pad spans
@@ -546,6 +550,14 @@ class Sorter:
                 "shift_mm": round(mid, 1), "length_mm": round(max(s) - min(s), 1)}
             self.part_ends = [(cx + a[0] * min(s), cy + a[1] * min(s)), (cx + a[0] * max(s), cy + a[1] * max(s))]
             self.meta["grasp_point"][f"look_{attempt}"]["ends"] = [[round(c, 1) for c in e] for e in self.part_ends]
+            # Squat (nut flat, or any part standing) from the close-up: length along the part's axis over its width
+            # across it, both in mm, so a diagonal part reads as long. 11:58 and 12:08 a hex bolt standing on its head
+            # (27 x 19 mm here) failed round_part's fill test on the watch frame (0.43-0.45 < 0.55), skipped the depth
+            # look and was grasped like a lying part: its top came within ~2 mm of the sensor.
+            w = [-(p[0] - cx) * a[1] + (p[1] - cy) * a[0] for it in near for p in it[6]]
+            width = max(w) - min(w)
+            self.look_squat = (max(s) - min(s)) < SQUAT_RATIO * width
+            self.meta["grasp_point"][f"look_{attempt}"].update(width_mm=round(width, 1), squat=self.look_squat)
         tape = None
         if new:
             x0, y0, x1, y1 = new[4]
@@ -606,6 +618,7 @@ class Sorter:
             if attempt == 1:
                 sound("Ping")
             look_q = self.look_joints(item)
+            self.look_squat = None
             t = await self.jmove(look_q, f"look {attempt}", holding=False)   # FIRST MOTION
             t_cmd = t_cmd or t
             new, tape = await self.look(item, attempt, heading)
@@ -615,6 +628,10 @@ class Sorter:
                 self.not_seen = True
                 return False, item, t_cmd
             self.top_tape = tape
+            if self.look_squat is not None and self.look_squat != squat:
+                squat = self.look_squat                    # the close-up decides (see look()); the hover height follows
+                hz = HOVER_HIGH_Z if squat else HOVER_Z
+                self.tel.emit("note", step="squat from the close-up", squat=squat)
             if attempt == 1 and getattr(self.args, "views", "classic") == "coverage":
                 await self.oblique_looks(new, look_q)
             item = new
