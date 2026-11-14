@@ -1,39 +1,39 @@
 {
-  "_comment": "Start presets for ops/console.py. Each is passed unchanged to: station_run.py start -- <args> --dash-host 127.0.0.1 (telemetry to the dashboard that runs on the station, :8775). Before starting, the console checks the deployed /opt/viam/sorter-ali/current/sort.py knows every --flag, so a preset for a newer release is refused until that release is deployed. Sources: README.md 'Supported commands', sort.py --help, dashboard/runner.py DEFAULT_BUNDLE, station incoming/device_bench.out (2026-11-14 11:16).",
+  "_comment": "Start presets for ops/console.py. Each is passed unchanged to: station_run.py start -- <args> --dash-host 127.0.0.1 (telemetry to the dashboard that runs on the station, :8775). Before starting, the console checks the deployed /opt/viam/sorter-ali/current/sort.py knows every --flag, so a preset for a newer release is refused until that release is deployed. Sources: README.md 'Supported commands', sort.py --help, dashboard/runner.py DEFAULT_BUNDLE, station incoming/device_bench.out (2026-11-14 11:16). 2026-11-14 15:50 [claude-code/claude-opus-5-5 op Ali]: demo/continuous/one_object/multi/judged/collect_demo = the live sort of release _oblstand (coverage_v4/bundle_top_obl12.json, --decide all, no --assume-lying: the oblique standing check needs it off). judged_npu/judged_typeclf unchanged (bundle not checked on NPU).",
   "demo": {
     "title": "Demo sort (any part type; defaults: 6 items, CPU)",
     "args": ["--mode", "sort", "--background", "cardboard", "--type", "auto",
-             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--views", "coverage", "--decide", "top",
-             "--assume-lying", "--dash-port", "8776"]
+             "--anomaly-bundle", "models/coverage_v4/bundle_top_obl12.json", "--views", "coverage", "--decide", "all",
+             "--dash-port", "8776"]
   },
   "continuous": {
     "title": "Continuous sort (until STOP: 999 items, waits up to 1 h for the next part)",
     "args": ["--mode", "sort", "--background", "cardboard", "--type", "auto",
-             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--views", "coverage", "--decide", "top",
-             "--assume-lying", "--dash-port", "8776", "--items", "999", "--watch-timeout", "3600"]
+             "--anomaly-bundle", "models/coverage_v4/bundle_top_obl12.json", "--views", "coverage", "--decide", "all",
+             "--dash-port", "8776", "--items", "999", "--watch-timeout", "3600"]
   },
   "one_object": {
     "title": "One-object sort (1 item)",
     "args": ["--mode", "sort", "--background", "cardboard", "--type", "auto",
-             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--views", "coverage", "--decide", "top",
-             "--assume-lying", "--dash-port", "8776", "--items", "1"]
+             "--anomaly-bundle", "models/coverage_v4/bundle_top_obl12.json", "--views", "coverage", "--decide", "all",
+             "--dash-port", "8776", "--items", "1"]
   },
   "multi": {
     "title": "Multi-part sort: several parts on the pad, one at a time, until the pad stays empty 60 s (sort.py --multi)",
     "args": ["--mode", "sort", "--background", "cardboard", "--type", "auto",
-             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--views", "coverage", "--decide", "top",
-             "--assume-lying", "--dash-port", "8776", "--items", "999", "--watch-timeout", "60", "--multi"]
+             "--anomaly-bundle", "models/coverage_v4/bundle_top_obl12.json", "--views", "coverage", "--decide", "all",
+             "--dash-port", "8776", "--items", "999", "--watch-timeout", "60", "--multi"]
   },
   "collect_demo": {
-    "title": "Collect demo (3 picks of one part; defaults: label unlabeled, type unknown)",
+    "title": "Data capture (collect 3 picks, label unlabeled, type unknown; standing parts laid flat first)",
     "args": ["--mode", "collect", "--background", "cardboard", "--reps", "3", "--views", "coverage",
-             "--assume-lying", "--dash-port", "8776"]
+             "--dash-port", "8776"]
   },
   "judged": {
     "title": "Judged sort (6 items, CPU)",
     "args": ["--mode", "sort", "--items", "6", "--background", "cardboard", "--type", "auto",
-             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--anomaly-device", "CPU",
-             "--decide", "top", "--views", "coverage", "--watch-timeout", "300"]
+             "--anomaly-bundle", "models/coverage_v4/bundle_top_obl12.json", "--anomaly-device", "CPU",
+             "--decide", "all", "--views", "coverage", "--watch-timeout", "300"]
   },
   "judged_npu": {
     "title": "Judged sort (6 items, NPU)",
