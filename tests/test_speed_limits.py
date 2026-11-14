@@ -84,6 +84,16 @@ class UprightGuard(unittest.TestCase):
         self.assertAlmostEqual(tips, 77 - (60 - SENSOR_MARGIN_MM))
         self.assertGreaterEqual(40 - tips, MIN_GRIP_MM)
 
+    def test_measured_gap_with_the_longest_part(self):
+        # config/poses.json 61.8 mm (open fingers, 2026-11-14); longest part socket_m16 ~76.9 mm (part_sizes.json)
+        import sort
+        L = sort.longest_part_mm("auto")
+        self.assertIsNone(upright_tips(21, G, L)[0])           # the 15:48 bolt's 20-22 mm reading: left in place
+        tips, why = upright_tips(40, G, L)
+        self.assertIsNone(why)
+        self.assertLessEqual(L - tips, G["tip_to_sensor_mm"] - SENSOR_MARGIN_MM + 1e-9)   # even 77 mm stays clear
+        self.assertAlmostEqual(upright_tips(77, G, L)[0], 38.5)                          # read right: halfway
+
     def test_under_read_that_leaves_no_grip_is_refused(self):
         tips, why = upright_tips(22, self.g, 77)              # 15:48: the same bolt read 20-22 mm and 80 mm
         self.assertIsNone(tips)

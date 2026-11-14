@@ -599,3 +599,17 @@ under unittest, all other test files pass except 3 test_anomaly cases needing op
 failing before this change too). No motion, no config change.
 Next: measure tip_to_sensor_mm; then a 3-pick collect run with these defaults (one variable: the straight-move chains),
 then a separate run with --run-accel 900.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:29]
+ARM: taken (Pranav: "move bot to home pls"). Found at joints (96.5, -5.7, 2.8, 50.5, 49.7, 9.8), model TCP ~(116, 231, 138),
+still over 1 s, teleop off, gripper open (pos 839). Plan: single joint move to scan_joints_deg (home), default speed;
+joint-line path check vs table/walls/ceiling/obstacles.json: worst clearance 113 mm (table).
+11:29 home reached: joints (0.0, 22.6, -50.7, 0.0, -74.0, 0.0), max error 0.04 deg, no error raised. ARM: released (home/scan pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:32]
+config/poses.json grasp.tip_to_sensor_mm = 61.8 (new key; before: absent, every upright grasp refused). Measured by hand
+by Pranav, fingers open, arm stationary, ~11:30; used as-is for the closed-tip gap (conservative by ~7.5 mm). Revert:
+delete the key. Upright guard now: tips >= 23.1 mm above the surface for an unknown type (longest part 76.9 mm must stay
+8 mm under the sensor), so with --type auto an upright part read under 33 mm is left in place (the 15:48 bolt read
+20-22); 34-46 mm: tips raised to 23.1; >= 46 mm: halfway rule. Upright grasps still need --allow-upright; not run on
+the arm. 16 offline tests (tests/test_speed_limits.py, test_sort_offline.py) pass.
