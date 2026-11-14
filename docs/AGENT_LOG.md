@@ -541,3 +541,9 @@ Done: prepared the operator-requested new publication branch ali/clean-base from
 Verified: 80 Python tests passed (one optional training integration skipped), nine JS tests, three geometry/UDP checks, runtime/tool imports, supported CLI help, overview selftest, presentation TypeScript and Vite production build under Node 22.23.1, offline ZIP packaging, and local dashboard app/health/History/Models HTTP checks with preview and recording disabled. No live inference or physical reliability claim. Credentials/artifacts/build outputs excluded from Git.
 Robot: no motion, gripper actuation, Viam config, model activation, deployment or service changes. Physical arm state not queried.
 Next: review the published cleanup branch and rehearse a reviewed station release under AGENTS.md; continued shared-checkout work remains independent.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 10:39]
+ARM: taken (Pranav: "can you do a run", hands-off). Ali's loops stopped and arm released 21:00 yesterday; arm still at the
+watch pose, gripper open, one hex bolt lying on the cardboard pad. sort.py --mode collect --reps 3 --background cardboard
+--assume-lying, --fast-carry 180 (default on this branch): 180 deg/s only after a confirmed grip, 60 otherwise; sort.py
+restores 60 at run end. Revert by hand if needed: arm DoCommand {"set_speed": 60}.

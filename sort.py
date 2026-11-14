@@ -44,7 +44,7 @@ sys.path.insert(0, str(ROOT))
 from viam.components.camera import Camera
 from viam.services.generic import Generic
 
-from viam.proto.component.arm import JointPositions
+from viam.proto.component.arm import JointPositions, MoveOptions
 from vh.motion import Mover, cam_to_world, grasp_height, held, tcp_pose
 from vh.detection import WristView, detect
 from station import connect
@@ -59,6 +59,9 @@ TZ = G["table_z"]
 WATCH_J = CP["watch_pose"]["joints_deg"]
 NORMAL_SPEED = 60.0                 # arm joint speed, deg/s: the module default, used for approach, descent and grasp
 MAX_SPEED = 180.0                   # the UFACTORY 850's joint-speed limit (and the module's): --fast-carry's ceiling
+NORMAL_ACCEL, MAX_ACCEL = 381.67, 1145.0   # joint acceleration deg/s^2: module default and its limit
+STRAIGHT_STEP_MM = 10.0             # waypoint spacing for straight moves (MoveThroughJointPositions)
+GRIP_SPEED, GRIP_SPEED_MAX = 2000, 5000    # G2 finger speed: module default (every close) and its limit (opening a confirmed grip)
 SECURE_SLIP_POS = 15                # a grip is confirmed if the fingers closed at most this much more during the lift
 LIFT_Z = 280.0                      # TCP height before swinging to the checkpoint: clears the box walls (100) + flap (140)
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
@@ -228,18 +231,71 @@ class Sorter:
         return t
 
     async def straight(self, x, y, z, label):
+        """Straight TCP move keeping the tool axis and jaw angle. With --fast-moves: a chain of IK waypoints every
+        STRAIGHT_STEP_MM along the line, executed with MoveThroughJointPositions at the full joint speed and
+        acceleration (per-move MoveOptions). The module's MoveToPosition plans each move with the motion service
+        (~1 s whatever the speed: descend 989 ms at 60 deg/s, 1012 ms at 180). Same safety as before: a straight line,
+        no obstacle check (the grasp ends 2 mm above the surface on purpose). Falls back to it if any IK is off."""
+        if self.args.fast_moves:
+            try:
+                await self.straight_waypoints(x, y, z, label)
+                return
+            except (ValueError, RuntimeError) as e:
+                self.tel.emit("note", step="straight via planner", why=f"{label}: {e}"[:200])
+                print(f"  {label}: {e}; using the planner move", flush=True)
         with self.tel.span(label, phase=label.split()[0], item=self.n):
             await self.mv.straight(x, y, z, label)
         self.q = None
 
+    async def straight_waypoints(self, x, y, z, label):
+        q0 = self.q or await self.joints()
+        p0, axis = fk_tcp(q0)
+        F = frames(q0)[-1]
+        heading = math.degrees(math.atan2(F[1, 1], F[0, 1]))        # world heading of the gripper y axis (the jaws)
+        target = np.array([x, y, z], float)
+        n = max(2, math.ceil(np.linalg.norm(target - p0) / STRAIGHT_STEP_MM))
+        qs, seed = [], q0
+        for i in range(1, n + 1):
+            q, err_mm, err_deg = ik(p0 + (target - p0) * i / n, axis=tuple(axis), seed=seed, jaw_heading_deg=heading)
+            if err_mm > 1.0 or err_deg > 1.0:
+                raise ValueError(f"waypoint {i}/{n} IK off by {err_mm:.1f} mm / {err_deg:.1f} deg")
+            if max(abs(a - b) for a, b in zip(q, seed)) > 15:
+                raise ValueError(f"waypoint {i}/{n} jumps {max(abs(a - b) for a, b in zip(q, seed)):.0f} deg (IK branch change)")
+            qs.append(q)
+            seed = q
+        speed = self.speed or NORMAL_SPEED
+        opts = MoveOptions(max_vel_degs_per_sec=float(speed),
+                           max_acc_degs_per_sec2=float(MAX_ACCEL if speed > NORMAL_SPEED else NORMAL_ACCEL))
+        self.tel.emit("move", label=label, component="arm", joints=[round(v, 1) for v in qs[-1]],
+                      target={"x": x, "y": y, "z": z}, waypoints=n)
+        with self.tel.span(label, phase=label.split()[0], item=self.n):
+            await self.arm.move_through_joint_positions([JointPositions(values=list(q)) for q in qs], options=opts)
+        self.q = list(qs[-1])
+
+    async def set_finger_speed(self, speed, why):
+        """G2 finger speed via set_gripper_speed (1-5000; the module sets 2000 at startup)."""
+        if getattr(self, "finger_speed", GRIP_SPEED) == speed:
+            return
+        await self.gripper.do_command({"set_gripper_speed": int(speed)})
+        self.finger_speed = speed
+        self.tel.emit("note", step="finger speed", speed=speed, why=why)
+        print(f"  finger speed -> {speed} ({why})", flush=True)
+
+    def fast_moves(self):
+        """Speed for moves away from the table (approach, return, retreat): --fast-moves, or normal if off."""
+        return self.args.fast_moves or NORMAL_SPEED
+
     async def set_arm_speed(self, deg_s, why):
-        """Arm joint speed via the module's set_speed DoCommand (lasts until changed or the module restarts)."""
+        """Arm joint speed and acceleration via the module's set_speed / set_acceleration DoCommand (lasts until changed
+        or the module restarts). Full speed also gets the full acceleration (1145 deg/s^2): at 180 deg/s most of our
+        moves are too short to reach full speed, so acceleration decides their time."""
         if getattr(self, "speed", None) == deg_s:
             return
-        await self.arm.do_command({"set_speed": float(deg_s)})
+        accel = MAX_ACCEL if deg_s > NORMAL_SPEED else NORMAL_ACCEL
+        await self.arm.do_command({"set_speed": float(deg_s), "set_acceleration": float(accel)})
         self.speed = deg_s
-        self.tel.emit("note", step="arm speed", deg_s=deg_s, why=why)
-        print(f"  arm speed -> {deg_s:.0f} deg/s ({why})", flush=True)
+        self.tel.emit("note", step="arm speed", deg_s=deg_s, accel=accel, why=why)
+        print(f"  arm speed -> {deg_s:.0f} deg/s, acceleration {accel:.0f} deg/s^2 ({why})", flush=True)
 
     async def release(self):
         """Open and wait until the fingers are really open: gripper.open() can return while they are still closed,
@@ -461,6 +517,7 @@ class Sorter:
         retries = 0 if self.args.mode == "collect" else G["retries"]
         for attempt in range(1, 2 + retries):
             heading = item[3] + G["jaw_offset_deg"] + theta_extra
+            await self.set_arm_speed(self.fast_moves(), "approach: look and hover")
             if attempt == 1:
                 sound("Ping")
             t = await self.jmove(self.look_joints(item), f"look {attempt}", holding=False)   # FIRST MOTION
@@ -667,6 +724,7 @@ class Sorter:
             if self.gripper and await self.mv.finger_pos() < 780:
                 await self.release()
             self.finish(rec)
+            await self.set_arm_speed(self.fast_moves(), "return (empty)")
             await self.jmove(WATCH_J, "return", holding=False)
             # 18:40: the same unseen part was retried 10x in a row. Two misses on the same spot: stop and ask a human.
             if self.args.mode == "collect" and not self.not_seen:
@@ -680,9 +738,9 @@ class Sorter:
         self.last_miss = None
         if self.args.fast_carry and self.grip_secure:
             await self.set_arm_speed(self.args.fast_carry, "grip confirmed: carrying at full speed")
+            await self.set_finger_speed(GRIP_SPEED_MAX, "grip confirmed: release at full finger speed")
         elif self.args.fast_carry:
-            self.tel.emit("note", step="fast carry skipped", why="grip not confirmed: fingers kept closing during the lift")
-            print("  grip not confirmed (fingers kept closing during the lift): carrying at normal speed", flush=True)
+            await self.set_arm_speed(NORMAL_SPEED, "grip not confirmed (fingers kept closing during the lift): carrying at normal speed")
         decision, reason, at, scores = await self.inspect()
         t_dec = time.time()
         rec.update(decision=decision, reason=reason, decided_at_view=at, scores=scores, t_decided=iso(t_dec),
@@ -704,7 +762,8 @@ class Sorter:
                 await self.release()
         elif decision == "collect":
             await self.place_back()
-        await self.set_arm_speed(NORMAL_SPEED, "released: back to normal speed for the next approach")
+        await self.set_finger_speed(GRIP_SPEED, "released: next close at the default finger speed")
+        await self.set_arm_speed(self.fast_moves(), "released: return at full speed")
         rec["t_released"] = iso(time.time())
         self.state("RETURN")
         await self.jmove(WATCH_J, "return", holding=False)
@@ -761,13 +820,14 @@ class Sorter:
             await self.capture_refs()
         count = a.reps if a.mode == "collect" else a.items
         self.speed = None
-        await self.set_arm_speed(NORMAL_SPEED, "run start")
+        await self.set_arm_speed(self.fast_moves(), "run start")
         try:
             for _ in range(count):
                 if not await self.cycle():
                     break
         finally:
             try:
+                await self.set_finger_speed(GRIP_SPEED, "run end")
                 await self.set_arm_speed(NORMAL_SPEED, "run end")   # also after an error: never leave the arm fast
             except Exception as e:
                 print(f"  could not restore the arm speed ({e}); set it by hand: arm DoCommand set_speed {NORMAL_SPEED:.0f}")
@@ -796,11 +856,16 @@ async def main():
                    help=f"arm joint speed while carrying a CONFIRMED grip (held, fingers steady through the lift), from "
                         f"lift to release; normal {NORMAL_SPEED:.0f} deg/s otherwise. Default {MAX_SPEED:.0f} (the arm's "
                         f"limit); 0 = off")
+    p.add_argument("--fast-moves", type=float, default=MAX_SPEED, metavar="DEG_S",
+                   help=f"arm joint speed (with max acceleration {MAX_ACCEL:.0f} deg/s^2) for every move, straight moves "
+                        f"included (IK waypoint chains, not the planner). An unconfirmed grip is still carried at "
+                        f"{NORMAL_SPEED:.0f}. Default {MAX_SPEED:.0f}; 0 = off (planner straight moves, {NORMAL_SPEED:.0f} deg/s)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
-    if not 0 <= a.fast_carry <= MAX_SPEED:
-        raise SystemExit(f"--fast-carry must be 0 (off) .. {MAX_SPEED:.0f} deg/s")
+    for name in ("fast_carry", "fast_moves"):
+        if not 0 <= getattr(a, name) <= MAX_SPEED:
+            raise SystemExit(f"--{name.replace('_', '-')} must be 0 (off) .. {MAX_SPEED:.0f} deg/s")
     global TZ, HOVER_Z, ZONE        # every pick height, the planner's table and the zone follow the pick surface
     if a.background not in SURFACE_Z:
         raise SystemExit(f"no measured surface_z for {a.background!r} in config/poses.json")
