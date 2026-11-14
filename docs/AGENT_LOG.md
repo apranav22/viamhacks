@@ -553,3 +553,10 @@ restores 60 at run end. Revert by hand if needed: arm DoCommand {"set_speed": 60
 placed back; cycles 12.0 / 13.5 / 20.8 s (the last waited at WATCH for the bolt to settle), latency 439-4351 ms. Arm
 back at 60 deg/s at run end. ARM: released (watch pose, gripper open). Since then (c508de6, not yet run on the arm):
 every move at 180 deg/s + 1145 deg/s^2, straight moves as IK waypoint chains, finger speed 5000 after a confirmed grip.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:01]
+ARM: taken (Pranav: "reset to home pos first, drop the old part"). Found still at TCP (366,120,210), gripper closed on a
+bolt (pos 123), teleop off. Plan: 60 deg/s; path-checked joint move to the survey/home joints, over the cardboard pad
+(275,350), lower, open (bolt set on the pad), up, home.
+11:01 reset done: home -> over pad (275,350) -> lowered to TCP z 39 -> opened (bolt set on the pad) -> home.
+Path clearances 90-121 mm. Speed/accel left at the defaults 60 / 381.67. ARM: released (home/survey pose, gripper open).
