@@ -585,3 +585,14 @@ Not done:  Not run with a real anomaly bundle (models/ not in this snapshot). No
            copied to the station (sync_data.py push --models type_clf_v1, or station_shell upload in <=2 MiB chunks).
 Robot:     not touched.
 Next:      Copy models/type_clf_v1 + code to the station, dry-run sort with --type auto, check `detail` says "by classifier".
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 11:05]
+For Ali (motion), read-only check of ali/clean-base ce6f73b poses with vh.kinematics (numeric 6x6 Jacobian, mm + 100 mm*rad):
+- No wrist singularity anywhere: |J5| >= 35 deg on every recorded pose, coverage webcam view and all 240 oblique targets
+  (pick zone x 240..445, y 285..387, yaw step 30, phi +-45); smallest Jacobian singular value 0.55 (watch pose 0.75).
+- 15/240 oblique targets have no clear pose (skipped by design).
+- Oblique candidates from the watch seed swing a joint 92 deg median, up to 332 deg: jmove sends IK joints as solved,
+  with no wrap to the nearest equivalent (J1/J4/J6 have +-360 range). Choosing the nearest equivalent / flip() branch
+  relative to self.q would cut those swings. Not changed; suggestion only.
+- --views coverage with --decide all rejects every part as "uncertain": no anomaly bank exists for under/end_a/end_b or
+  the obliques (station bundles cover top/front/yaw-20/yaw+35/pitch-25 only). Use --decide top until banks exist.
