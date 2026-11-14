@@ -617,3 +617,14 @@ threshold from OTHER runs only, folds whose model saw >= 10 good picks (deployme
 Position-aware matching (--local-radius 2): no gain for either backbone (ResNet 9/28, DINOv3 10/28 at the old rule).
 Station device bench (tools/device_bench.py): type classifier CPU 12.8 / GPU 1.0 / NPU 1.1 ms; each_cardboard_v4
 hex_bolt_partial top model CPU 12.2 / GPU f32 23.5 / NPU 10.3 ms (NPU compiles here; score agreement NOT checked yet).
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 12:30]
+Device placement, measured on the station (Core Ultra X7 358H / Arc B390 iGPU / AI Boost NPU), no sort.py running:
+- tools/device_bench.py, p50 single inference: type classifier CPU 12.8 / GPU 1.0 / NPU 1.1 ms;
+  each_cardboard_v4 hex_bolt_partial top PatchCore CPU 12.2 / GPU f32 23.5 / NPU 10.3 ms; button_ss_long CPU 10.1 / GPU 11.9 ms.
+- tools/device_agreement.py on 53 real hex_bolt_partial top crops: GPU = CPU (max diff 0.0001); NPU max |diff| 0.066,
+  median 0.012 vs threshold 20.42, 0 decision flips (10 rejects on each device). Our PatchCore export DOES compile and
+  agree on the NPU (the organizer sheet's NPU failure was for their export).
+=> Placement story: anomaly banks on NPU (10 ms, frees CPU), type classifier on GPU (1 ms), CPU for capture/decode/loop.
+Pulled HF: only 4 runs from today (11 collect picks, hex_bolt_partial); new end/under collection not synced yet.
+Candidate bundle models/cand_cvp95_v1 (train_anomaly --threshold cv-p95) training on this PC; not activated.
