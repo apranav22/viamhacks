@@ -92,9 +92,21 @@ python sync_data.py pull                                 # every shared run you 
 python sync_data.py push                                 # your finished runs (skips runs written < 2 min ago)
 python sync_data.py push --models any_cardboard_v2       # share a trained bundle too
 python sync_data.py pull --revision <commit>             # exact snapshot a model was trained on
-# station (after the next deploy ships it; huggingface_hub is installed in .venv):
-/opt/viam/sorter-ali/.venv/bin/python3.12 /opt/viam/sorter-ali/current/sync_data.py push
 ```
+
+**Repo:** https://huggingface.co/datasets/aliriz/armfarm04-fastener-runs (private, `config/data_repo.json`). It is on
+Ali's personal account, which can't share a private repo: create a free HF org, invite the team, then move it with
+`HfApi().move_repo("aliriz/armfarm04-fastener-runs", "<org>/armfarm04-fastener-runs", repo_type="dataset")` and update
+`config/data_repo.json` + `VH_DATA_REPO` in `station_sync_cron.sh`. First push 19:35: 19 laptop runs + 3 models
+(`any_cardboard_v2`, `button_white_v1`, `hexbolt_cardboard_v1`); pull round trip verified byte-identical.
+
+**Station (automatic):** root cron every 10 min runs `/opt/viam/sorter-ali/tools/sync_cron.sh` (= `station_sync_cron.sh`)
+-> `sync_data.py --root /opt/viam/sorter-ali push` (prefers `current/sync_data.py`, falls back to `tools/`). It skips
+while any `python3 ... sort.py` runs, so uploads never compete with a live run; log `/opt/viam/sorter-ali/sync.log`.
+Models are not in the cron: push them with `tools/sync_cron.sh --models '<name>'` on the station.
+Auth: Ali's HF token in `/root/.cache/huggingface/token` (0600; Ali chose this over a repo-scoped token). Replace it with
+a fine-grained token (write: this repo only) when convenient. Remove: `crontab -e` (delete the line), `rm` the token.
+Same-name bundles trained separately on laptop and station (e.g. `any_cardboard_v2`) are refused as collisions: rename one.
 
 Rules it enforces: unchanged runs are skipped (cheap, idempotent); a run edited later (e.g. a new `exclude.json`) is
 re-pushed; a run name already shared from another host with different content is refused (name collision); `pull` never
