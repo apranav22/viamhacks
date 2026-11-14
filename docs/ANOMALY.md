@@ -2,6 +2,13 @@
 
 [pi/unknown · op Ali · local workstation · ali/pipeline]
 
+## Current status (day 1 evening)
+
+This baseline description below predates the live station work. Rotation-normalized `part-top-v2`, measured-size auto
+part typing, per-type banks and live collection/sort runs now exist. See `THRESHOLD_FINDINGS.md` for exact experiments,
+threshold limitations and observed mistakes, and `AGENT_LOG.md` for chronology. Independent-physical-part audit and
+upright-grasp safety are still unproved. Do not read the historical "not implemented" list as current status.
+
 ## What is implemented
 
 - `vh/anomaly_data.py`: explicitly selected successful collection picks -> shared square-context crops. Whole picks,

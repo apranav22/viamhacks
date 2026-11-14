@@ -46,11 +46,11 @@ from viam.services.generic import Generic
 
 from viam.proto.common import GeometriesInFrame, WorldState
 from viam.proto.component.arm import JointPositions
-from pipeline import Mover, box, cam_to_world, grasp_height, held, world_state
+from pipeline import Mover, box, cam_to_world, grasp_height, held, tcp_pose, world_state
 from screws import WristView, detect
 from station import connect
 from station_shell import execute as station_exec
-from vh.kinematics import check_path, flip, ik, load_obstacles, tcp as fk_tcp
+from vh.kinematics import check_path, flip, frames, ik, load_obstacles, tcp as fk_tcp
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
 
@@ -78,10 +78,21 @@ ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on
 # Per --background: surface z (poses.json grasp.surface_z, touch-measured) and pick zone. The cardboard pad spans
 # world x ~104-415 (flap seam at ~415), y ~162-546 from the wrist image, so its zone stops 25 mm short of the seam.
 SURFACE_Z = G.get("surface_z", {"white": G["table_z"]})
-ZONES = {"white": ZONE, "cardboard": {"x_min": 190, "x_max": 390, "y_min": 260, "y_max": 410}}
+ZONES = {"white": ZONE, "cardboard": {"x_min": 150, "x_max": 400, "y_min": 200, "y_max": 500}}
+# 18:35 pad (larger sheet) measured from the watch frame: x 109-454 (flap seam ~410), y 168-531. Zone keeps >=40 mm
+# inside; IK + joint-path checks pass at a 5x5 grid x 4 yaws over it (look, low hover, lift).
+# Top image: wrist lens centred over the part, this high above the surface (0.21 mm/px at 1280x720). Measured
+# 2026-11-13 17:21 + 17:31 (runs/look_height_sweep_*, runs/look_height_led_*): all heights in focus; without the
+# lamp LED the arm's shadow reached the part at 190, with the LED (now part of the capture recipe) it is even and
+# neutral. 170 is refused by the planner (gripper:claws vs table). The old look centred the TCP (camera ~70 mm
+# off-axis), so it hovered at TCP 230 (lens ~360, 0.39 mm/px) to keep long parts in frame.
+LOOK_LENS_MM = 190.0
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
-TAPE_FRAC = 0.02                    # share of the part crop that is tape-blue to call it "known: tape"
+# Webcam crops are the whole gripper window: the blue-zinc socket_m16 reads up to 2.2% "tape" there (18:17 run, 153
+# views; 18:50 a clean socket screw was rejected at 1.9%). Top view: part-only bbox, good parts <= 0.08%.
+TAPE_FRAC_WEB = 0.04
+TAPE_FRAC = 0.01                    # share of the part crop that is tape-blue to call it "known: tape"
 # Wrist RGB controls (2026-11-13 17:05, runs/camera_lock_*): 1280x720, brightness 8, manual exposure 10 ms (luma ~123,
 # no clipping, matches auto). Auto white balance kept: every manual temperature 4200-5500 K gave a red cast (R/G ~2.1).
 # v4l2 controls reset when the camera/module restarts, so every run sets and records them.
@@ -119,7 +130,9 @@ def tape_fraction(rgb):
     sat = (mx - mn) / np.maximum(mx, 1e-3)
     r, g, b = f[..., 0], f[..., 1], f[..., 2]
     hue_blue = (b == mx) & (b - np.maximum(r, g) > 0.12) & (r < g)          # blue dominant, not violet
-    blue = hue_blue & (sat > 0.45) & (mx > 0.25) & ((b - g) > 0.6 * (b - r))    # deep blue, not cyan (g close to b)
+    # 18:08 with the lamp LED + auto WB, tape on the top view read b-g ~0.21 vs b-r ~0.47 and failed the old 0.6 ratio
+    # (tape 0.05% -> missed). 0.4: tape 2.3-3.9% of the crop, every good top image (36) <= 0.08%. Zinc is excluded by sat.
+    blue = hue_blue & (sat > 0.45) & (mx > 0.25) & ((b - g) > 0.4 * (b - r))    # deep blue, not cyan (g close to b)
     return float(blue.mean())
 
 
@@ -176,7 +189,10 @@ def zone_px(view, z):
 def round_part(it):
     """Nuts and other squat parts: their long-axis angle is noise, so it doesn't count for 'still'."""
     x0, y0, x1, y1 = it[4]
-    return max(x1 - x0, y1 - y0) < 1.4 * max(1, min(x1 - x0, y1 - y0))
+    w, h = max(1, x1 - x0), max(1, y1 - y0)
+    # A long part lying at ~45 deg also has a square axis-aligned box, but fills only ~1/3 of it (a nut ~3/4).
+    # 17:37: a diagonal hex bolt (aspect 1.07, fill 0.33) went to the depth check, read 48 mm "upright", was skipped.
+    return max(w, h) < 1.4 * min(w, h) and it[2] / (w * h) > 0.55
 
 
 def project(pt):
@@ -191,7 +207,7 @@ class Sorter:
         self.arm, self.gripper = self.mv.arm, self.mv.gripper
         self.cam = Camera.from_robot(m, "cam")
         self.web = Camera.from_robot(m, "overview-cam")
-        self.obs = load_obstacles()
+        self.obs = load_obstacles(table_z=TZ)    # the pick surface: bare table or the cardboard pad
         self.run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + args.mode
         self.dir = ROOT / "runs" / self.run_id
         self.dir.mkdir(parents=True)
@@ -199,7 +215,8 @@ class Sorter:
         if args.anomaly_bundle and str(args.anomaly_bundle) == "active":     # set from the training dashboard
             args.anomaly_bundle = Path((ROOT / "models" / "ACTIVE").read_text().strip())
             print(f"active anomaly bundle: {args.anomaly_bundle}", flush=True)
-        self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device) if args.anomaly_bundle else None
+        self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device, sizes=ROOT / "config" / "part_sizes.json") \
+            if args.anomaly_bundle else None
         if self.anomaly:
             loaded = self.anomaly.warm(args.type, args.background)  # compile and warm BEFORE any arm motion
             print(f"Anomaly models ready on {args.anomaly_device}: {len(loaded)} groups", flush=True)
@@ -263,12 +280,12 @@ class Sorter:
         return img.data
 
     async def infer_crop(self, image, bbox, view):
+        if self.anomaly is None:
+            return Score("missing", detail="No anomaly bundle loaded"), bbox
         try:
-            crop, box = context_crop(image, bbox)
+            crop, box = self.anomaly.crop(image, bbox, view, getattr(self, "top_mmpx", None) if view == "top" else None)
         except ValueError as e:
             return Score("invalid", detail=str(e)), bbox
-        if self.anomaly is None:
-            return Score("missing", detail="No anomaly bundle loaded"), box
         result = await asyncio.to_thread(self.anomaly.score, crop, self.args.type, self.pose, view, self.args.background)
         return result, box
 
@@ -303,6 +320,7 @@ class Sorter:
         """Until one part sits still on the pad. Returns (item, t_appeared, t_stable)."""
         self.state("WATCH")
         if self.view is None:
+            self.watch_tcp = await tcp_pose(self.m)    # with view.t: the camera's offset from the TCP (look_joints)
             rot, t = await cam_to_world(self.m)
             k = (await self.cam.get_properties()).intrinsic_parameters
             self.view = WristView(k, rot, t, TZ)
@@ -346,19 +364,42 @@ class Sorter:
             if self.args.watch_timeout and t_appeared is None and now - self._watch_start > self.args.watch_timeout:
                 return None, None, None, None
 
+    def look_joints(self, item):
+        """Joints putting the wrist lens LOOK_LENS_MM straight above the part, by translating the watch pose (same
+        wrist heading, so the camera offset from the TCP measured at the watch pose stays valid)."""
+        w = self.watch_tcp
+        off = np.asarray(self.view.t) - np.array([w.x, w.y, w.z])                     # camera minus TCP, world, at the watch pose
+        y = frames(WATCH_J)[-1][:3, 1]
+        heading = math.degrees(math.atan2(y[1], y[0]))
+        target = np.array([item[0] - off[0], item[1] - off[1], TZ + LOOK_LENS_MM - off[2]])
+        q, err, _ = ik(target, seed=WATCH_J, jaw_heading_deg=heading)
+        p, _ = fk_tcp(q)
+        if np.linalg.norm(p - target) > 2 or p[2] - G["tcp_to_tip_mm"] < TZ + 30:
+            raise RuntimeError(f"look pose unreachable or too low: {np.round(p, 1).tolist()} vs {np.round(target, 1).tolist()}")
+        return q
+
     async def look(self, item, attempt, heading):
-        """Look again from hover (0.45 mm/px): position and angle of the same part. Saves the top-face image."""
+        """Top image with the lens centred LOOK_LENS_MM above the part: position and angle of the same part."""
         jpg, (rot, t), props = await asyncio.gather(self.wrist_jpeg(), cam_to_world(self.m), self.cam.get_properties())
         view = WristView(props.intrinsic_parameters, rot, t, TZ)
         rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
         near = [it for it in detect(rgb, view, None) if math.dist(it[:2], item[:2]) < 60]
-        new = min(near, key=lambda it: math.dist(it[:2], item[:2])) if near else None
+        new = None
+        if near:
+            # At 0.21 mm/px a shiny head can split off from the threads as its own blob. 18:20 socket_m16 #17/#27: the
+            # nearest blob was a head fragment -> tiny top crop, grasp at the head, #27 dropped. Merge the blobs.
+            big = max(near, key=lambda it: it[2])
+            n = sum(it[2] for it in near)
+            new = (sum(it[0] * it[2] for it in near) / n, sum(it[1] * it[2] for it in near) / n, n, big[3],
+                   (min(it[4][0] for it in near), min(it[4][1] for it in near),
+                    max(it[4][2] for it in near), max(it[4][3] for it in near)))
         tape = None
         if new:
             x0, y0, x1, y1 = new[4]
             tape = tape_fraction(rgb[max(0, y0 - 6):y1 + 6, max(0, x0 - 6):x1 + 6])
         (self.idir / f"top_{attempt}.jpg").write_bytes(jpg)
         self.top_image, self.top_bbox = jpg, list(new[4]) if new else None
+        self.top_mmpx = (t[2] - TZ) / props.intrinsic_parameters.focal_x_px     # part size in mm (type auto)
         self.meta.setdefault("top", {})[f"top_{attempt}"] = {
             "bbox": list(new[4]) if new else None, "xy": [round(new[0], 1), round(new[1], 1)] if new else None,
             "yaw_world": round(new[3], 1) if new else None, "pixels": new[2] if new else None,
@@ -399,13 +440,17 @@ class Sorter:
         theta_extra = 0.0
         self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)
         squat = round_part(item)
-        hz = HOVER_HIGH_Z      # every part: from the low hover a long part runs off the bottom of the wrist frame
-        for attempt in range(1, 2 + G["retries"]):
+        # The top image now comes from the camera-centred look pose, so the gripper hover only has to be high where the
+        # depth look needs range (squat parts: nut flat or a part standing). Long parts: the low hover (no down-up-down).
+        hz = HOVER_HIGH_Z if squat else HOVER_Z
+        # collect mode: one grasp attempt only. 19:03 a short hex bolt was stabbed 3x per item, nudged each time, and the
+        # closing fingertips tore the cardboard pad. A miss in collect mode stops the run (see cycle()).
+        retries = 0 if self.args.mode == "collect" else G["retries"]
+        for attempt in range(1, 2 + retries):
             heading = item[3] + G["jaw_offset_deg"] + theta_extra
-            q, err, _ = ik(np.array([item[0], item[1], hz]), seed=self.q or WATCH_J, jaw_heading_deg=heading)
             if attempt == 1:
                 sound("Ping")
-            t = await self.jmove(q, f"hover {attempt}", holding=False)
+            t = await self.jmove(self.look_joints(item), f"look {attempt}", holding=False)   # FIRST MOTION
             t_cmd = t_cmd or t
             new, tape = await self.look(item, attempt, heading)
             if new is None:
@@ -418,7 +463,14 @@ class Sorter:
             turn = abs((new[3] - item[3] + 90) % 180 - 90)
             item = new
             height = None
-            if squat and attempt == 1:
+            # hover with the gripper (not the camera) over the part, jaws across it. The depth look for squat parts
+            # runs from here: depth needs > ~28 cm range at 1280x720, more than the camera-centred look gives.
+            heading = item[3] + G["jaw_offset_deg"] + theta_extra
+            q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
+            await self.jmove(q, f"hover {attempt}", holding=False)
+            # --assume-lying: an operator laid the part flat (collect). The depth height read 42-48 mm for flat parts
+            # (18:58 hex_bolt_short, 17:37 diagonal bolt), so for squat parts it skipped good picks.
+            if squat and attempt == 1 and not getattr(self.args, "assume_lying", False):
                 height, dxy = await self.depth_look(item[:2])
                 print(f"  height from depth: {height if height is None else round(height)} mm")
                 if height and height > STANDING_MM and dxy is not None and not self.args.allow_upright:
@@ -434,10 +486,8 @@ class Sorter:
                     item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
                     shift = 99.0
                     self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
-            if shift > 2.0 or turn > 4.0:
-                heading = item[3] + G["jaw_offset_deg"] + theta_extra
-                q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
-                await self.jmove(q, f"aim {attempt}", holding=False)
+                    q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
+                    await self.jmove(q, f"aim upright {attempt}", holding=False)
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
@@ -511,9 +561,9 @@ class Sorter:
             if not held(jaw, G):
                 self.tel.emit("recovery", level="L2", what=f"part dropped during view {name}")
                 return "dropped", f"dropped during view {name}", name, scores
-            if self.args.mode == "sort" and not decision and tape > TAPE_FRAC:
+            if self.args.mode == "sort" and not decision and tape > TAPE_FRAC_WEB:
                 decision, reason, at = "reject", f"known: tape ({name}, {100 * tape:.1f}% of crop)", name
-            elif self.args.mode == "sort" and not decision and result.fields()["anomalous"]:
+            elif self.args.mode == "sort" and not decision and result.fields()["anomalous"] and getattr(self.args, "decide", "all") == "all":
                 decision, reason, at = "reject", reject_reason(scores, [name]), name
             if decision:
                 break
@@ -522,7 +572,8 @@ class Sorter:
         if self.args.mode == "collect":
             return "collect", self.args.label, None, scores
         if not decision:
-            uncertain = reject_reason(scores, ["top", *order])
+            # --decide top: the webcam anomaly scores are logged as evidence only (crop under rework, 17:58)
+            uncertain = reject_reason(scores, ["top", *order] if getattr(self.args, "decide", "all") == "all" else ["top"])
             decision, reason, at = ("reject", uncertain, "fusion") if uncertain else ("good", "all required anomaly views below threshold; no tape", "fusion")
         return decision, reason, at, scores
 
@@ -554,8 +605,10 @@ class Sorter:
         self.state("PLACE")
         sound("Ping")
         r = self.pad
+        # Keep >= 60 mm inside the zone in y: near the pad edge the white table enters the 190 mm look frame and the
+        # part merges with the background-edge band (18:40, button screw set down at y 233 -> unseen from the look).
         x = random.uniform(r["x_min"] + 40, r["x_max"] - 40)
-        y = random.uniform(r["y_min"] + 30, r["y_max"] - 30)
+        y = random.uniform(r["y_min"] + 60, r["y_max"] - 60)
         q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=random.uniform(0, 180))
         await self.jmove(q, "over pad", holding=self.upright or True)
         # set it down (upright parts stay upright) or let go 20-35 mm up so it lands on a random face / tips over
@@ -589,11 +642,28 @@ class Sorter:
         if not ok:
             rec.update(decision="none", reason=self.skip_reason or ("part not seen from hover" if self.not_seen else "could not grasp"),
                        t_decided=iso(time.time()))
+            if self.args.mode == "sort" and self.skip_reason and getattr(self, "top_image", None) and self.top_bbox:
+                # left in place (upright grasp disabled), but the top image was taken: decide from it, mark not moved
+                top, _ = await self.infer_crop(self.top_image, self.top_bbox, "top")
+                f = top.fields()
+                rec.update(decision="reject" if f["anomalous"] is not False else "good", picked=False,
+                           reason=f"{self.skip_reason}; top {f['status']} {f['score'] and round(f['score'], 2)} / "
+                                  f"{f['threshold'] and round(f['threshold'], 2)} {f['detail'] or ''}",
+                           scores={"top": f}, confidence=None)
             if self.gripper and await self.mv.finger_pos() < 780:
                 await self.release()
             self.finish(rec)
             await self.jmove(WATCH_J, "return", holding=False)
+            # 18:40: the same unseen part was retried 10x in a row. Two misses on the same spot: stop and ask a human.
+            if self.args.mode == "collect" and not self.not_seen:
+                print("  STOP: missed grasp in collect mode; check the part and the pad, then rerun")
+                return False
+            prev, self.last_miss = getattr(self, "last_miss", None), (item[0], item[1])
+            if prev and math.dist(prev, self.last_miss) < 15:
+                print(f"  STOP: part at ({item[0]:.0f}, {item[1]:.0f}) failed twice in a row; move it toward the pad centre and rerun")
+                return False
             return True
+        self.last_miss = None
         decision, reason, at, scores = await self.inspect()
         t_dec = time.time()
         rec.update(decision=decision, reason=reason, decided_at_view=at, scores=scores, t_decided=iso(t_dec),
@@ -693,6 +763,9 @@ async def main():
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")
     p.add_argument("--allow-upright", action="store_true", help="grasp upright parts (UNSAFE: hit the gripper 15:48)")
+    p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
+    p.add_argument("--decide", choices=["all", "top"], default="all",
+                   help="sort: which anomaly views can reject (top = wrist top view only; webcam scores logged as evidence)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()

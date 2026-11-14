@@ -8,4 +8,5 @@ models/
 *.png
 !site/img/*.jpg
 config/backup-*.json
-.cache/   # huggingface_hub download metadata (sync_data.py pull)
+# huggingface_hub download metadata (sync_data.py pull)
+.cache/

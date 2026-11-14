@@ -37,3 +37,8 @@ One line per surprise, newest last. This is raw material for "what failed, what 
 - **Checkpoint found and reached live:** TCP (202, −166, 90), tool axis pointing back at the lens, 250 mm away, 15° above it. The part sits against the black claw bar with the divider behind; ~3.5 px/mm. `config/checkpoint.json`.
 - **The wrist RealSense can't see a held part:** it projects ~64 px below the image and is ~14 cm away, under the D435 minimum depth. The "opposite" view of the webcam is the hover look before the grasp.
 - **The jaws close along the gripper's y axis, not x** (filmed at the checkpoint). `JawFrame` assumed x, so grasps were aimed 90° off: `jaw_offset_deg` 90 → 0.
+
+
+## Day-1 evening handoff
+
+See `THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.

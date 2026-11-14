@@ -14,10 +14,12 @@
 | Grasp by shape class (upright, lying, thin screw, nut flat/edge, washer, unknown) from the hover look | Different fasteners need different grasps; depth tells an upright bolt from a nut |
 | Live dashboard via fire-and-forget UDP, separate process | Measured 23–74 µs per event on the loop |
 
-## Status / next
+## Status / next (day 1 evening)
 
-- **Built:** baseline cycle `run.py` (watch → hover → look → pick → home), dashboard, offline fake station, tests. Dry run and offline only; **no live pick yet**.
-- **Next:** bring-up on the arm (ARCHITECTURE "Bring-up"), then defect detection at the hover look + checkpoint, then L3.
+- **Built and exercised live:** `sort.py` collection and sorting on the Intel station, shared runs/models across releases, per-type OpenVINO anomaly banks, measured-size auto type, multi-view capture, dashboards and HF backup. Upright grasp remains unvalidated and off by default.
+- **Read first:** `THRESHOLD_FINDINGS.md` for the new defect runs, threshold experiments, misses, false rejects and safety incidents; `AGENT_LOG.md` for chronological evidence; `DATA_PLAN.md` for data access.
+- **Next:** curate the latest captures, freeze independent calibration/audit data, verify thin-socket coverage and size-based typing, rehearse safely. Teammate access to private HF data still needs a team org.
+- The ownership table below is the original bring-up allocation, not a claim that these tasks remain undone.
 
 ## Who does what
 

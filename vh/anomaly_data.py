@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .anomaly import CROP_POLICY, context_crop, group_key
+from .anomaly import CROP_POLICY, group_key, model_crop
 
 
 def split_picks(pick_ids, seed=17):
@@ -24,12 +24,17 @@ def split_picks(pick_ids, seed=17):
 def collect_samples(run_dirs, part_type, background):
     records, skipped = [], []
     for root in map(Path, run_dirs):
+        # runs/<run>/exclude.json {"item_017": "reason", ...}: picks reviewed as bad data (wrong top crop etc.)
+        excl = json.loads((root / "exclude.json").read_text()) if (root / "exclude.json").exists() else {}
         for line in (root / "decisions.jsonl").read_text().splitlines():
             row = json.loads(line)
             pick = f"{root.name}/item_{row['item']:03d}"
+            if f"item_{row['item']:03d}" in excl:
+                skipped.append({"pick": pick, "reason": "excluded on review: " + excl[f"item_{row['item']:03d}"]})
+                continue
             folder = root / f"item_{row['item']:03d}"
             # part_type "any": one model per view over every part type's good picks (the judged run can't know the type)
-            if row.get("decision") != "collect" or (part_type != "any" and row.get("type") != part_type):
+            if row.get("decision") != "collect" or (part_type not in ("any", "each") and row.get("type") != part_type):
                 skipped.append({"pick": pick, "reason": "not a completed collection of requested type"})
                 continue
             if not (folder / "meta.json").exists():
@@ -43,7 +48,8 @@ def collect_samples(run_dirs, part_type, background):
             if pose not in {"lying", "upright"}:
                 skipped.append({"pick": pick, "reason": "unknown held pose"})
                 continue
-            common = {"pick_id": pick, "part_type": part_type, "pose": pose, "background": background,
+            # part_type "each": one bank per collected type (row type); "any": one pooled bank
+            common = {"pick_id": pick, "part_type": row.get("type") if part_type == "each" else part_type, "pose": pose, "background": background,
                       "label": row.get("label", meta.get("label")), "source_run": str(root)}
             tops = [(name, v) for name, v in meta.get("top", {}).items() if v.get("bbox")]
             if tops:
@@ -78,14 +84,20 @@ def build_dataset(run_dirs, output, part_type, background, seed=17):
             if size(r) != newest:
                 records.remove(r)
                 skipped.append({'pick': r['pick_id'], 'view': 'top', 'reason': f'wrist frame {size(r)} != newest {newest}'})
-    good = [r['pick_id'] for r in records if r['label'] == 'good']
-    splits = split_picks(good, seed)
+    splits = {}
+    for ty in sorted({r['part_type'] for r in records}):        # stratified: every type gets train/cal/test picks
+        good = sorted({r['pick_id'] for r in records if r['label'] == 'good' and r['part_type'] == ty})
+        if len(good) >= 5:
+            splits.update(split_picks(good, seed))
     output.mkdir(parents=True)
     samples = []
     for n, r in enumerate(records):
+        if r['label'] == 'good' and r['pick_id'] not in splits:
+            skipped.append({'pick': r['pick_id'], 'view': r['view'], 'reason': 'fewer than 5 good picks of this type'})
+            continue
         split = splits[r['pick_id']] if r['label'] == 'good' else 'test'
         try:
-            crop, box = context_crop(r['image'], r['bbox'])
+            crop, box = model_crop(r['image'], r['bbox'], r['view'])
         except (ValueError, OSError) as e:
             skipped.append({'pick': r['pick_id'], 'view': r['view'], 'reason': str(e)})
             continue
@@ -93,7 +105,7 @@ def build_dataset(run_dirs, output, part_type, background, seed=17):
         (output / 'images').mkdir(exist_ok=True)
         crop.save(output / filename)
         samples.append({**r, 'image': filename, 'source_image': r['image'], 'crop': box, 'split': split,
-                        'group': group_key(part_type, r['pose'], r['view'], background)})
+                        'group': group_key(r['part_type'], r['pose'], r['view'], background)})
     manifest = {'schema': 1, 'crop_policy': CROP_POLICY, 'seed': seed, 'samples': samples, 'skipped': skipped,
                 'limitations': ['Pick-level split; samples may be the same physical item.',
                                 'No rotation normalization or part/background masking in this baseline.',

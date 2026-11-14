@@ -30,9 +30,13 @@ from pipeline import LOG_DIR, POSES_PATH, cam_to_world, scan
 from station import connect
 from tracking import MultiTracker
 
-# Pixel constants below were tuned on the 640x480 wrist stream. 1280x720 has the same vertical field of view
-# (fx 908 vs 605), so detect() scales lengths by frame height / 480 and areas by its square.
+# Pixel constants below were tuned on the 640x480 wrist stream at the watch pose (~0.77 mm/px on the table).
+# detect() scales lengths by REF_MM_PER_PX / (this frame's mm/px) and areas by its square, so they hold at any
+# resolution AND height: at the 220 mm look pose (0.24 mm/px) parts are ~3x bigger in pixels, and an unscaled
+# background blur absorbed the zinc threads (17:25 smoke run: only the bolt head detected). Without a view (no
+# pose known) only the resolution is scaled (frame height / 480).
 CALIB_HEIGHT_PX = 480
+REF_MM_PER_PX = 0.77
 COLOR_DIFF = 70           # summed RGB distance from the local background that counts as a part
 BACKGROUND_SIGMA_PX = 25  # wider than a part at the survey scale
 MIN_PIXELS, MAX_PIXELS = 40, 12000
@@ -57,7 +61,10 @@ class WristView:
 def detect(rgb, view: WristView | None, region: dict | None) -> list:
     """Parts on the white table: [(x, y, pixels, yaw_deg, bbox)]. World mm with a view, else pixels."""
     f = rgb.astype(np.float32)
-    s = rgb.shape[0] / CALIB_HEIGHT_PX
+    if view is not None:
+        s = REF_MM_PER_PX / ((view.t[2] - view.table_z) / view.k.focal_x_px)
+    else:
+        s = rgb.shape[0] / CALIB_HEIGHT_PX
     sigma = BACKGROUND_SIGMA_PX * s / 4
     # the background is smooth, so blur at quarter resolution and scale back up (~10x faster)
     small = ndimage.gaussian_filter(f[::4, ::4], sigma=(sigma, sigma, 0))

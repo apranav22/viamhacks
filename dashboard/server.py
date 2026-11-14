@@ -7,13 +7,16 @@
 
 Idle preview: when no run is active the server itself polls both cameras (~4 fps) and the arm/gripper
 state (~2 Hz), so the feeds are live between runs. It pauses the moment a run sends telemetry and
-stays paused until the run ends (or goes silent for 3 s), so it never competes with the run's camera calls.
+stays paused until the run ends (or goes silent for 3 s). --preview-during-run explicitly opts into
+camera-only preview during runs (default 1 fps, maximum 2 fps per camera); detection and arm polling
+remain idle-only. --no-preview and --replay never connect to the robot.
 
 It reassembles frames, keeps the recent history in memory, streams events to browsers (SSE), and
 records the run (events.jsonl + key frames) under runs/<run>/dash. Stdlib only.
 """
 
 import argparse
+import math
 import os
 import sys
 import asyncio
@@ -230,9 +233,28 @@ def load_creds(key_file):
     return {"address": env["VIAM_ADDRESS"], "api_key": env["VIAM_API_KEY"], "api_key_id": env["VIAM_API_KEY_ID"]}
 
 
-async def preview_loop(hub, key_file, cams, fps):
-    """Idle preview: poll cameras + arm/gripper state while no run is active, and run the cheap live
-    detectors on the frames (vh/live_detect.py) in this process. Read-only on the robot."""
+RUN_PREVIEW_MAX_FPS = 2.0
+PREVIEW_CAMERA_TIMEOUT = 2.0
+
+
+def positive_fps(value):
+    value = float(value)
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("FPS must be positive and finite")
+    return value
+
+
+def run_preview_fps(value):
+    value = positive_fps(value)
+    if value > RUN_PREVIEW_MAX_FPS:
+        raise argparse.ArgumentTypeError(f"run preview FPS must be <= {RUN_PREVIEW_MAX_FPS:g}")
+    return value
+
+
+async def preview_loop(hub, key_file, cams, fps, preview_during_run=False, run_fps=1.0):
+    """Idle detection/state polling, with explicitly enabled camera-only preview during runs."""
+    fps = positive_fps(fps)
+    run_fps = run_preview_fps(run_fps)
     import viam.components.arm  # noqa: F401
     import viam.components.camera  # noqa: F401
     import viam.components.gripper  # noqa: F401
@@ -255,31 +277,47 @@ async def preview_loop(hub, key_file, cams, fps):
                 api_key=creds["api_key"], api_key_id=creds["api_key_id"]))
             arm, grip = Arm.from_robot(m, "arm"), Gripper.from_robot(m, "gripper")
             handles = {c: Camera.from_robot(m, c) for c in cams}
-            intr = await Intrinsics.from_camera(handles["cam"]) if "cam" in handles else None
-            status("live", fps=fps)
-            tick, paused = 0, False
+            intr = None
+            tick, mode = 0, None
             T, T_tcp, T_time = None, None, 0.0
             while True:
-                if hub.run_active():
-                    if not paused:
-                        status("paused", reason="run active")
-                        paused = True
+                active = hub.run_active()
+                next_mode = ("run_preview" if preview_during_run else "paused") if active else "live"
+                rate = run_fps if active else fps
+                if next_mode != mode:
+                    status(next_mode, fps=0 if next_mode == "paused" else rate,
+                           reason="run active" if active else "idle")
+                    mode = next_mode
+                    if active:
+                        # Do not let saved candidates pair a moving image with an old pose/detection.
+                        hub.latest.pop("arm_state", None)
+                        for name in handles:
+                            if name in hub.latest:
+                                hub.latest[name] = (hub.latest[name][0], None)
+                        T, T_tcp, T_time = None, None, 0.0
+                if mode == "paused":
                     await asyncio.sleep(0.25)
                     continue
-                if paused:
-                    status("live", fps=fps)
-                    paused = False
+                if not active and intr is None and "cam" in handles:
+                    intr = await Intrinsics.from_camera(handles["cam"])
                 t0 = time.perf_counter()
                 for name, cam in handles.items():
-                    if hub.run_active():                # a run started mid-poll: yield the cameras at once
+                    if hub.run_active() != active:       # re-evaluate mode/rate on the next tick
                         break
                     tc = time.perf_counter()
-                    imgs, _ = await cam.get_images(filter_source_names=["color"] if name == "cam" else None)
+                    # Bound the await without relying on SDK-version-specific timeout keywords.
+                    imgs, _ = await asyncio.wait_for(
+                        cam.get_images(filter_source_names=["color"] if name == "cam" else None),
+                        timeout=PREVIEW_CAMERA_TIMEOUT)
+                    if hub.run_active() != active:
+                        break
                     img = next((i for i in imgs if "jpeg" in i.mime_type), imgs[0])
                     rpc = round(1000 * (time.perf_counter() - tc))
                     td = time.perf_counter()
                     try:
-                        if name == "cam":
+                        if active:
+                            det = None
+                        elif name == "cam":
                             det = await asyncio.to_thread(live_detect.wrist, img.data, T, intr)
                         elif name == "overview-cam":
                             det = await asyncio.to_thread(live_detect.overhead, img.data)
@@ -287,16 +325,20 @@ async def preview_loop(hub, key_file, cams, fps):
                             det = None
                     except Exception as e:
                         det = {"error": f"{type(e).__name__}: {e}"[:160]}
-                    det_ms = round(1000 * (time.perf_counter() - td), 1)
+                    if hub.run_active() != active:
+                        break                           # discard detection computed across a run transition
+                    det_ms = 0 if active else round(1000 * (time.perf_counter() - td), 1)
                     fid = next(PREVIEW_IDS)
                     hub._store_frame(fid, img.data, img.mime_type)
                     hub.latest[name] = (img.data, det)
                     hub.event({"k": "preview", "t": time.time(), "cam": name, "rpc_ms": rpc, "det_ms": det_ms, "det": det,
                                "frame": {"id": fid, "len": len(img.data), "mime": img.mime_type, "ok": True}})
-                if tick % 2 == 0:
+                if not active and not hub.run_active() and tick % 2 == 0:
                     tcp, joints, gpos, holding = await asyncio.gather(
                         m.transform_pose(PoseInFrame(reference_frame="gripper", pose=Pose(o_z=1)), "world"),
                         arm.get_joint_positions(), grip.do_command({"get": True}), grip.is_holding_something())
+                    if hub.run_active():
+                        continue
                     p = tcp.pose
                     ev = {"k": "arm_state", "t": time.time(),
                           "tcp": [round(p.x, 1), round(p.y, 1), round(p.z, 1), round(p.o_x, 3), round(p.o_y, 3), round(p.o_z, 3), round(p.theta, 1)],
@@ -306,12 +348,12 @@ async def preview_loop(hub, key_file, cams, fps):
                     hub.event(dict(ev))
                     # cam -> world for the wrist detections: refresh when the arm moved or every 5 s
                     now_tcp = ev["tcp"]
-                    if intr and (T_tcp is None or max(abs(a - b) for a, b in zip(now_tcp, T_tcp)) > 0.5
+                    if not hub.run_active() and intr and (T_tcp is None or max(abs(a - b) for a, b in zip(now_tcp, T_tcp)) > 0.5
                                  or time.time() - T_time > 5):
                         T, _ = await frame_to_world(m, "cam")
                         T_tcp, T_time = now_tcp, time.time()
                 tick += 1
-                await asyncio.sleep(max(0.0, 1.0 / fps - (time.perf_counter() - t0)))
+                await asyncio.sleep(max(0.0, 1.0 / rate - (time.perf_counter() - t0)))
         except Exception as e:
             status("error", error=f"{type(e).__name__}: {e}"[:200])
             try:
@@ -447,7 +489,11 @@ def main():
     ap.add_argument("--replay", default=None, help="a runs/<run>/dash folder to replay")
     ap.add_argument("--speed", type=float, default=1.0)
     ap.add_argument("--no-preview", action="store_true", help="never connect to the robot (telemetry only)")
-    ap.add_argument("--preview-fps", type=float, default=4.0)
+    ap.add_argument("--preview-fps", type=positive_fps, default=4.0)
+    ap.add_argument("--preview-during-run", action="store_true",
+                    help="opt into camera-only preview during active runs (adds camera RPC load)")
+    ap.add_argument("--run-preview-fps", type=run_preview_fps, default=1.0,
+                    help="active-run preview FPS per camera, >0 and <=2 (default: 1)")
     ap.add_argument("--preview-cams", default="cam,overview-cam")
     ap.add_argument("--key", default=str(ROOT / "api-key.json"))
     a = ap.parse_args()
@@ -457,7 +503,8 @@ def main():
     else:
         threading.Thread(target=udp_loop, args=(hub, a.udp_host, a.udp_port), daemon=True).start()
         if not a.no_preview:
-            threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps)),
+            threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps,
+                                                                         a.preview_during_run, a.run_preview_fps)),
                              daemon=True).start()
     srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub))
     srv.daemon_threads = True

@@ -3,6 +3,8 @@ import math
 import sys
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent))
 from route import section as route_section
+from progress import section as progress_section, CSS as progress_css
+from eda import section as eda_section, CSS as eda_css
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -128,7 +130,8 @@ def html():
         f'<tr><td><b>{n}</b></td><td>{g}</td><td>{cost}</td><td>{why}</td><td><span class="pill v-{v}">{v}</span></td></tr>'
         for n, g, cost, why, v in RECON)
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Track 3: Spot it, sort it</title>
+<title>Spot it, sort it · Project &amp; data</title>
+<link rel="icon" href="data:,">
 <style>
 :root{{--bg:#f8fafc;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--acc:#2563eb}}
 *{{box-sizing:border-box}} body{{margin:0;font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:var(--ink);background:var(--bg)}}
@@ -164,14 +167,39 @@ th,td{{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);ver
 figure{{margin:0}} figure img{{width:100%;border-radius:10px;border:1px solid var(--line)}} figcaption{{font-size:13px;color:var(--mute);margin-top:6px}}
 code{{background:#f1f5f9;padding:1px 5px;border-radius:5px;font-size:13px}}
 .eq{{font-family:ui-monospace,Menlo,monospace;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px 16px;font-size:14px;overflow:auto}}
-</style></head><body>
+{progress_css}
+{eda_css}
+/* Compact by disclosure, not by reducing reading or image size. */
+header{{padding:24px max(20px,6vw)}} header p{{max-width:760px}}
+nav{{flex-wrap:nowrap;overflow-x:auto;gap:8px;padding:6px max(20px,6vw)}}
+nav a{{flex:none;padding:8px 10px;font-size:15px;white-space:nowrap}}
+main{{margin:auto;padding:0 24px 64px;max-width:1240px}}
+section{{margin:24px 0}} [id]{{scroll-margin-top:72px}}
+.grid>*{{min-width:0}} .g2{{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}}
+.g3{{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}}
+details.fold{{border:1px solid var(--line);border-radius:12px;background:var(--card);margin:12px 0}}
+details.fold>summary{{padding:14px 18px;font-size:16px;font-weight:650;color:var(--ink)}}
+details.fold[open]>summary{{border-bottom:1px solid var(--line)}}
+.fold-body{{padding:4px 18px 18px;min-width:0;overflow-wrap:anywhere}}
+.fold-body>section:last-child{{margin-bottom:0}} summary:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{{outline:3px solid #2563eb;outline-offset:3px}}
+.reference-note{{color:var(--mute);margin:12px 0;font-size:15px}}
+.table-scroll,.diagram-scroll{{overflow-x:auto}} .table-scroll>table{{min-width:720px}}
+.diagram-scroll>.diagram{{min-width:760px}} .skip{{position:absolute;left:20px;top:-80px;background:white;padding:10px;z-index:10}} .skip:focus{{top:8px}}
+@media(max-width:600px){{main{{padding:0 16px 40px}} header{{padding:20px}}
+nav{{padding:4px 8px}} .fold-body{{padding:4px 12px 14px}} .card{{padding:16px}}
+.grid.g2,.grid.g3{{grid-template-columns:minmax(0,1fr)!important}} .bar{{overflow-x:auto}} .seg{{flex:none!important;min-width:110px}}
+.overall{{gap:8px 12px}} .phead{{gap:10px;flex-wrap:wrap}}}}
+</style></head><body><a class="skip" href="#eda">Skip to collected data</a>
 <header><h1>Track 3: Spot it, sort it</h1>
-<p>Six judge items, placed one at a time, five minutes. Find every defect (including one we've never seen), put each item where we said we would, survive a judge moving it, and prove it in a log.
-This page: one cycle from start to end, the path past the fixed camera, recovery levels, what the judges measure, where detection breaks, and whether 3D reconstruction helps.</p></header>
-<nav><a href="#states">Start → end</a><a href="#route">Route per item</a><a href="#recovery">Recovery levels</a><a href="#scoring">Scoring</a><a href="#asym">The core problem</a><a href="#cases">Cases</a><a href="#coverage">Coverage</a>
-<a href="#decide">Decision rule</a><a href="#recon">3D reconstruction?</a><a href="#evals">Our evals</a><a href="#station">What we see</a><a href="#open">Open questions</a></nav>
+<p>Project &amp; collected-data review · six items, five minutes, inspect → sort → log.
+A saved evidence snapshot, not a live robot dashboard or a model-performance claim.</p></header>
+<nav aria-label="Project page"><a href="#eda"><b>Data overview</b></a><a href="#eda-next">Next actions</a><a href="#eda-gallery">Images</a><a href="#progress">Plan</a><a href="#reference">Design reference</a></nav>
 <main>
+{eda_section()}
+{progress_section()}
 
+<section id="reference"><h2>Design reference</h2><p class="reference-note">Original design notes and proposed behavior, not a verification of the current robot. Expand only what you need.</p></section>
+<details class="fold"><summary>Architecture · cycle, route &amp; recovery</summary><div class="fold-body">
 <section id="states"><h2>Start state → end state</h2><p class="lead"><b>One item at a time:</b> a judge places a single item, we decide and sort it, then the next one comes. Six cycles in five minutes.</p>
 <div class="grid g2">
 <div class="card state"><h3>Initial state (each cycle)</h3><ul>
@@ -211,6 +239,8 @@ This page: one cycle from start to end, the path past the fixed camera, recovery
 <div class="callout" style="margin-top:16px"><b>Log with recovery:</b> exactly one line per item, written when the item is released into its bin. It holds the decision, confidence and timestamps, plus a <code>recoveries</code> count, so a retried item still produces one line.</div>
 </section>
 
+</div></details>
+<details class="fold"><summary>Judging · scoring &amp; trade-offs</summary><div class="fold-body">
 <section id="scoring"><h2>What the judges measure</h2><p class="lead">Reference sheet weights. Detection is scored from <b>our own log</b>: no log, no decision or latency points.</p>
 {score_bar()}
 <div class="grid g3" style="margin-top:16px">
@@ -219,6 +249,8 @@ This page: one cycle from start to end, the path past the fixed camera, recovery
 <div class="card"><h3>Latency only counts correct items</h3>Inspection moves count as the response, so latency is the time to <i>notice</i> the part, not to classify it.</div>
 </div></section>
 
+</div></details>
+<details class="fold"><summary>Detection · cases, coverage &amp; decision rule</summary><div class="fold-body">
 <section id="asym"><h2>The core problem: defect and good are not symmetric</h2>
 <div class="grid g2">
 <div class="callout"><p class="big">“Defective” needs one piece of evidence.</p>One view with tape or a strong anomaly is enough. That's why the tape-up case is easy.</div>
@@ -230,11 +262,11 @@ This page: one cycle from start to end, the path past the fixed camera, recovery
 </div></section>
 
 <section id="cases"><h2>Cases, ranked by how they fail</h2><p class="lead">Separated items mean finding parts is simple blob detection on a white table. These are the detection cases we need to cover.</p>
-<table><tr><th>Case</th><th>Difficulty</th><th>Who can see it</th><th>How it fails</th><th>Mitigation</th></tr>{cases}</table></section>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Detection cases"><table><tr><th>Case</th><th>Difficulty</th><th>Who can see it</th><th>How it fails</th><th>Mitigation</th></tr>{cases}</table></div></section>
 
 <section id="coverage"><h2>Coverage: can two cameras see 360°?</h2>
 <p class="lead">Almost. A top-down grasp leaves the face that was on the table facing out past the fingertips. So <b>pointing the fingertips at the fixed camera shows exactly the hidden side</b>. Spinning about the gripper's own axis only rotates the picture; <b>tilting</b> shows the sides.</p>
-{coverage_svg()}
+<div class="diagram-scroll" tabindex="0" role="region" aria-label="Surface coverage diagram">{coverage_svg()}</div>
 <div class="grid g3" style="margin-top:16px">
 <div class="card"><h3>Views per item</h3><ol style="margin:0;padding-left:18px"><li>Wrist close-up, top-down, before the grasp</li><li>Fingertips at the fixed camera (underside)</li><li>Tilt −45°</li><li>Tilt +45°</li></ol></div>
 <div class="card"><h3>The blind spot</h3>The finger contact patches sit at the shank's “equator”, which every view sees only at a grazing angle. Tape exactly there is our worst case.</div>
@@ -254,8 +286,10 @@ confidence(box)    = coverage × how far the worst view is below its threshold</
 Our failure mode is <i>unobserved</i> surface. A radiance field doesn't create evidence for a face nobody imaged; it would hallucinate it. It also needs dozens of posed views and minutes of GPU per item, mostly in CUDA code. It isn't an OpenVINO model, so it doesn't help the device-placement story either.
 And depth won't find tape: the wrist camera <i>is</i> RGB-D, but tape is ~0.1 mm thick.</div>
 <p class="lead" style="margin-top:14px">The 3D idea that <b>does</b> pay is cheap and geometric: model each part type as primitives (cylinder shank, hex head/nut) and use that to account for coverage and catch shape defects.</p>
-<table><tr><th>Approach</th><th>What it gives</th><th>Cost</th><th>Why it matters (or not)</th><th>Verdict</th></tr>{recon}</table></section>
+<div class="table-scroll" tabindex="0" role="region" aria-label="Reconstruction approaches"><table><tr><th>Approach</th><th>What it gives</th><th>Cost</th><th>Why it matters (or not)</th><th>Verdict</th></tr>{recon}</table></div></section>
 
+</div></details>
+<details class="fold"><summary>Evaluation plan · station images &amp; open questions</summary><div class="fold-body">
 <section id="evals"><h2>Our evals (mirror the judging)</h2>
 <div class="grid g2" style="grid-template-columns:repeat(2,minmax(0,1fr))">
 <div class="card"><h3>1. Offline replay (no arm needed)</h3>Every rehearsal saves all views of every item. Re-run detection with new models or thresholds over the whole history in seconds. Report:<ul>
@@ -281,7 +315,26 @@ And depth won't find tape: the wrist camera <i>is</i> RGB-D, but tape is ~0.1 mm
 <div class="card"><h3>For us to test</h3><ul><li>Webcam focus and resolution at 20 / 30 / 40 cm</li><li>Grasp by the head vs the shank, per part type</li><li>Jaw width when holding each part type vs fully closed (L2/L3 signal)</li><li>Per-view false-alarm rate on good parts</li></ul></div>
 <div class="card"><h3>Assumptions on this page</h3><ul><li>One item on the table at a time</li><li>Unsure = reject (reject bin = hold area)</li><li>Inspection moves count as the response</li><li>The judge may move the item before or after the grasp</li></ul></div>
 </div></section>
-</main></body></html>"""
+</div></details>
+</main>
+<script>
+// Preserve incoming links, including targets nested inside closed disclosures.
+function revealTarget(){{
+  let id; try {{ id = decodeURIComponent(location.hash.slice(1)); }} catch {{ return; }}
+  const target = document.getElementById(id);
+  if (!target) return;
+  for (let node = target; node; node = node.parentElement) {{
+    if (node.tagName === 'DETAILS') node.open = true;
+  }}
+  requestAnimationFrame(() => target.scrollIntoView({{block:'start'}}));
+}}
+window.addEventListener('hashchange', revealTarget);
+document.addEventListener('click', event => {{
+  const link = event.target.closest('a[href^="#"]');
+  if (link && link.hash === location.hash) revealTarget();
+}});
+revealTarget();
+</script></body></html>"""
 
 
 if __name__ == "__main__":

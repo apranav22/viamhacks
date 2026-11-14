@@ -25,3 +25,8 @@ python run.py pick --live --step                # real motion, Enter before each
 ```
 
 **Status (day 1, ~12:15):** baseline cycle (watch → hover → look → pick → home) built and tested offline and in dry run; **not yet run with live motion**. Defect detection is next.
+
+
+## Day-1 evening handoff
+
+See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.

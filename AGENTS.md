@@ -113,3 +113,8 @@ Next:      the single most useful next step
 | `dashboard/server.py` | live dashboard (UDP telemetry, idle camera preview) on :8765 |
 | `config/` | measured poses, checkpoint, Viam config tooling |
 | `site/` | visual overview (`python3 site/build.py`) |
+
+
+## Day-1 evening handoff
+
+See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.

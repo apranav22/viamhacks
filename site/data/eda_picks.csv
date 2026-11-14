@@ -1,0 +1,44 @@
+id,label,type,label_source,pose,decision,reason,complete,has_meta,top_count,crop_views,missing_views,readable_multiview,latency_ms,cycle_s,xy,yaw,height_mm,flags
+20261113_150512_collect/item_001,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_150630_collect/item_001,unknown,unknown,unknown,unknown,none,could not grasp,False,False,3,[],[],False,663,,"[136.0, 255.6]",-169.3,,"[""missing metadata""]"
+20261113_150630_collect/item_002,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_151115_collect/item_001,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_151143_collect/item_001,tape,hex_nut,log,unknown,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,638,17.66,"[393.2, 327.7]",96.6,,"[""missing metadata""]"
+20261113_151143_collect/item_002,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_151342_collect/item_001,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_151424_collect/item_001,tape,hex_nut,log,unknown,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,373,12.53,"[214.1, 295.6]",-147.9,,"[""missing metadata""]"
+20261113_151424_collect/item_002,tape,hex_nut,log,unknown,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,433,13.79,"[345.9, 337.9]",177.1,,"[""missing metadata""]"
+20261113_151424_collect/item_003,tape,hex_nut,log,unknown,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,366,17.1,"[438.3, 347.9]",88.8,,"[""missing metadata""]"
+20261113_151424_collect/item_004,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_152536_collect/item_001,tape,hex_bolt_short,log,lying,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,471,17.58,"[243.7, 403.7]",-21.2,,"[""missing metadata""]"
+20261113_152536_collect/item_002,tape,hex_bolt_short,log,lying,collect,tape,True,False,2,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,589,22.47,"[389.4, 277.6]",-37.5,,"[""missing metadata""]"
+20261113_152536_collect/item_003,tape,hex_bolt_short,log,lying,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,702,15.25,"[325.8, 298.5]",-27.8,,"[""missing metadata""]"
+20261113_152536_collect/item_004,tape,hex_bolt_short,log,lying,collect,tape,True,False,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,437,14.42,"[334.0, 354.0]",179.4,,"[""missing metadata""]"
+20261113_152536_collect/item_005,tape,hex_bolt_short,log,lying,collect,tape,True,False,2,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,482,25.17,"[346.0, 358.3]",-22.4,,"[""missing metadata""]"
+20261113_152536_collect/item_006,unknown,unknown,unknown,unknown,none,part not seen from hover,False,False,2,[],[],False,430,,"[353.9, 361.1]",-168.0,,"[""missing metadata""]"
+20261113_153239_collect/item_001,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,360,,"[213.3, 296.2]",-175.0,,[]
+20261113_153239_collect/item_002,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,459,,"[213.2, 295.9]",-174.8,,[]
+20261113_153239_collect/item_003,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,403,,"[213.3, 296.1]",-174.9,,[]
+20261113_153239_collect/item_004,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,371,,"[213.3, 295.8]",-174.8,,[]
+20261113_153239_collect/item_005,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,501,,"[213.1, 295.8]",-174.8,,[]
+20261113_153239_collect/item_006,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,512,,"[213.3, 296.2]",-174.9,,[]
+20261113_153239_collect/item_007,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,470,,"[213.4, 295.6]",-174.7,,[]
+20261113_153239_collect/item_008,good,button_ss_long,meta,unknown,none,part not seen from hover,False,True,1,[],[],False,428,,"[213.5, 295.5]",-174.9,,[]
+20261113_153347_collect/item_001,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,376,13.27,"[215.7, 294.4]",-174.1,,[]
+20261113_153347_collect/item_002,unknown,unknown,unknown,unknown,unlogged,,False,False,0,[],[],False,,,,,,"[""missing metadata"", ""no decision log row""]"
+20261113_153544_collect/item_001,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,500,15.29,"[271.5, 372.6]",135.5,,[]
+20261113_153544_collect/item_002,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,377,16.66,"[282.2, 299.5]",111.7,,[]
+20261113_153544_collect/item_003,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,442,16.3,"[310.2, 358.9]",84.3,,[]
+20261113_153544_collect/item_004,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,394,15.5,"[234.2, 281.2]",145.1,,[]
+20261113_153544_collect/item_005,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,490,12.68,"[357.4, 339.7]",167.9,,[]
+20261113_153544_collect/item_006,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,401,13.44,"[239.7, 331.8]",-174.3,,[]
+20261113_153544_collect/item_007,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,1898,14.69,"[231.0, 362.7]",-177.0,,[]
+20261113_153544_collect/item_008,good,button_ss_long,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,419,14.06,"[414.3, 355.6]",-127.0,,[]
+20261113_154405_collect/item_001,good,socket_large,meta,upright,none,part not seen from hover,False,True,2,[],"[""end"", ""side+120"", ""side-120"", ""side0""]",False,456,,"[261.7, 322.5]",147.1,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_002,good,socket_large,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,1238,13.58,"[263.6, 290.2]",-149.7,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_003,good,socket_large,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,524,15.76,"[232.3, 339.5]",-153.1,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_004,good,socket_large,meta,upright,none,part not seen from hover,False,True,2,[],"[""end"", ""side+120"", ""side-120"", ""side0""]",False,1480,,"[281.6, 357.6]",134.6,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_005,good,socket_large,log,upright,collect,good,True,True,1,"[""end"", ""side+120"", ""side-120"", ""side0""]",[],True,732,21.96,"[217.6, 329.0]",-146.6,11.0,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_006,good,socket_large,log,lying,collect,good,True,True,1,"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",[],True,439,13.01,"[323.4, 338.3]",-177.3,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_007,good,socket_large,log,upright,collect,good,True,True,1,"[""end"", ""side+120"", ""side-120"", ""side0""]",[],True,1005,22.83,"[226.6, 335.8]",-144.9,40.0,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"
+20261113_154405_collect/item_008,good,socket_large,meta,lying,none,could not grasp,False,True,3,[],"[""front"", ""pitch-25"", ""yaw+35"", ""yaw-20""]",False,382,,"[300.7, 329.0]",-171.9,,"[""run-level safety review: E-stop incident (AGENT_LOG)""]"

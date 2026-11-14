@@ -127,10 +127,10 @@ def main():
     p.add_argument('--type', required=True)
     p.add_argument('--background', required=True, choices=['white', 'cardboard'])
     p.add_argument('--out', required=True, type=Path)
-    p.add_argument('--size', default=256, type=int)
-    p.add_argument('--coreset-ratio', default=0.01, type=float)
+    p.add_argument('--size', default=320, type=int)
+    p.add_argument('--coreset-ratio', default=0.1, type=float)
     p.add_argument('--train-device', choices=['cpu', 'xpu'], default='cpu', help='Frozen feature extraction device; coreset/export stay on CPU')
-    p.add_argument('--margin', default=1.10, type=float)
+    p.add_argument('--margin', default=1.15, type=float)
     a = p.parse_args()
     if a.out.exists():
         p.error('Choose a new output folder; existing bundles are never overwritten')

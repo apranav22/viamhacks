@@ -120,3 +120,8 @@ $PY sort.py --mode sort --items 6 --type any --anomaly-bundle models/any_white_v
 Verified 17:07 (no motion): `sort.py` imports on the station; `button_xpu_v2` on GPU scores held-out inputs in 6-10 ms
 per view; both cameras read from the station (wrist 1280x720 + aligned 1280x720 depth since 17:05, webcam 1080p);
 station -> laptop dashboard telemetry received. NOT yet verified: a live sort.py run launched on the station.
+
+
+## Day-1 evening handoff
+
+See `THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.
