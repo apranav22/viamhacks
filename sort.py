@@ -630,6 +630,8 @@ class Sorter:
         """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command."""
         self.state("PICK")
         self.oblique_scores, self.early = {}, None      # per pick (coverage oblique looks)
+        self.pose = "lying"           # set before any early return: cycle() scores a part left in place with it (12:31
+        #                               demo crash in the station release: 'Sorter' object has no attribute 'pose')
         t_cmd = None
         theta_extra = 0.0
         self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)

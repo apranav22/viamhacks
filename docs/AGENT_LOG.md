@@ -729,3 +729,18 @@ and ported Ali's changes onto our layout:
 Checked offline: today's lift -> view moves and the lay-flat poses still pass the new self/elbow checks; 114 Python
 tests (3 need openvino, not on this laptop) + 9 JS tests pass. NOT run on the arm. @Ali: please push your shared
 checkout to a branch so the next merge is a git merge, not a port from a release.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:31]
+ARM: taken for a demo (Pranav: "we want to do a demo. run the bot", "run it on the vino"; chose Ali's live station
+release as-is). Operator confirmed the other driver (planner moves again at 12:25:06) is stopped and a person is at the
+E-stop. Checks: teleop off, still over 3 s, at the watch pose, gripper open, no loop on the station. Run on the station
+(release 20261114_120758, unchanged): station_run.py start -- --mode sort --items 6 --background cardboard --views
+coverage --anomaly-bundle models/each_cardboard_v4/bundle_m103.json --type auto --decide top --dash-host 127.0.0.1
+--dash-port 8776. Stop: python station_run.py stop.
+12:31 demo run (station, release 20261114_120758 unchanged) crashed on item 1: a screw standing on its head, depth 36
+mm -> refused as upright (that release has upright grasp off) -> sort mode scores it from the top image ->
+AttributeError: 'Sorter' object has no attribute 'pose'. The arm stopped at the hover above the part, gripper open.
+Station run log: runs/20261114_103053_sort (station clock). Fixed the same latent bug on this branch (pose set at the
+start of pick). Added demo.py: read-only check, then station_run.py start with fixed demo settings incl. --assume-lying
+(avoids that crash path; parts must be laid flat). ARM: released. 12:32 demo.py check: arm MOVING, 90 deg from the
+watch pose: someone else is running a planner pick loop (moves 12:32:29-12:32:40); not started.
