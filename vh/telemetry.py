@@ -22,8 +22,12 @@ CHUNK = 8000
 
 
 class Telemetry:
-    def __init__(self, host="127.0.0.1", port=8766, enabled=True, run_id=None):
+    def __init__(self, host="127.0.0.1", port=8766, enabled=True, run_id=None, log_path=None,
+                 log_kinds=("span", "move", "error", "recovery")):
         self.addr = (host, port)
+        # timing kept on disk (no frames): UDP to the dashboard is lost when nothing listens
+        self.log = open(log_path, "a", buffering=1) if log_path else None
+        self.log_kinds = set(log_kinds)
         self.enabled = enabled
         self.run_id = run_id or time.strftime("%Y%m%d_%H%M%S")
         self.sock = None
@@ -51,11 +55,15 @@ class Telemetry:
 
     def emit(self, kind, frame=None, mime="image/jpeg", **fields):
         """Send one event. `frame` = raw bytes (e.g. the camera's JPEG) attached to it."""
-        if not self.enabled:
+        if not self.enabled and not self.log:
             return
         t0 = time.perf_counter_ns()
         ev = {"k": kind, "t": time.time(), "s": next(self._seq), "run": self.run_id}
         ev.update(fields)
+        if self.log and kind in self.log_kinds:
+            self.log.write(json.dumps(ev, separators=(",", ":"), default=_jsonable) + "\n")
+        if not self.enabled:
+            return
         if frame:
             fid = next(self._fid) & 0xFFFFFFFF
             n = (len(frame) + CHUNK - 1) // CHUNK

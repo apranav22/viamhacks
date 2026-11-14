@@ -573,3 +573,29 @@ Done: dashboard run control (operator request): Live tab "Start a run" panel for
 Verified: 89 Python tests OK (9 new, fake sort.py; 1 optional skip), 9 JS tests. Not clicked in a browser, no live run started from it yet.
 Robot: untouched.
 Next: first real use = a 2-pick capture from the panel with the operator watching.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:40]
+Found (machine logs, armfarm04b, read-only): 10:48:08 "cleared controller error: Linear speed exceeds limit in ServoJ
+mode (C60)", during runs/20261114_104758_collect (c508de6: 180 deg/s + 1145 deg/s^2 for every move; stopped after 1
+item). The module drives the arm in ServoJ mode, where UFACTORY caps the TCP at 1.2 x 1000 = 1200 mm/s even on joint
+moves; that, not the 1000 mm/s Cartesian limit (C24), is the binding one. 11:00:06-11:00:17 C1 (E-stop pressed), cleared
+before the 11:01 reset. runs/20261114_110157_collect (11:02, 3 picks, cycles 11.6 / 12.1 / 12.2 s, --tcp-limit build
+c39c289) is on this laptop but was not logged here; no controller error since 10:48.
+Merged origin/ali/clean-base (coverage views, dashboard run control) into pranav/fast-carry; conflicts were additive.
+Done (code only, NOT run on the arm): straight moves (descend / lift / lower / retreat) as IK waypoint chains every 30 mm
+(joint path within 2 mm of the line, 0.25-0.3 mm modelled), obstacle-checked except the table, one
+move_through_joint_positions call under --tcp-limit; module straight move at 60 deg/s as fallback. Every move reads the
+joints back: > 1 deg short of target -> get_error, arm.stop(), ArmFault (the module clears faults silently); any error in
+the run loop -> arm.stop(). Still-frame gate before every capture (top look, oblique, depth look, webcam views, refs):
+frames until two consecutive distinct ones match (frame_change <= REF_STEADY_FRAC, max 5): operator saw blurred pictures
+taken while moving. Webcam view scoring overlaps the move to the next view (a sort-mode anomaly reject lands one view
+later, same compartment; tape still decides before moving). --run-accel (default 600, unchanged; <= 1145).
+runs/<id>/timeline.jsonl keeps span / move / error / recovery events. Upright grasp guard (vh.motion.upright_tips): the
+halfway rule, raised so max(measured height, longest part from config/part_sizes.json) stays 8 mm under the sensor body
+above the closed tips; refused when < 10 mm of the measured part would be held. Needs grasp.tip_to_sensor_mm in
+config/poses.json, NOT measured yet: until then every upright grasp is refused, even with --allow-upright.
+Verified: 15 new offline tests (tests/test_speed_limits.py, tests/test_sort_offline.py), tests/test_motion.py now runs
+under unittest, all other test files pass except 3 test_anomaly cases needing openvino (not installed on this laptop;
+failing before this change too). No motion, no config change.
+Next: measure tip_to_sensor_mm; then a 3-pick collect run with these defaults (one variable: the straight-move chains),
+then a separate run with --run-accel 900.

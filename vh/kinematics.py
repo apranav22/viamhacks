@@ -182,13 +182,81 @@ def peak_tcp_speed(d, mm_per_deg, v, acc):
 
 def safe_joint_speed(j_from, j_to, tcp_limit, acc, v_max=180.0, v_min=10.0):
     """Fastest leading-joint speed (deg/s, whole degrees, <= v_max) whose peak TCP speed stays <= tcp_limit mm/s.
-    The xArm firmware limits the TCP to 1000 mm/s (UFACTORY: TCP 1000 mm/s, joints 180 deg/s, 1146 deg/s^2); one
-    joint speed for every move drove the tool tip to 2.4-2.9 m/s on the long swings at 180 deg/s."""
-    d, k = tcp_speed_profile(j_from, j_to)
-    if d <= 0 or peak_tcp_speed(d, k, v_max, acc) <= tcp_limit:
+    The firmware's binding limit is C60: in ServoJ mode (how the Viam module drives the arm) the TCP may not pass
+    1.2 x 1000 = 1200 mm/s, even on joint moves (UFACTORY: TCP 1000 mm/s, joints 180 deg/s, 1145 deg/s^2). 180 deg/s
+    at 1145 deg/s^2 for every move tripped C60 at 10:48 on 2026-11-14."""
+    return safe_chain_speed([j_from, j_to], tcp_limit, acc, v_max, v_min, n=60)
+
+
+def chain_tcp_profile(qs, n=20):
+    """(D, s, mm_per_deg) for joint waypoints qs[0] -> qs[1] -> ... as the module streams them: joint-linear per leg,
+    one leading-joint speed for the whole chain, no stop between legs. D is the summed leading-joint travel (deg),
+    s the travel at the end of each sample segment, mm_per_deg the TCP mm per leading-joint degree there."""
+    s, k, D = [], [], 0.0
+    for a, b in zip(qs, qs[1:]):
+        d, kk = tcp_speed_profile(a, b, n)
+        if d <= 0:
+            continue
+        s.append(D + np.linspace(0, d, n)[1:]); k.append(kk); D += d
+    if not s:
+        return 0.0, np.zeros(0), np.zeros(0)
+    return D, np.concatenate(s), np.concatenate(k)
+
+
+def peak_chain_tcp_speed(qs, v, acc, n=20):
+    """Peak TCP speed (mm/s) through waypoints qs under one trapezoid (cruise v deg/s, acceleration acc deg/s^2). Each
+    sample segment takes the fastest velocity anywhere in it (accelerating to its end, decelerating from its start)."""
+    D, s, k = chain_tcp_profile(qs, n)
+    return _peak(D, s, k, v, acc)
+
+
+def _peak(D, s, k, v, acc):
+    if D <= 0:
+        return 0.0
+    start = np.concatenate([[0.0], s[:-1]])
+    vel = np.minimum(min(v, math.sqrt(acc * D)), np.sqrt(2 * acc * np.minimum(s, D - start)))
+    return float((k * vel).max())
+
+
+def safe_chain_speed(qs, tcp_limit, acc, v_max=180.0, v_min=10.0, n=20):
+    """safe_joint_speed for a chain of waypoints (one speed for the whole move_through_joint_positions call)."""
+    D, s, k = chain_tcp_profile(qs, n)
+    if D <= 0 or _peak(D, s, k, v_max, acc) <= tcp_limit:
         return float(v_max)
     lo, hi = v_min, v_max
     for _ in range(20):
         mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if peak_tcp_speed(d, k, mid, acc) <= tcp_limit else (lo, mid)
+        lo, hi = (mid, hi) if _peak(D, s, k, mid, acc) <= tcp_limit else (lo, mid)
     return float(max(v_min, math.floor(lo)))
+
+
+def line_joints(q0, target, step_mm=30.0, tol_mm=2.0, max_step_deg=20.0):
+    """Joint waypoints that carry the TCP along the straight line from tcp(q0) to target (mm), keeping q0's tool axis
+    and jaw heading: IK every step_mm, seeded from the previous waypoint. Returns (waypoints, worst deviation mm) of
+    the joint-linear path between them from the line. ValueError when IK misses, a joint jumps (another IK branch) or
+    the path strays more than tol_mm: the caller then falls back to the module's own straight move."""
+    q0 = [float(v) for v in q0]
+    p0, axis = tcp(q0)
+    y = frames(q0)[-1][:3, 1]
+    heading = math.degrees(math.atan2(y[1], y[0]))
+    target = np.asarray(target, float)
+    n = max(1, math.ceil(np.linalg.norm(target - p0) / step_mm))
+    qs, prev = [], q0
+    for i in range(1, n + 1):
+        q, err, ang = ik(p0 + (target - p0) * i / n, axis=axis, seed=prev, jaw_heading_deg=heading)
+        if err > 0.5 or ang > 0.5:
+            raise ValueError(f"line IK missed by {err:.1f} mm / {ang:.1f} deg at step {i}/{n}")
+        if max(abs(a - b) for a, b in zip(q, prev)) > max_step_deg:
+            raise ValueError(f"line IK jumped {max(abs(a - b) for a, b in zip(q, prev)):.0f} deg at step {i}/{n}")
+        qs.append(q); prev = q
+    u = (target - p0) / max(np.linalg.norm(target - p0), 1e-9)
+    dev, a = 0.0, np.array(q0)
+    for q in qs:
+        b = np.array(q)
+        for f in np.linspace(0, 1, 9)[1:-1]:
+            r = tcp(a + (b - a) * f)[0] - p0
+            dev = max(dev, float(np.linalg.norm(r - u * (r @ u))))
+        a = b
+    if dev > tol_mm:
+        raise ValueError(f"joint path strays {dev:.1f} mm from the straight line")
+    return qs, round(dev, 2)

@@ -62,6 +62,13 @@ def test_telemetry_cost_and_delivery():
     off.emit("watch", frame=jpg)
 
 
+def load_tests(loader, tests, pattern):
+    """unittest (python3 -m unittest discover tests) runs the plain test_ functions too; no pytest in .venv."""
+    import unittest
+    return unittest.TestSuite(unittest.FunctionTestCase(fn) for name, fn in sorted(globals().items())
+                              if name.startswith("test_") and callable(fn))
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):
