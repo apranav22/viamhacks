@@ -18,13 +18,18 @@ import struct
 import time
 from contextlib import contextmanager
 
-CHUNK = 8000
+CHUNK = 8000          # loopback only
+# Over the network a datagram larger than the MTU (~1500 B) is IP-fragmented, and the station -> laptop path drops the
+# fragments: 2026-11-14 run 20261114_084057 lost 63/65 frames (events, < 1500 B, all arrived). One fragment-free
+# datagram per chunk off-host.
+NET_CHUNK = 1200
 
 
 class Telemetry:
     def __init__(self, host="127.0.0.1", port=8766, enabled=True, run_id=None, log_path=None,
                  log_kinds=("span", "move", "error", "recovery", "still")):
         self.addr = (host, port)
+        self.chunk = CHUNK if host in ("127.0.0.1", "localhost", "::1") else NET_CHUNK
         # timing kept on disk (no frames): UDP to the dashboard is lost when nothing listens
         self.log = open(log_path, "a", buffering=1) if log_path else None
         self.log_kinds = set(log_kinds)
@@ -66,10 +71,10 @@ class Telemetry:
             return
         if frame:
             fid = next(self._fid) & 0xFFFFFFFF
-            n = (len(frame) + CHUNK - 1) // CHUNK
+            n = (len(frame) + self.chunk - 1) // self.chunk
             if n <= 0xFFFF:
                 for i in range(n):
-                    self._send(b"F" + struct.pack("!IHH", fid, i, n) + frame[i * CHUNK:(i + 1) * CHUNK])
+                    self._send(b"F" + struct.pack("!IHH", fid, i, n) + frame[i * self.chunk:(i + 1) * self.chunk])
                 ev["frame"] = {"id": fid, "len": len(frame), "mime": mime}
         self._send(b"E" + json.dumps(ev, separators=(",", ":"), default=_jsonable).encode())
         dt = time.perf_counter_ns() - t0

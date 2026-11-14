@@ -140,9 +140,9 @@ class UprightPick(unittest.TestCase):
     """pick() on a squat blob that the depth look reads as standing: halfway rule first; if that descent hits the
     part (fault), clear, back up, re-check it stands and descend once more at the sensor-safe height."""
 
-    def pick(self, heights, hits=(), part_type="auto"):
+    def pick(self, heights, hits=(), part_type="auto", views="classic"):
         s = sorter(FakeArm([0] * 6))
-        s.args.type, s.args.assume_lying, s.args.views = part_type, False, "classic"
+        s.args.type, s.args.assume_lying, s.args.views = part_type, False, views
         s.ignore_xy, s.state, s.rewatch = [], lambda *a, **k: None, False
         moves, straights = [], []
         item = (300.0, 300.0, 500, 0.0, (100, 100, 130, 130))
@@ -169,7 +169,11 @@ class UprightPick(unittest.TestCase):
         async def lay_flat(it):
             straights.append(("lay flat", None)); s.laid_flat = True
 
+        async def obliques(it, look_q):
+            straights.append(("obliques", None))
+
         s.jmove, s.look, s.depth_look, s.straight, s.lay_flat = jmove, look, depth, straight, lay_flat
+        s.oblique_looks = obliques
         s.look_joints = lambda it: sort.WATCH_J
         s.mv = SimpleNamespace(finger_pos=lambda: _const(800.0), grab=grab)
         with unittest.mock.patch.object(sort, "round_part", lambda it: True), \
@@ -203,6 +207,17 @@ class UprightPick(unittest.TestCase):
         self.assertFalse(ok)
         self.assertTrue(s.rewatch)
         self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "back up 1"])
+
+    def test_coverage_standing_part_skips_the_oblique_looks(self):
+        s, ok, moves, straights = self.pick([74.0], views="coverage")          # 12:13 bolt: oblique boxes assume lying
+        self.assertNotIn(("obliques", None), straights)
+        self.assertEqual(straights[-1], ("lay flat", None))
+
+    def test_coverage_squat_lying_part_gets_them_after_the_depth_look(self):
+        s, ok, moves, straights = self.pick([5.0], views="coverage")           # a flat nut
+        self.assertTrue(ok)
+        self.assertEqual([lbl for lbl, _ in straights], ["obliques", "descend 1", "lift 1"])
+        self.assertEqual(moves[-2:], ["look (for obliques)", "hover 1"])
 
     def test_no_retry_when_low_was_already_safe(self):
         with self.assertRaises(sort.ArmFault):                   # 80 mm read: halfway keeps it clear; a fault is real

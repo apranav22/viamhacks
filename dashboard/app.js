@@ -1,6 +1,6 @@
 /* [codex/unknown · op Ali · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14] */
 'use strict';
-const {RunState,frameUrl,anomalyStatus,captureVerdict,finite}=DashboardState;
+const {RunState,frameUrl,anomalyStatus,captureVerdict,finite,viewLabel,slotStatus,COVERAGE}=DashboardState;
 const $=id=>document.getElementById(id);
 const names={button_ss_long:'Button screw',hex_nut:'Hex nut',socket_thin_long:'Thin long socket screw',socket_thin_short:'Thin short socket screw',socket_m16:'Large socket screw',hex_bolt_partial:'Long hex bolt',hex_bolt_short:'Short hex bolt'};
 const human=value=>names[value] || value || 'Unknown part';
@@ -113,14 +113,25 @@ function renderLive(){
   }else text('feed-age','No frame');
   text('feed-age-visible',$('feed-age').textContent);
 }
+// Coverage runs: one slot per pipeline view in order (Top, Table ±45°, Underside, End A/B), even when a view is
+// still to come or was skipped, so a missing view is visible instead of silently absent.
+function slots(item){
+  const caps=item.captures || [];
+  const coverage=(ui.mode==='live'&&live.views?live.views.some(v=>v!=='top'&&COVERAGE.includes(v)):false) || caps.some(c=>c.view!=='top'&&COVERAGE.includes(c.view));
+  if(!coverage)return caps.map(c=>({...c,label:c.label || viewLabel(c.view)}));
+  const skipped=new Set([...(item.skipped || []),...(item.metadata?.skipped || [])]);
+  return COVERAGE.map(v=>{const c=caps.filter(x=>x.view===v).at(-1);
+    return c?{...c,label:viewLabel(v)}:{id:'slot:'+v,view:v,label:viewLabel(v),placeholder:true,skipped:skipped.has(v),score:{}};});
+}
 function renderCaptures(item,e){
-  const captures=item.captures || [],selectionKey=captureKey(item);
+  const captures=slots(item),selectionKey=captureKey(item);
   let chosen=captures.find(c=>c.id===ui.selected.get(selectionKey));
   if(!chosen)chosen=(e?captures.find(c=>e.scores[c.id]?.status==='ok'):captures.find(c=>c.trigger)) || captures.filter(c=>c.view==='top').at(-1) || captures[0];
   const signature=JSON.stringify([selectionKey,ui.evaluation,item.label,captures.map(c=>[c.id,c.url,anomalyStatus(scoreFor(c,e)),tapeFor(c).status,c.trigger])]);
   if(stripKey!==signature){stripKey=signature;const focus=document.activeElement?.dataset.capture;$('captures').replaceChildren();
-    for(const [index,c] of captures.entries()){const verdict=captureVerdict(scoreFor(c,e),tapeFor(c).flagged,item.label,!!e);
-      const button=node('button',String(index+1),'capture-button '+verdict.tone);if(verdict.short)button.append(node('span',' · '+verdict.short,'capture-result'));button.type='button';button.dataset.capture=c.id;
+    for(const [index,c] of captures.entries()){const verdict=c.placeholder?{text:c.skipped?'Skipped: no clear path':ui.mode==='live'?'Waiting':'Not captured',tone:''}:captureVerdict(scoreFor(c,e),tapeFor(c).flagged,item.label,!!e);
+      const st=c.placeholder?{word:c.skipped?'Skipped':ui.mode==='live'?'Waiting':'Not captured',tone:'muted'}:slotStatus(scoreFor(c,e),tapeFor(c).flagged,false);
+      const button=node('button',c.label || String(index+1),'capture-button '+(verdict.tone || st.tone));if(st.word)button.append(node('span',' · '+st.word,'capture-result'));button.type='button';button.dataset.capture=c.id;
       button.setAttribute('aria-label',`Capture ${index+1}: ${c.label || c.filename} · ${verdict.text}`);button.title=`${c.label || c.filename} · ${verdict.text}`;
       button.addEventListener('click',()=>{ui.selected.set(selectionKey,c.id);render();});$('captures').append(button);
       if(focus===c.id)button.focus();
@@ -136,6 +147,9 @@ function renderCaptures(item,e){
   if(chosen)renderCapture(item,chosen,e);else{text('verdict','No captures saved');text('verdict-source','');}
 }
 function renderCapture(item,c,e){
+  if(c.placeholder){text('verdict',c.skipped?'Skipped: no clear path for this view':ui.mode==='live'?'Waiting for this view':'Not captured');$('verdict').className='';text('verdict-source','');
+    text('capture-title',c.label);text('capture-time','');setImage('original',null,'image-error');setImage('crop',null,'crop-error');text('crop-error','No crop');
+    text('anomaly-status','');text('anomaly-value','');text('tape-status','');text('tape-value','');text('trigger','');text('source-note','');return;}
   const score=scoreFor(c,e),tape=tapeFor(c);
   const verdict=captureVerdict(score,tape.flagged,item.label,!!e);text('verdict',verdict.text);$('verdict').className=verdict.tone;
   text('verdict-source',e?(score.status==='not_replayed'?'Not included in recheck':'Rechecked image'):'');

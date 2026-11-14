@@ -38,9 +38,19 @@
     return {text:'Not checked',short:'',tone:''};
   }
   function viewLabel(v) {
-    const names={'oblique+45':'Table, tilted +45°','oblique-45':'Table, tilted −45°','tilt+60':'Held, underside +60°','tilt-60':'Held, underside −60°',
-      'end_a':'Held, end A','end_b':'Held, end B'};
+    const names={top:'Top','oblique+45':'Table +45°','oblique-45':'Table −45°',under:'Underside',end_a:'End A',end_b:'End B',
+      'tilt+60':'Tilt +60°','tilt-60':'Tilt −60°',front:'Front',watch:'Watch'};
     return names[v] || v;
+  }
+  // Coverage pipeline order: one slot per view, shown even before/without a capture (waiting / skipped).
+  const COVERAGE=['top','oblique+45','oblique-45','under','end_a','end_b'];
+  function slotStatus(score, tapeFlagged, skipped) {
+    if (skipped) return {word:'Skipped', tone:'muted'};
+    if (score?.status === 'ok' && score.anomalous === true || tapeFlagged === true) return {word:'Defect', tone:'flagged'};
+    if (score?.status === 'ok' && score.anomalous === false) return {word:'Pass', tone:'clear'};
+    if (score?.status === 'missing') return {word:'No model', tone:'muted'};
+    if (score?.status && score.status !== 'not_replayed') return {word:'Not checked', tone:'muted'};
+    return {word:'', tone:''};
   }
   class RunState {
     constructor() { this.reset(); }
@@ -63,7 +73,7 @@
     }
     ingest(event) {
       if (!event?.k) return;
-      if (event.k==='run') { this.reset(event.run); this.live=event.live===true; this.replay=!!event._replay; this.started=event.t; this.policy=event.detector_policy || {}; this.stage='RUN'; }
+      if (event.k==='run') { this.reset(event.run); this.views=Array.isArray(event.views)?event.views:null; this.live=event.live===true; this.replay=!!event._replay; this.started=event.t; this.policy=event.detector_policy || {}; this.stage='RUN'; }
       if (event.run && this.run && event.run!==this.run) return;
       if (!this.run && event.run) this.run=event.run;
       if (event._replay) this.replay=true;
@@ -104,6 +114,7 @@
       if(event.k==='grasp_result')item.grasp=event.ok?'Grip reported held':'Grip missed';
       if(event.k==='span' && /release/i.test(event.name || ''))item.delivery=event.error?'Release failed: '+event.error:
         (this.live?'Release sequence completed; physical placement unconfirmed':'Dry-run release; physical placement unconfirmed');
+      if(event.k==='recovery'){const m=(event.what||'').match(/^(?:view\s+)?(\S+)\s+skipped/);if(m){(item.skipped ||= []).includes(m[1]) || item.skipped.push(m[1]);}}
       if(['recovery','error','stopped'].includes(event.k)){const text=event.what || event.msg || event.reason || event.k;this.log.push({t:event.t,text});if(this.log.length>50)this.log.shift();item.notice=text;}
     }
     attach(item,event) {
@@ -114,5 +125,5 @@
       return true;
     }
   }
-  return {viewLabel,RunState,frameUrl,anomalyStatus,captureVerdict,detector,finite};
+  return {viewLabel,slotStatus,COVERAGE,RunState,frameUrl,anomalyStatus,captureVerdict,detector,finite};
 });

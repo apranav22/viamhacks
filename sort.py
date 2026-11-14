@@ -67,6 +67,9 @@ WATCH_J = CP["watch_pose"]["joints_deg"]
 # for every move tripped C60 at 10:48 (2026-11-14); --tcp-limit 900 / 800 keeps 25-33% under it.
 NORMAL_SPEED, NORMAL_ACCEL = 60.0, 381.67   # the module defaults: restored at run end; also the fallback straight move
 RUN_ACCEL = 600.0                   # deg/s^2 during a run (--run-accel; module limit 1145); the speed limits model it
+SETTLE_S = 0.35                     # wait after a capture move before the frame: at RUN_ACCEL the arm still rings when
+#                                     the move returns (Ali, 2026-11-14 11:15 run: blurred frames). Then the still-frame
+#                                     gate checks it. sharpness() is logged per capture (meta["sharpness"]).
 ARRIVE_DEG = 1.0                    # a move that ends farther than this from its target (any joint) stopped on a fault
 LIFT_Z = 280.0                      # TCP height before swinging to the checkpoint: clears the box walls (100) + flap (140)
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
@@ -150,6 +153,16 @@ def iso(t):
     return datetime.fromtimestamp(t).astimezone().isoformat(timespec="milliseconds")   # with UTC offset: the station is MST
 
 
+def sharpness(rgb):
+    """Variance of the 4-neighbour Laplacian of the grey image: drops sharply with motion blur. Logged per capture
+    (meta["sharpness"]) so blurred training frames can be filtered; compare within a view, not across views."""
+    g = np.asarray(rgb, np.float32).mean(axis=2) if np.ndim(rgb) == 3 else np.asarray(rgb, np.float32)
+    if g.shape[0] < 3 or g.shape[1] < 3:
+        return None
+    lap = 4 * g[1:-1, 1:-1] - g[:-2, 1:-1] - g[2:, 1:-1] - g[1:-1, :-2] - g[1:-1, 2:]
+    return round(float(lap.var()), 1)
+
+
 def tape_fraction(rgb):
     """Share of pixels that are saturated blue (painter's tape), not the cyan-ish zinc of the plated parts."""
     f = rgb.astype(np.float32) / 255
@@ -231,7 +244,7 @@ class Sorter:
         self.run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + args.mode
         self.dir = ROOT / "runs" / self.run_id
         self.dir.mkdir(parents=True)
-        self.tel = Telemetry(host=args.dash_host, run_id=self.run_id, log_path=self.dir / "timeline.jsonl")
+        self.tel = Telemetry(host=args.dash_host, port=args.dash_port, run_id=self.run_id, log_path=self.dir / "timeline.jsonl")
         if args.anomaly_bundle and str(args.anomaly_bundle) == "active":     # set from the training dashboard
             args.anomaly_bundle = Path((ROOT / "models" / "ACTIVE").read_text().strip())
             print(f"active anomaly bundle: {args.anomaly_bundle}", flush=True)
@@ -262,7 +275,7 @@ class Sorter:
         """Joint move to q after checking the joint-space path against the obstacles, at the fastest joint speed that
         keeps this move's peak tool speed under --tcp-limit (--tcp-limit-holding with a part in the gripper)."""
         q0 = self.q or await self.joints()
-        ok, c, where = check_path(q0, q, self.obs, holding=holding, margin=0)
+        ok, c, where = check_path(q0, q, self.obs + getattr(self, "part_obs", []), holding=holding, margin=0)
         if not ok:
             self.tel.emit("error", msg=f"{label}: path blocked ({c} mm, {where}); not moving")
             raise PathBlocked(f"{label}: joint path would hit {where} ({c} mm)")
@@ -379,6 +392,17 @@ class Sorter:
         self.tel.emit("anomaly_result", frame=result.heatmap_bytes(), mime="application/x-anomaly-map;h=64;w=64",
                       n=self.n, view=view, model_crop=crop, background=self.args.background, **fields)
 
+    @staticmethod
+    def dash_jpeg(jpg, width=960):
+        """Display copy of a webcam frame for the dashboard (the saved file stays full size): fewer UDP packets."""
+        im = Image.open(io.BytesIO(jpg))
+        if im.width <= width:
+            return jpg, 1.0
+        k = width / im.width
+        buf = io.BytesIO()
+        im.convert("RGB").resize((width, round(im.height * k))).save(buf, "JPEG", quality=82)
+        return buf.getvalue(), k
+
     def emit_crop(self, view, rgb):
         """The inspected crop of a capture, for the dashboard's crop panel (k='crop', matched to the capture by view)."""
         buf = io.BytesIO()
@@ -395,6 +419,7 @@ class Sorter:
         fast stop: blurred captures. Grab until two consecutive, distinct frames match (frame_change <=
         REF_STEADY_FRAC); the second is used. Every result is logged (timeline.jsonl) to tune the gate."""
         prev, prev_jpg, changes, t0 = None, None, [], time.perf_counter()
+        await asyncio.sleep(SETTLE_S)
         for i in range(STILL_TRIES):
             jpg = await grab()
             if jpg == prev_jpg:                       # the same buffered frame again: not a new exposure
@@ -529,6 +554,7 @@ class Sorter:
                                                     self.cam.get_properties())
         view = WristView(props.intrinsic_parameters, rot, t, TZ)
         rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
+        self.meta.setdefault("sharpness", {})[f"top_{attempt}"] = sharpness(rgb)
         near = [it for it in detect(rgb, view, None, ends=True) if math.dist(it[:2], item[:2]) < 60]
         new = None
         if near:
@@ -603,6 +629,7 @@ class Sorter:
     async def pick(self, item):
         """Hover, look, descend, grab, lift. Returns (held, item, t_cmd) with t_cmd = first motion command."""
         self.state("PICK")
+        self.oblique_scores, self.early = {}, None      # per pick (coverage oblique looks)
         t_cmd = None
         theta_extra = 0.0
         self.upright = 0.0                 # mm of part hanging past the fingertips when held in line (0: held across)
@@ -632,8 +659,10 @@ class Sorter:
                 squat = self.look_squat                    # the close-up decides (see look()); the hover height follows
                 hz = HOVER_HIGH_Z if squat else HOVER_Z
                 self.tel.emit("note", step="squat from the close-up", squat=squat)
-            if attempt == 1 and getattr(self.args, "views", "classic") == "coverage":
+            coverage_looks = attempt == 1 and getattr(self.args, "views", "classic") == "coverage"
+            if coverage_looks and not squat:
                 await self.oblique_looks(new, look_q)
+                coverage_looks = False
             item = new
             height = None
             # hover with the gripper (not the camera) over the part, jaws across it. The depth look for squat parts
@@ -662,6 +691,13 @@ class Sorter:
                     self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
                     q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
                     await self.jmove(q, f"aim upright {attempt}", holding=False)
+            # Squat parts: the oblique looks model the part as lying (18 mm box), so they wait for the depth look. Lying
+            # (a flat nut): back to the look pose for them, then the hover again. Standing: none now; it is laid flat
+            # and gets them as a lying part on the next cycle.
+            if coverage_looks and not self.upright:
+                await self.jmove(look_q, "look (for obliques)", holding=False)
+                await self.oblique_looks(item, look_q)
+                await self.jmove(q, f"hover {attempt}", holding=False)
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
@@ -819,39 +855,85 @@ class Sorter:
                 await g.do_command({"set_gripper_speed": old})
 
     async def oblique_looks(self, item, look_q):
-        """--views coverage: wrist-cam looks tilted +-OBLIQUE_DEG about the part's long axis (vh/coverage.py), then back
-        to the look pose. A side with no clear pose/path is skipped and logged, never forced."""
+        """--views coverage: wrist-cam looks tilted +-OBLIQUE_DEG about the part's long axis (vh/coverage.py). Each side
+        starts and ends at the look pose (+45 -> -45 directly swung through the table: half the -45 looks were skipped,
+        2026-11-14 11:10); if that leg is blocked, via the same pose backed off 120 mm along the lens axis. The part on
+        the pad is an obstacle for all of these moves. Scored at once; a defect here is an early reject (sort mode).
+        (Ali, station release 20261114_120758.)"""
         self.oblique_images = {}
-        for phi in (coverage.OBLIQUE_DEG, -coverage.OBLIQUE_DEG):
-            name = f"oblique{phi:+d}"
-            got = None
-            for d, q in coverage.oblique_candidates(item[0], item[1], item[3], phi, TZ, self.q, self.obs):
-                try:
-                    await self.jmove(q, f"look {name}", holding=False)
-                except PathBlocked as e:
-                    print(f"  {name} at {d} mm: {e}")
+        ends = getattr(self, "part_ends", None)
+        self.part_obs = [coverage.part_obstacle(ends, TZ)] if ends else []
+        try:
+            for phi in (coverage.OBLIQUE_DEG, -coverage.OBLIQUE_DEG):
+                name = f"oblique{phi:+d}"
+                got = None
+                for d, q in coverage.oblique_candidates(item[0], item[1], item[3], phi, TZ, look_q, self.obs + self.part_obs):
+                    for route in ([q], [coverage.backed_off(q), q]):
+                        try:
+                            for i, w in enumerate(route):
+                                await self.jmove(w, f"look {name}" + (" (approach)" if i < len(route) - 1 else ""), holding=False)
+                            got = (d, route)
+                            break
+                        except PathBlocked as e:
+                            print(f"  {name} at {d} mm{' via back-off' if len(route) > 1 else ''}: {e}")
+                            if self.q != look_q and self.q is not None:      # stopped at the back-off: return the same way
+                                await self.jmove(look_q, "look (back)", holding=False)
+                    if got:
+                        break
+                if got is None:
+                    self.tel.emit("recovery", level="L1", what=f"{name} skipped: no clear pose")
+                    self.meta.setdefault("skipped", []).append(name)
+                    print(f"  {name} skipped: no clear pose")
                     continue
-                got = d
-                break
-            if got is None:
-                self.tel.emit("recovery", level="L1", what=f"{name} skipped: no clear pose")
-                print(f"  {name} skipped: no clear pose")
-                continue
-            jpg = await self.still_frame(self.wrist_jpeg, name)
-            (self.idir / f"{name}.jpg").write_bytes(jpg)
-            self.oblique_images[name] = jpg
-            rot, t = await cam_to_world(self.m)
-            self.meta.setdefault("oblique", {})[name] = {"lens_mm": got, "joints_deg": self.q,
-                                                         "cam_R": np.round(rot, 5).tolist(), "cam_t": np.round(t, 2).tolist()}
-            self.tel.emit("look", frame=jpg, n=self.n, view=name, label=f"{name} ({got} mm)")
-            if getattr(self, "part_ends", None):
-                props = await self.cam.get_properties()
-                rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
-                crop, box = coverage.oblique_crop(rgb, props.intrinsic_parameters, rot, t, self.part_ends, TZ + 5)
-                if crop is not None:
-                    Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
-                    self.meta["oblique"][name]["crop_box"] = box
-                    self.emit_crop(name, crop)
+                jpg = await self.still_frame(self.wrist_jpeg, name)
+                (self.idir / f"{name}.jpg").write_bytes(jpg)
+                self.oblique_images[name] = jpg
+                rot, t = await cam_to_world(self.m)
+                self.meta.setdefault("oblique", {})[name] = {"lens_mm": got[0], "joints_deg": self.q,
+                                                             "cam_R": np.round(rot, 5).tolist(), "cam_t": np.round(t, 2).tolist()}
+                self.tel.emit("look", frame=jpg, n=self.n, view=name, label=f"{name} ({got[0]} mm)")
+                crop = None
+                if ends:
+                    props = await self.cam.get_properties()
+                    rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
+                    try:
+                        crop, box = coverage.oblique_crop(rgb, props.intrinsic_parameters, rot, t, ends, TZ + 5)
+                    except Exception as e:                 # a crop problem must never stop the run
+                        print(f"  {name} crop failed: {e}")
+                        crop, box = None, None
+                    if crop is not None:
+                        Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
+                        self.meta["oblique"][name]["crop_box"] = box
+                        self.emit_crop(name, crop)
+                await self.score_oblique(name, crop)
+                for w in reversed(got[1][:-1]):                # back out the way we came
+                    await self.jmove(w, f"look {name} (retreat)", holding=False)
+                await self.jmove(look_q, "look (back)", holding=False)
+        finally:
+            self.part_obs = []
+
+    async def score_oblique(self, name, crop):
+        """Tape rule + anomaly model on an oblique crop. Sort mode: the first defect is remembered as an early reject
+        (the part is still picked, then dropped straight into reject without the webcam views)."""
+        rec = {}
+        if crop is not None:
+            rec["tape"] = round(tape_fraction(crop), 4)
+            self.meta.setdefault("sharpness", {})[name] = sharpness(crop)
+            if self.anomaly is not None:
+                result = await asyncio.to_thread(self.anomaly.score, Image.fromarray(crop), self.args.type, "lying", name,
+                                                 self.args.background)
+            else:
+                result = Score("missing", detail="No anomaly bundle loaded")
+        else:
+            result = Score("invalid", detail="no part crop in the oblique image")
+        rec.update(anomaly=result.score, **result.fields())
+        self.oblique_scores[name] = rec
+        self.emit_anomaly(name, result, None)
+        if self.args.mode == "sort" and not self.early:
+            if rec.get("tape", 0) > TAPE_FRAC:
+                self.early = (name, f"known: tape ({name}, {100 * rec['tape']:.1f}% of part)")
+            elif result.fields().get("anomalous") and getattr(self.args, "decide", "all") == "all":
+                self.early = (name, reject_reason({name: rec}, [name]))
 
     async def inspect(self):
         """Webcam views at the checkpoint. Returns the decision (sort mode decides after every view)."""
@@ -869,6 +951,10 @@ class Sorter:
             decision, reason, at = "reject", f"known: tape (top face, {100 * self.top_tape:.1f}% of part)", "top"
         elif self.args.mode == "sort" and top.fields()["anomalous"]:
             decision, reason, at = "reject", reject_reason(scores, ["top"]), "top"
+        scores.update(getattr(self, "oblique_scores", {}) or {})       # coverage: the oblique wrist looks
+        if not decision and getattr(self, "early", None):
+            at, reason = self.early
+            decision = "reject"                    # found on the table: straight to reject, no webcam views
         hold = self.upright or True
         order = UPRIGHT_ORDER if self.upright else VIEW_ORDER
         vj = UPRIGHT_J if self.upright else VIEW_J
@@ -878,7 +964,7 @@ class Sorter:
         # released into the same place. Tape (fast, local) still decides before the next move.
         pending = None
         for name in order:
-            move, verdict = await asyncio.gather(self.jmove(vj[name], f"view {name}", holding=hold),
+            move, verdict = await asyncio.gather(self.view_move(name, vj, hold),
                                                  self.score_view(pending, scores), return_exceptions=True)
             pending = None
             if isinstance(verdict, BaseException):
@@ -888,6 +974,7 @@ class Sorter:
             if isinstance(move, PathBlocked):      # path blocked for this part: skip the view, keep going
                 self.tel.emit("recovery", level="L1", what=f"view {name} skipped: {move}")
                 print(f"  view {name} skipped: {move}")
+                self.meta.setdefault("skipped", []).append(name)
                 continue
             if isinstance(move, BaseException):
                 raise move
@@ -901,6 +988,7 @@ class Sorter:
             box = [int(max(0, u - 260)), int(max(0, v - 330)), int(min(1920, u + 260)), int(min(1080, v + 330))]
             crop = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))[box[1]:box[3], box[0]:box[2]]
             tape = tape_fraction(crop)
+            self.meta.setdefault("sharpness", {})[name] = sharpness(crop)
             (self.idir / f"web_{name}.jpg").write_bytes(jpg)
             Image.fromarray(crop).save(self.idir / f"crop_{name}.jpg", quality=92)
             self.emit_crop(name, crop)
@@ -908,7 +996,9 @@ class Sorter:
             self.meta.setdefault("views", {})[name] = {"crop_box": box, "joints_deg": [round(v, 2) for v in vj[name]],
                                                        "tcp": [round(float(c), 1) for c in p], "tool_axis": [round(float(c), 3) for c in z],
                                                        "jaw": jaw}
-            self.tel.emit("view", frame=jpg, n=self.n, view=name, crop=box, tape=tape, anomaly=None, frame_ms=round(ms), jaw=jaw)
+            small, k = self.dash_jpeg(jpg)
+            self.tel.emit("view", frame=small, n=self.n, view=name, crop=[round(v * k) for v in box], tape=tape, anomaly=None,
+                          frame_ms=round(ms), jaw=jaw)
             if not held(jaw, G):
                 self.tel.emit("recovery", level="L2", what=f"part dropped during view {name}")
                 return "dropped", f"dropped during view {name}", name, scores
@@ -926,9 +1016,31 @@ class Sorter:
             return "collect", self.args.label, None, scores
         if not decision:
             # --decide top: the webcam anomaly scores are logged as evidence only (crop under rework, 17:58)
-            uncertain = reject_reason(scores, ["top", *order] if getattr(self.args, "decide", "all") == "all" else ["top"])
+            # A view whose model doesn't exist yet ("missing") is evidence only: it can't force an "uncertain" reject
+            # (with the new coverage views every part would be rejected until their models are trained). Every other
+            # failure (unknown type, invalid crop, error) stays uncertain -> reject. Top is always required. (Ali)
+            cand = [*getattr(self, "oblique_scores", {}), *order] if getattr(self.args, "decide", "all") == "all" else []
+            required = ["top"] + [v for v in cand if v in scores and scores[v].get("status") != "missing"]
+            uncertain = reject_reason(scores, required)
             decision, reason, at = ("reject", uncertain, "fusion") if uncertain else ("good", "all required anomaly views below threshold; no tape", "fusion")
         return decision, reason, at, scores
+
+    async def view_move(self, name, vj, hold):
+        """To a checkpoint view; when the straight joint path is blocked, come in from 120 mm above with the same
+        orientation ("under" sits 8 mm above the bin box: from a flipped-wrist lift the path clipped the box, Ali's
+        11:15 run, every item)."""
+        try:
+            await self.jmove(vj[name], f"view {name}", holding=hold)
+        except PathBlocked:
+            await self.jmove(self.raised_view(name, vj), f"view {name} (approach)", holding=hold)
+            await self.jmove(vj[name], f"view {name}", holding=hold)
+
+    def raised_view(self, name, vj):
+        cache = self.__dict__.setdefault("_raised", {})
+        key = (name, tuple(vj[name]))
+        if key not in cache:
+            cache[key] = coverage.raised(vj[name], 120.0)
+        return cache[key]
 
     async def score_view(self, pending, scores):
         """Finish one view's model score (started as a task right after its capture). Returns (decision, reason, view)
@@ -966,6 +1078,30 @@ class Sorter:
         await self.jmove(WATCH_J, "return", holding=False)
         print(f"  empty-gripper references -> {out}")
 
+    def obliques_reachable(self, x, y, yaw_deg):
+        """Offline: would both oblique looks find a clear pose AND route (direct or via back-off) from the look pose for
+        a part lying at (x, y) along yaw_deg? Same planner and checks as oblique_looks. (Ali)"""
+        ends = getattr(self, "part_ends", None)
+        half = 0.5 * (math.dist(*ends) if ends else 70.0)
+        a = (math.cos(math.radians(yaw_deg)), math.sin(math.radians(yaw_deg)))
+        e = [(x - a[0] * half, y - a[1] * half), (x + a[0] * half, y + a[1] * half)]
+        try:
+            look_q = self.look_joints((x, y))
+        except Exception:
+            return False
+        obs = self.obs + [coverage.part_obstacle(e, TZ)]
+        for phi in (coverage.OBLIQUE_DEG, -coverage.OBLIQUE_DEG):
+            ok = False
+            for d, q in coverage.oblique_candidates(x, y, yaw_deg, phi, TZ, look_q, obs):
+                if check_path(look_q, q, obs, holding=False, margin=0)[0]:
+                    ok = True; break
+                b = coverage.backed_off(q)
+                if check_path(look_q, b, obs, holding=False, margin=0)[0] and check_path(b, q, obs, holding=False, margin=0)[0]:
+                    ok = True; break
+            if not ok:
+                return False
+        return True
+
     async def place_back(self):
         """Collect mode: put the part on the pad at a new random spot and angle."""
         self.state("PLACE")
@@ -973,14 +1109,23 @@ class Sorter:
         r = self.pad
         # Keep >= 60 mm inside the zone in y: near the pad edge the white table enters the 190 mm look frame and the
         # part merges with the background-edge band (18:40, button screw set down at y 233 -> unseen from the look).
-        x = random.uniform(r["x_min"] + 40, r["x_max"] - 40)
-        y = random.uniform(r["y_min"] + 60, r["y_max"] - 60)
-        q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=random.uniform(0, 180))
+        # Coverage: only set the part down where BOTH oblique looks have a clear route from the look pose (2026-11-14
+        # 09:35: a bolt near the pad edge -> +45 blocked -> the back-off route folded the elbow -> self-collision stop).
+        for tries in range(40):
+            # 70 mm in x (was 40): socket_thin_long set down at x 191 rolled to 165, off the planned spot (10:06)
+            x = random.uniform(r["x_min"] + 70, r["x_max"] - 70)
+            y = random.uniform(r["y_min"] + 70, r["y_max"] - 70)
+            heading = random.uniform(0, 180)
+            if getattr(self.args, "views", "classic") != "coverage" or self.upright or self.obliques_reachable(x, y, heading + 90):
+                break
+        else:
+            self.tel.emit("recovery", level="L1", what="no placement with both oblique looks clear in 40 tries; placing anyway")
+        q, _, _ = ik(np.array([x, y, LIFT_Z]), seed=WATCH_J, jaw_heading_deg=heading)
         await self.jmove(q, "over pad", holding=self.upright or True)
         # set it down (upright parts stay upright) or let go 20-35 mm up so it lands on a random face / tips over
         how = random.choice(["set", "drop"]) if self.args.drops else "set"   # round parts roll ~12 cm when dropped
         drop = 3.0 if how == "set" else random.uniform(20, 35)
-        self.meta["placed_next"] = {"x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
+        self.meta["placed_next"] = {"tries": tries + 1, "x": round(x, 1), "y": round(y, 1), "how": how, "release_above_mm": round(drop, 1)}
         await self.straight(x, y, self.grasp_z + drop, "lower", holding=self.upright or True)
         with self.tel.span(f"release ({how})", phase="place", item=self.n):
             await self.release()
@@ -1084,7 +1229,8 @@ class Sorter:
 
     async def run(self):
         a = self.args
-        self.tel.emit("run", cmd=f"sort.py --mode {a.mode}", live=True, release=a.mode, states=STATES_SORT if a.mode == "sort" else STATES_COLLECT, views=VIEW_ORDER,
+        self.tel.emit("run", cmd=f"sort.py --mode {a.mode}", live=True, release=a.mode, states=STATES_SORT if a.mode == "sort" else STATES_COLLECT,
+                      views=(["top", "oblique+45", "oblique-45"] if getattr(a, "views", "classic") == "coverage" else ["top"]) + list(VIEW_ORDER),
                       label=a.label, type=a.type, platform=sys.platform, host=socket.gethostname())
         if (await Generic.from_robot(self.m, "teleop").do_command({"command": "status"})).get("running"):
             raise SystemExit("teleop is running: someone else is driving")
@@ -1131,6 +1277,13 @@ class Sorter:
                 print(f"  could not restore the arm speed ({e}): arm DoCommand set_speed 60, set_acceleration 381.67")
             self.state("IDLE")
             print("telemetry", self.tel.report(), "->", self.dir)
+            if not getattr(a, "no_share", False):
+                try:   # share this run now instead of at the next cron tick; detached, so it never holds the arm
+                    import sync_data
+                    if sync_data.spawn_push(self.dir):
+                        print(f"sharing {self.run_id} in the background (log runs/{sync_data.POST_RUN_LOG})", flush=True)
+                except Exception as e:
+                    print(f"  post-run share not started ({e}); the cron / `python sync_data.py push` will pick it up")
 
 
 async def main():
@@ -1141,6 +1294,7 @@ async def main():
     p.add_argument("--label", default="unlabeled", help="collect: good | tape | other:<what>")
     p.add_argument("--type", default="unknown", help="collect: part type, e.g. socket_m16_long")
     p.add_argument("--dash-host", default="127.0.0.1")
+    p.add_argument("--dash-port", type=int, default=8766, help="dashboard UDP port (station dashboard: 8776)")
     p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json, or 'active' (models/ACTIVE, set from the training dashboard); without a model, sort mode rejects as uncertain")
     p.add_argument("--anomaly-device", choices=["CPU", "GPU", "NPU"], default="CPU")
     p.add_argument("--background", choices=["white", "cardboard"], default="cardboard",
@@ -1157,9 +1311,12 @@ async def main():
                    help="the same limit while a part is in the gripper (it can swing loose)")
     p.add_argument("--run-accel", type=float, default=RUN_ACCEL, metavar="DEG_S2",
                    help="joint acceleration during a run with --tcp-limit (the speed limits model it); <= 1145")
-    p.add_argument("--views", choices=["classic", "coverage"], default="classic",
-                   help="coverage: oblique wrist looks +-45 before the grasp, webcam tilt +-60 + both ends (vh/coverage.py)")
+    p.add_argument("--views", choices=["classic", "coverage"], default="coverage",
+                   help="coverage (Ali's pipeline, default): oblique wrist looks +-45 before the grasp, webcam underside + "
+                        "both ends (vh/coverage.py); classic: the four webcam views front / yaw-20 / yaw+35 / pitch-25")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
+    p.add_argument("--no-share", action="store_true",
+                   help="don't push this run to the shared HF dataset when it ends (sync_data.py push later)")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
     if a.tcp_limit and not (0 < a.tcp_limit_holding <= a.tcp_limit <= 1000):
@@ -1181,5 +1338,13 @@ async def main():
         await Sorter(m, a).run()
 
 
+def _sigterm(*_):
+    # station_run.py stop sends SIGTERM: turn it into KeyboardInterrupt so asyncio cancels the run and run()'s finally
+    # restores the arm's default joint speed/acceleration (a bare SIGTERM would skip it and leave the arm fast). (Ali)
+    raise KeyboardInterrupt
+
+
 if __name__ == "__main__":
+    import signal
+    signal.signal(signal.SIGTERM, _sigterm)
     asyncio.run(main())

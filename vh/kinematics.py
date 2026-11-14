@@ -104,6 +104,28 @@ def clearance(pt, r, box):
     return outside + inside - r          # < 0: the sphere touches the box
 
 
+ELBOW_FOLD_MAX_DEG = -12.0  # j3 above this folds the forearm onto the upper arm. 2026-11-14 09:35 "xArm: Self Collision
+#   Error" moving to j3 -0.3 (wrist 233 mm from the shoulder); j3 -16 / -20 ran fine (wrist ~308 mm).
+SELF_MARGIN_MM = 40.0     # tool/camera vs the arm's own base and upper arm: the xArm firmware stops on self collision
+_CAM_IN_FLANGE = np.array([67.5, -23.1, 17.5])   # wrist camera (vh/coverage.CAM_IN_FLANGE), r ~35 mm
+
+
+def self_clearance(joints_deg):
+    """Smallest gap (mm) between the gripper/camera and the base column or upper arm (capsules). 2026-11-14 09:25: an
+    oblique look route hit "xArm: Self Collision Error"; check_path only knew the workcell. Forearm not modelled (the
+    tool is attached next to it)."""
+    F = frames(joints_deg)
+    fl, R = F[5][:3, 3], F[5][:3, :3]
+    tool = [(fl + R[:, 2] * d, 50.0) for d in (0, 40, 80, 110)] + [(fl + R @ _CAM_IN_FLANGE, 35.0), (fl + R[:, 2] * 170, 15.0)]
+    links = [(np.array([0.0, 0, 0]), np.array([0.0, 0, 364]), 90.0), (F[1][:3, 3], F[2][:3, 3], 70.0)]
+    worst = 1e9
+    for p, r in tool:
+        for a, b, rl in links:
+            ab = b - a; t = np.clip((p - a) @ ab / (ab @ ab), 0, 1)
+            worst = min(worst, float(np.linalg.norm(p - (a + t * ab))) - r - rl)
+    return worst
+
+
 def check_path(j_from, j_to, obstacles, holding=True, steps=60, margin=10, ignore=()):
     """Sample the joint-space line; return (ok, worst clearance mm, where) over all body points and obstacles.
     ~10 ms for 60 steps."""
@@ -111,7 +133,16 @@ def check_path(j_from, j_to, obstacles, holding=True, steps=60, margin=10, ignor
     obs = [(n, np.array(c, float), np.array(d, float) / 2) for n, (c, d) in obstacles if n not in ignore]
     worst = (1e9, None)
     for i in range(steps + 1):
-        bp = body_points(a + (b - a) * i / steps, holding)
+        qi = a + (b - a) * i / steps
+        lim = max(ELBOW_FOLD_MAX_DEG, a[2] + 0.5)   # a move starting folded (fault recovery) may unfold, never fold more
+        if qi[2] > lim:                      # elbow folded onto the upper arm: firmware self collision (09:35, j3 -0.3)
+            fold = float(lim - qi[2])
+            if fold < worst[0]:
+                worst = (fold, f"self (elbow folded, j3 {qi[2]:.1f} > {ELBOW_FOLD_MAX_DEG}) at step {i}/{steps}")
+        sc = self_clearance(qi) - SELF_MARGIN_MM
+        if sc < worst[0]:
+            worst = (sc, f"self (tool vs base/upper arm) at step {i}/{steps}")
+        bp = body_points(qi, holding)
         P = np.array([p for p, _ in bp]); R = np.array([r for _, r in bp], float)
         for name, c, h in obs:
             q = np.abs(P - c) - h

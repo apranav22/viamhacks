@@ -53,27 +53,35 @@ def oblique_candidates(x, y, yaw_deg, phi_deg, surface_z, seed, obstacles, part_
     n = np.array([-A[1], A[0], 0.0])
     part = np.array([x, y, surface_z + part_r])
     ray = math.cos(math.radians(phi_deg)) * np.array([0, 0, 1.0]) + math.sin(math.radians(phi_deg)) * n
+    # Seeds: the caller's (look pose), then its wrist turned +-180 on j4. From the look pose the solver can settle on a
+    # wrist branch with no clear pose (2026-11-14 09:23 run: +45 skipped on 2/6 hex bolts; the j4+-180 seeds reach all
+    # three standoffs). Every clear solution is returned (caller's seed first), so the router has alternatives.
+    seed = np.array(seed, float)
+    seeds = [seed] + [seed + np.array([0, 0, 0, s4, 0, 0]) for s4 in (180.0, -180.0)]
     out = []
     for d in OBLIQUE_LENS_MM:
         cam = part + d * ray
-        best = None
-        for s in (1, -1):
-            def res(q, reg):
-                F = frames(q)[-1]; R, t = F[:3, :3], F[:3, 3]
-                r = list((t + R @ CAM_IN_FLANGE - cam) / 5.0) + list((R[:, 2] + ray) * 50) + list(np.cross(R[:, 1], s * A) * 50)
-                return r + list((np.asarray(q) - seed) * reg)
-            q = _lsq(res, np.array(seed, float))
-            F = frames(q)[-1]
-            if np.linalg.norm(F[:3, 3] + F[:3, :3] @ CAM_IN_FLANGE - cam) > 2 or F[:3, 2] @ -ray < math.cos(math.radians(1)):
-                continue
-            q = [round(float(v), 2) for v in q]
-            if not _ok(q):
-                continue
-            cl = _clearance(q, obstacles)
-            if cl >= 10 and (best is None or cl > best[0]):
-                best = (cl, q)
-        if best:
-            out.append((d, best[1]))
+        found = []
+        for sd in seeds:
+            best = None
+            for s in (1, -1):
+                def res(q, reg, s=s, sd=sd):
+                    F = frames(q)[-1]; R, t = F[:3, :3], F[:3, 3]
+                    r = list((t + R @ CAM_IN_FLANGE - cam) / 5.0) + list((R[:, 2] + ray) * 50) + list(np.cross(R[:, 1], s * A) * 50)
+                    return r + list((np.asarray(q) - sd) * reg)
+                q = _lsq(res, sd)
+                F = frames(q)[-1]
+                if np.linalg.norm(F[:3, 3] + F[:3, :3] @ CAM_IN_FLANGE - cam) > 2 or F[:3, 2] @ -ray < math.cos(math.radians(1)):
+                    continue
+                q = [round(float(v), 2) for v in q]
+                if not _ok(q):
+                    continue
+                cl = _clearance(q, obstacles)
+                if cl >= 10 and (best is None or cl > best[0]):
+                    best = (cl, q)
+            if best and not any(np.abs(np.array(best[1]) - np.array(f)).max() < 5 for f in found):
+                found.append(best[1])
+        out += [(d, q) for q in found]
     return out
 
 
@@ -120,6 +128,8 @@ def oblique_crop(rgb, k, rot, t, ends_xy, z, pad_mm=8.0, half_h_mm=13.0):
     from PIL import Image
     E = np.array([[e[0], e[1], z] for e in ends_xy], float)
     C = (E - t) @ rot                                    # world -> camera (rot: camera -> world)
+    if (C[:, 2] <= 1).any():                             # part behind / at the lens: no crop (never raise mid-run)
+        return None, None
     uv = np.c_[k.focal_x_px * C[:, 0] / C[:, 2] + k.center_x_px, k.focal_y_px * C[:, 1] / C[:, 2] + k.center_y_px]
     mm_px = float(C[:, 2].mean()) / k.focal_x_px
     # Snap to the part's own blob near the projection: the extrinsics put it 10-15 mm off along the axis at some
@@ -150,5 +160,39 @@ def oblique_crop(rgb, k, rot, t, ends_xy, z, pad_mm=8.0, half_h_mm=13.0):
     big[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = rgb[sy0:sy1, sx0:sx1]
     im = Image.fromarray(big).rotate(ang, resample=Image.BILINEAR, center=(centre[0] - x0, centre[1] - y0))
     cx, cy = centre[0] - x0, centre[1] - y0
+    if length < 4 or height < 4:
+        return None, None
     im = im.crop((int(cx - length / 2), int(cy - height / 2), int(cx + length / 2), int(cy + height / 2)))
     return np.asarray(im), [sx0, sy0, sx1, sy1]
+
+
+def backed_off(q, along_mm=120.0):
+    """Same tool orientation, lens backed off along its own axis: the waypoint into / out of an oblique look when the
+    straight joint path dips into the table (2026-11-14: 16/100 +45 and 9/100 -45 placements need it)."""
+    F = frames(q)[-1]; R, t = F[:3, :3], F[:3, 3]
+    tgt = t - R[:, 2] * along_mm
+    def res(v, reg):
+        G = frames(v)[-1]
+        return list((G[:3, 3] - tgt) / 5) + list((G[:3, :3] - R).ravel() * 50) + list((np.asarray(v) - q) * reg)
+    return [round(float(v), 2) for v in _lsq(res, np.array(q, float))]
+
+
+def part_obstacle(ends_xy, surface_z, height=18.0, margin=10.0):
+    """The part lying on the pad as an axis-aligned box (name, (centre, dims)) for check_path, so oblique looks never
+    sweep the open fingers through it (the checker otherwise knows only the table, bin and walls)."""
+    (x0, y0), (x1, y1) = ends_xy
+    w = 9.0 + margin
+    lo = (min(x0, x1) - w, min(y0, y1) - w); hi = (max(x0, x1) + w, max(y0, y1) + w)
+    return ("part", (((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, surface_z + height / 2),
+                     (hi[0] - lo[0], hi[1] - lo[1], height + 4)))
+
+
+def raised(q, dz=120.0):
+    """Same tool orientation, TCP raised dz mm in world z: the waypoint above a low checkpoint pose ("under" sits 8 mm
+    over the bin box, so every joint path straight into it from the lift clipped the box: 2026-11-14 11:15 run)."""
+    F = frames(q)[-1]; R, t = F[:3, :3], F[:3, 3]
+    tgt = t + np.array([0, 0, dz])
+    def res(v, reg):
+        G = frames(v)[-1]
+        return list((G[:3, 3] - tgt) / 5) + list((G[:3, :3] - R).ravel() * 50) + list((np.asarray(v) - q) * reg)
+    return [round(float(v), 2) for v in _lsq(res, np.array(q, float))]

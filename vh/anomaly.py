@@ -130,6 +130,11 @@ def model_crop(image, bbox, view, policy=CROP_POLICY):
     if policy == "part-top-v2" and view == "top":
         crop, info = part_crop(image, bbox)
         return crop, list(info["region"])
+    if view.startswith("oblique"):
+        # coverage oblique wrist looks: the saved crop_oblique*.jpg is already the part, rotated axis-horizontal
+        # (vh/coverage.oblique_crop); live scoring passes the same crop, so training uses it unchanged
+        image = rgb_image(image)
+        return image, [0, 0, image.width, image.height]
     return context_crop(image, bbox)
 
 

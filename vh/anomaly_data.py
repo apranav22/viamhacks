@@ -63,6 +63,10 @@ def collect_samples(run_dirs, part_type, background):
                     skipped.append({"pick": pick, "reason": "top crop touches frame border"})
             for view, value in meta.get("views", {}).items():
                 records.append({**common, "view": view, "image": str(folder / f"web_{view}.jpg"), "bbox": value["crop_box"]})
+            for view in meta.get("oblique", {}):              # coverage: oblique wrist looks (crop saved at capture)
+                crop = folder / f"crop_{view}.jpg"
+                if crop.exists():
+                    records.append({**common, "view": view, "image": str(crop), "bbox": None})
     return records, skipped
 
 

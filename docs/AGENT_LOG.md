@@ -706,3 +706,26 @@ squat -> high hover -> depth 74 mm -> guard: tips 37 mm (halfway; no higher retr
 deg, low end 13 mm over the pad -> lay down 517 ms (16 deg/s, 150 mm/s cap) -> gentle release 1.28 s -> retreat. Next
 cycle: close-up 67.8 x 21.4 mm (lying, not squat), normal pick, inspect, placed back; cycle 12.94 s. No controller
 error. ARM: released (watch pose, gripper open, bolt lying on the pad).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:35]
+Moved this branch to Ali's new pipeline (Pranav: "move to the new pipeline from alis new pipeline"). Ali's latest code
+is NOT on GitHub: it is the station release /opt/viam/sorter-ali/releases/20261114_120758 (built 12:07:58, live), from
+Ali's shared checkout (old layout: pipeline.py / screws.py). Copied its code read-only (no api-key.json, runs, models)
+and ported Ali's changes onto our layout:
+- vh/coverage.py (whole file: wrist-branch seeds, backed_off, raised, part_obstacle, crop guards),
+  vh/kinematics.py (self_clearance + elbow-fold limit in check_path, after the 09:25 / 09:35 C22 stops),
+  vh/telemetry.py (1200 B UDP chunks off-host), vh/anomaly.py + anomaly_data.py (oblique crops), sync_data.py
+  (spawn_push + push lock), dashboard state.js / app.js / style.css (coverage view slots).
+- sort.py: sharpness per capture (meta["sharpness"]), SETTLE_S 0.35 before every frame (then our still-frame gate),
+  oblique looks routed via back-off with the part as an obstacle + scored at once (sort: early reject), checkpoint views
+  approached from 120 mm above when blocked, skipped views in meta, "missing" model views no longer force an uncertain
+  reject, placement only where both oblique looks are reachable (70 mm margins), smaller dashboard frames, --dash-port,
+  post-run HF share (--no-share to skip), SIGTERM restores the arm speed. --views now defaults to coverage.
+- Kept ours where the release is older: part_sizes.json (7 types vs 4), vh/config.py, dashboard run control
+  (index.html / server.py / runner.py), cardboard default, upright guard + lay flat (release still has --allow-upright).
+  Not ported: find_pad (defined, never called in the release); Mover world_state extras (ours already has them).
+- New: squat parts take the oblique looks only after the depth look says lying (the oblique routes model an 18 mm lying
+  part; a standing 74 mm bolt would be in the way); standing parts get them on the next cycle, lying.
+Checked offline: today's lift -> view moves and the lay-flat poses still pass the new self/elbow checks; 114 Python
+tests (3 need openvino, not on this laptop) + 9 JS tests pass. NOT run on the arm. @Ali: please push your shared
+checkout to a branch so the next merge is a git merge, not a port from a release.
