@@ -800,7 +800,7 @@ Robot: untouched. No commits.
 - Training PatchCore coverage_v1 on station (--type each, 9 coverage runs, 36 groups, xpu, nice 10): models/coverage_v1, log train_coverage_v1.log.
 - ARM taken: sort mode (--type auto, coverage views, each_cardboard_v4 m103, --decide top) for operator evaluation.
 
-[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:35]
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:23]
 - Pulled Pranav's multi-part pick (origin/pranav/fast-carry 42c3a13, ops/multi/sort.py wrapper) into sort.py itself:
   `--multi [--min-gap-mm 70]`. Logic in vh/multi_pick.py (choose: largest part with no neighbour within the gap, sticky
   while it stays put, left parts count as neighbours; own_part: close-up merges only blobs on the target's axis).
@@ -818,3 +818,6 @@ Robot: untouched. No commits.
 
 [claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:45]
 - Operator: use all data. coverage_v1 (today only) stopped at 7/36 groups; coverage_v2 training on station: every day-1 collect run (20261113_17-23h, 32 dirs; trainer filters background/type/label/exclude.json) + 9 coverage runs. Day-1 defects land in the test split. Script train_coverage_v2.sh, log train_coverage_v2.log. Sort mode run continues on each_cardboard_v4 --decide top.
+- DEPLOYED 2916c61 as release 20261114_132306 (operator: deploy now). Verified on the station: current -> that release,
+  sort.py --help shows --multi/--min-gap-mm, every ops preset flag present, new vh modules import; no sort.py running.
+  Not run on the arm. Pranav's incoming/multi/sort.py left in place (his call); the "multi" preset no longer uses it.
