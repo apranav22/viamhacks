@@ -135,8 +135,11 @@ def fit_group(samples, dataset_dir, out_dir, args):
             # held-out good scores (each training run scored by a bank built WITHOUT it) + calibration good scores.
             # 2026-11-14 replay (tools/threshold_replay.py): p95 of held-out good caught 25/28 defects vs 10/28 for the
             # max-good rule at 6/59 vs 3/59 good rejected (ResNet-18, folds with >= 10 good picks).
-            threshold = max(float(np.percentile(cv_scores + cal_scores, args.percentile)), 1e-6)
-            calibration = f'cross-run-good-p{args.percentile:g}'
+            # never looser than the max-margin rule: lopsided runs inflate held-out scores (socket_m16, 2026-11-14:
+            # p95 alone raised its threshold 16.2 -> 18.0 and lost 4 of 12 defects)
+            p95 = max(float(np.percentile(cv_scores + cal_scores, args.percentile)), 1e-6)
+            calibration = f'min(cross-run-good-p{args.percentile:g}={p95:.3f}, max-margin={threshold:.3f})'
+            threshold = min(p95, threshold)
         else:
             calibration = f'prototype-good-max-margin (cv-p95 fallback: {len(cv_scores)} held-out good < {args.cv_min})'
     results = []
