@@ -38,7 +38,7 @@ from dashboard.history import History, finite_json
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
 PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
 KEEP_PREVIEW = 24
-SAVE_FRAMES_FOR = {"look", "reference", "depth", "view", "anomaly_result"}
+SAVE_FRAMES_FOR = {"look", "reference", "depth", "view", "anomaly_result", "crop"}
 
 
 def _sound(name, say=None):

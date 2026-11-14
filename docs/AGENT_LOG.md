@@ -541,3 +541,10 @@ Done: prepared the operator-requested new publication branch ali/clean-base from
 Verified: 80 Python tests passed (one optional training integration skipped), nine JS tests, three geometry/UDP checks, runtime/tool imports, supported CLI help, overview selftest, presentation TypeScript and Vite production build under Node 22.23.1, offline ZIP packaging, and local dashboard app/health/History/Models HTTP checks with preview and recording disabled. No live inference or physical reliability claim. Credentials/artifacts/build outputs excluded from Git.
 Robot: no motion, gripper actuation, Viam config, model activation, deployment or service changes. Physical arm state not queried.
 Next: review the published cleanup branch and rehearse a reviewed station release under AGENTS.md; continued shared-checkout work remains independent.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/clean-base · 2026-11-14 10:48]
+Done: ported the coverage pipeline from the shared checkout (ali/judges-presentation, uncommitted) onto ali/clean-base: vh/coverage.py; sort.py --views coverage (oblique wrist looks ±45 before the grasp, webcam under/end_a/end_b) + grasp at the part's length midpoint + hover fallback via the look pose + crop telemetry; vh/detection.detect(ends=True) (was screws.py); bins re-measured 2026-11-14 10:25 (config/obstacles.json cardboard-box, checkpoint good_drop, sort.GOOD_TCP); dashboard crop frames + coverage view labels. Default --views stays classic.
+Verified: 80 Python tests OK (1 optional skip), 9 JS reducer tests, sort.py --help, detect(ends=True) offline smoke. Live behaviour was verified earlier from the shared checkout (runs/20261114_103009_collect, 20261114_104514_collect), not re-run from this branch.
+Not done: no deployment from this branch, no motion. config/webcam_refs stays gitignored (local images).
+Robot: untouched by this change.
+Next: deploy from a clean checkout of ali/clean-base before the next station collection with --views coverage.
