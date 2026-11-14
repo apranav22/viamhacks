@@ -115,6 +115,12 @@ Next:      the single most useful next step
 | `site/` | visual overview (`python3 site/build.py`) |
 
 
+## Offline calibration handoff
+
+`compare_anomaly.py`: `score` → `specimens` (human-reviewed identity/role template) → `report`.
+Read `docs/ANOMALY_CALIBRATION.md` first. No live activation. Never invent physical specimen identities or call
+repeated grasps independent samples. The good-reject budget is explicit; insufficient calibration stays uncertain.
+
 ## Day-1 evening handoff
 
 See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.

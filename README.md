@@ -27,6 +27,12 @@ python run.py pick --live --step                # real motion, Enter before each
 **Status (day 1, ~12:15):** baseline cycle (watch → hover → look → pick → home) built and tested offline and in dry run; **not yet run with live motion**. Defect detection is next.
 
 
+## Offline anomaly-only candidate calibration
+
+`compare_anomaly.py` scores frozen datasets and compares a calibrated anomaly-only policy with the matched-view
+bundle+tape baseline. It never changes the live robot policy. See `docs/ANOMALY_CALIBRATION.md` for commands,
+required specimen IDs/splits, rejection-budget selection, limitations, and Hugging Face team invitations.
+
 ## Day-1 evening handoff
 
 See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.
