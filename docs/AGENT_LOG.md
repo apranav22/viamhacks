@@ -694,3 +694,15 @@ lying as logged at 12:01; it went through the lying path the same way (no depth 
 the close-up top image, length along the axis < 2.0 x width across it (detect(ends=True) returns the width points);
 standing bolt 1.32 / 1.45, lying bolts 3.8-9.4 on today's top images. Squat -> high hover + depth look -> upright guard
 -> lay flat. Not run on the arm yet.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:13]
+(Times on the three entries above stamped 12:13 / 12:20 / 12:25 were estimates; they were written ~12:00-12:11.)
+ARM: taken (Pranav: "can we test?"; operator confirmed a person at the E-stop, the bolt standing on its head on the pad,
+the other driver stopped; last planner move 12:05:52). Checks: teleop off, still over 3 s, at the watch pose, gripper
+open, no loop on the station. Test: sort.py --mode collect --reps 1 at 48ef795 (squat from the close-up -> depth ->
+upright guard -> lay flat -> pick lying).
+12:13 test (runs/20261114_121256_collect, hex bolt standing on its head): WORKED end to end. Close-up 22.0 x 23.2 mm ->
+squat -> high hover -> depth 74 mm -> guard: tips 37 mm (halfway; no higher retry needed) -> grabbed, lifted -> tilt 60
+deg, low end 13 mm over the pad -> lay down 517 ms (16 deg/s, 150 mm/s cap) -> gentle release 1.28 s -> retreat. Next
+cycle: close-up 67.8 x 21.4 mm (lying, not squat), normal pick, inspect, placed back; cycle 12.94 s. No controller
+error. ARM: released (watch pose, gripper open, bolt lying on the pad).
