@@ -52,6 +52,7 @@ from station_shell import execute as station_exec
 from vh.kinematics import check_path, flip, frames, ik, load_obstacles, tcp as fk_tcp
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
+from vh.confidence import BASIS as CONFIDENCE_BASIS, decision_confidence
 
 from vh.config import POSES, CHECKPOINT as CP
 G = POSES["grasp"]
@@ -185,8 +186,12 @@ class Sorter:
         if args.anomaly_bundle and str(args.anomaly_bundle) == "active":     # set from the training dashboard
             args.anomaly_bundle = Path((ROOT / "models" / "ACTIVE").read_text().strip())
             print(f"active anomaly bundle: {args.anomaly_bundle}", flush=True)
-        self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device, sizes=ROOT / "config" / "part_sizes.json") \
-            if args.anomaly_bundle else None
+        type_clf = None if str(args.type_clf).lower() == "none" else args.type_clf
+        if type_clf and not Path(type_clf).exists():
+            print(f"type classifier {type_clf} not found: type auto falls back to the size rule", flush=True)
+            type_clf = None
+        self.anomaly = AnomalyModels(args.anomaly_bundle, args.anomaly_device, sizes=ROOT / "config" / "part_sizes.json",
+                                     type_clf=type_clf) if args.anomaly_bundle else None
         if self.anomaly:
             loaded = self.anomaly.warm(args.type, args.background)  # compile and warm BEFORE any arm motion
             print(f"Anomaly models ready on {args.anomaly_device}: {len(loaded)} groups", flush=True)
@@ -646,7 +651,7 @@ class Sorter:
                 rec.update(decision="reject" if f["anomalous"] is not False else "good", picked=False,
                            reason=f"{self.skip_reason}; top {f['status']} {f['score'] and round(f['score'], 2)} / "
                                   f"{f['threshold'] and round(f['threshold'], 2)} {f['detail'] or ''}",
-                           scores={"top": f}, confidence=None)
+                           scores={"top": f}, decided_at_view="top")
             if self.gripper and await self.mv.finger_pos() < 780:
                 await self.release()
             self.finish(rec)
@@ -690,6 +695,9 @@ class Sorter:
         return True
 
     def finish(self, rec):
+        if rec.get("decision") in ("good", "reject"):   # rubric: a confidence on every item line
+            rec["confidence"] = decision_confidence(rec, TAPE_FRAC, TAPE_FRAC_WEB, getattr(self.args, "decide", "all"))
+            rec["confidence_basis"] = CONFIDENCE_BASIS
         self.judge.write(json.dumps(rec) + "\n")
         self.meta.update(pose=getattr(self, "pose", None), height_mm=rec.get("height_mm"), decision=rec.get("decision"),
                          grasp_tcp_z=getattr(self, "grasp_z", None))
@@ -756,6 +764,8 @@ async def main():
     p.add_argument("--dash-host", default="127.0.0.1")
     p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json, or 'active' (models/ACTIVE, set from the training dashboard); without a model, sort mode rejects as uncertain")
     p.add_argument("--anomaly-device", choices=["CPU", "GPU", "NPU"], default="CPU")
+    p.add_argument("--type-clf", default=str(ROOT / "models" / "type_clf_v1" / "type_clf.json"),
+                   help="type auto: ResNet-18 type classifier (train_type_clf.py); 'none' = nearest-size rule only")
     p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")

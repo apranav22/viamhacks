@@ -181,11 +181,11 @@ class AnomalyModels:
     # UNKNOWN -> no model -> rejected as uncertain. In-type distances of good picks: median ~1.5, p95 ~4.
     UNKNOWN_SIZE_DIST = 6.0
 
-    def __init__(self, bundle, device="CPU", sizes=None):
+    def __init__(self, bundle, device="CPU", sizes=None, type_clf=None):
         self.path = Path(bundle)
         self.sizes = {k: v for k, v in (json.loads(Path(sizes).read_text()) if sizes else {}).items()
                       if not k.startswith("_")}
-        self.last_size, self.last_type = None, None
+        self.last_size, self.last_type, self.last_how = None, None, None
         self.manifest = json.loads(self.path.read_text())
         self.policy = self.manifest.get("crop_policy")
         if self.manifest.get("schema") != 1 or self.policy not in CROP_POLICIES:
@@ -196,6 +196,11 @@ class AnomalyModels:
         self.core = ov.Core()
         self.device = device.upper()
         self.models = {}
+        # type auto: ResNet-18 type classifier (vh/type_clf.py) picks the type; the size gate below still decides UNKNOWN.
+        self.type_clf = None
+        if type_clf:
+            from vh.type_clf import TypeClassifier
+            self.type_clf = TypeClassifier(type_clf, self.device, self.core)
 
     def warm(self, part_type, background):
         """Load only the requested type/background; a missing view remains explicitly unavailable."""
@@ -257,10 +262,18 @@ class AnomalyModels:
                 if self.last_type is None:
                     return Score("unknown_type", detail=f"size {[round(v, 1) for v in self.last_size]} mm matches no known "
                                                         f"type (nearest {ty}, distance {dist:.1f})")
+                self.last_how = "by size"
+                if self.type_clf is not None:
+                    loaded = {e["part_type"] for e, *_ in self.models.values()} & set(self.type_clf.classes)
+                    try:
+                        cty, p = self.type_clf.predict(rgb_image(image), allowed=loaded)
+                        self.last_type, self.last_how = cty, f"by classifier p={p:.2f}, size nearest {ty}"
+                    except Exception as e:      # classifier failure: keep the size type, say so in the log
+                        self.last_how = f"by size; classifier {type(e).__name__}: {e}"
             if self.last_type is None:
                 return Score("unknown_type", detail="no part type from the top view")
             r = self.score(image, self.last_type, pose, view, background)
-            r.detail = f"type {self.last_type} (by size)"
+            r.detail = f"type {self.last_type} ({self.last_how})"
             return r
         if part_type == "auto":
             # Unknown part type: score against every type's normal bank, keep the lowest score/threshold. A part that
