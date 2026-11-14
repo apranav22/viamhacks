@@ -34,15 +34,14 @@
 </section>
 <section id="history" aria-label="Historical captures"><label class="run-picker" for="history-run">Run<select id="history-run" aria-label="Run"><option value="">Loading…</option></select></label></section>
 <section id="models" hidden aria-label="Model comparison">
-  <div class="model-toolbar"><label>Benchmark<select id="model-benchmark" aria-label="Benchmark"><option>Loading…</option></select></label><span id="model-benchmark-count" class="subtle"></span></div>
-  <div class="model-summary-wrap"><table class="model-table" aria-label="Version comparison"><thead><tr><th>Version</th><th>Missed</th><th>Good rejected</th><th>Uncertain</th></tr></thead><tbody id="model-summary"></tbody></table></div>
-  <div class="model-review">
-    <div class="model-navigation"><label>Review<select id="model-filter"><option value="failures">Failures</option><option value="all">All examples</option></select></label><div><button id="model-previous" aria-label="Previous example">‹</button><span id="model-position">No examples</span><button id="model-next" aria-label="Next example">›</button></div></div>
-    <div class="model-verdict" aria-live="polite"><strong id="model-verdict"></strong><span id="model-diagnosis" class="subtle"></span></div>
-    <p id="model-empty" class="subtle">Loading benchmark…</p>
-    <div id="model-images" class="images" hidden><figure><figcaption>Camera image</figcaption><div class="image-stage"><img id="model-original" alt="Benchmark camera capture" hidden></div></figure><figure><figcaption>Inspected crop</figcaption><div class="image-stage"><img id="model-crop" alt="Verified reconstructed model crop" hidden><p id="model-crop-note" class="subtle"></p></div></figure></div>
-  </div>
-  <div class="model-footer"><label>Results<select id="model-version" aria-label="Model version"></select></label><button id="model-details-open">Details</button></div>
+  <div class="mc-head"><div><h2>Model progress since this morning</h2><p id="mc-sub" class="mc-sub">Loading…</p></div><label>Benchmark<select id="model-benchmark" aria-label="Benchmark"><option>Loading…</option></select><span id="model-benchmark-count" class="subtle"></span></label></div>
+  <ol id="mc-steps" class="mc-steps" aria-label="Each step compared with the morning baseline"></ol>
+  <div class="mc-compare-head"><h2>Failures side by side</h2><div class="mc-pickers"><label>Before<select id="mc-before" aria-label="Before"></select></label><button id="mc-swap" type="button" aria-label="Swap before and after">⇄</button><label>After<select id="mc-after" aria-label="After"></select></label></div></div>
+  <p id="mc-verdict" class="mc-verdict" aria-live="polite"></p>
+  <div id="mc-filters" class="mc-filters" aria-label="Which items to show"></div>
+  <p id="model-empty" class="subtle" hidden></p>
+  <div id="mc-grid" class="mc-grid"></div>
+  <p class="subtle mc-foot">Same 62 saved top-camera images replayed through every version; recorded collection labels. Click an item to open it in History. <button id="model-details-open" type="button" class="mc-link">How this is measured</button></p>
 </section>
 <p id="error" class="error" role="alert" hidden></p>
 <div class="workbench" id="capture-workbench"><section class="inspection" aria-label="Capture and detection results">
@@ -61,11 +60,10 @@
   <section id="detail-metadata" class="dialog-page" hidden><dl id="record-fields"></dl><button id="download-record">Save full record</button><pre id="raw-record" hidden></pre></section>
   <section id="detail-run" class="dialog-page" hidden><div class="history-extra"><div class="history-tools"><label for="run-search">Find a run<input id="run-search" type="search" placeholder="Run or part type"></label><label for="run-kind">Kind<select id="run-kind" aria-label="Kind"><option value="">All runs</option><option value="collect">Collection</option><option value="sort">Sorting</option><option value="dry">Dry run</option><option value="experiment">Experiment</option><option value="replay">Replay</option></select></label><button id="refresh">Refresh</button></div><p id="history-count" class="subtle">Reading saved captures…</p><details id="run-notes"><summary>Run notes</summary><p id="run-note" class="subtle"></p></details><p class="subtle">Filters update the Run picker. Close Details to select a run.</p></div></section>
 </dialog>
-<dialog id="model-dialog" class="dashboard-dialog" aria-label="Model details"><div class="dialog-heading"><h2>Details</h2><button id="model-details-close">Close</button></div><label class="model-section">Show<select id="model-detail-page"><option value="example">Diagnosis</option><option value="scores">Scores</option><option value="benchmark">Benchmark</option><option value="eligibility">Eligibility</option><option value="version">Model version</option></select></label>
-  <section id="model-detail-example" class="model-dialog-page"><h3 id="model-diagnosis-detail">Failure evidence</h3><p id="model-explanation" class="model-section"></p><p class="subtle model-section">Source image verified. Localisation and physical handling are not evaluated by this replay.</p><p id="model-provenance" class="subtle model-section"></p><button id="model-history">Open capture history</button></section>
-  <section id="model-detail-scores" class="model-dialog-page" hidden><dl class="model-details-fields"><dt>Selected type</dt><dd id="model-selected-type"></dd><dt>Score / threshold</dt><dd id="model-score"></dd><dt>Known-type check</dt><dd id="model-known-type"></dd></dl><p class="subtle">Known-type check scores the same crop using its recorded item type.</p></section>
-  <section id="model-detail-benchmark" class="model-dialog-page" hidden><h3>Development set</h3><p id="model-note" class="model-section"></p><div id="benchmark-info"><p>34 good and 28 defective picks. Membership and image hashes are frozen.</p></div></section>
-  <section id="model-detail-eligibility" class="model-dialog-page" hidden><h3>Comparison eligibility</h3><p class="model-section">Every model must have verified test results for every benchmark member. Training/calibration overlap blocks comparison.</p><p class="model-section">Recorded collection labels; physical specimen identities are unverified. These results do not establish unseen-defect performance.</p><p>A new audit benchmark requires reviewed labels and independent physical specimens.</p></section>
-  <section id="model-detail-version" class="model-dialog-page" hidden><dl class="model-details-fields"><dt>Bundle</dt><dd id="model-bundle"></dd><dt>Device</dt><dd id="model-device"></dd><dt>Decision</dt><dd>Top-view anomaly score with automatic size routing. Tape overrides excluded.</dd><dt>Threshold policy</dt><dd id="model-margin"></dd></dl><p id="model-version-status" class="subtle"></p></section>
+<dialog id="model-dialog" class="dashboard-dialog" aria-label="How models are compared"><div class="dialog-heading"><h2>How this is measured</h2><button id="model-details-close">Close</button></div>
+  <p class="model-section">Every version scores the same frozen set of saved top-camera images (hashes checked). A version is shown only when every benchmark image is held out of its training and calibration. Defect = positive; uncertain verdicts never count as correct.</p>
+  <p id="model-note" class="subtle model-section"></p>
+  <p class="subtle model-section">Images in the cards are the saved camera frame cropped around the recorded part box for display; the model's own preprocessed input may differ slightly. Tape rule and physical handling are excluded.</p>
+  <div class="model-summary-wrap"><table class="model-table"><thead><tr><th>Version</th><th>Result</th><th>Bundle · device · agent</th></tr></thead><tbody id="model-versions"></tbody></table></div>
 </dialog>
 </body></html>

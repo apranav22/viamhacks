@@ -32,6 +32,8 @@ def main():
     p.add_argument("--steps", default=1000, type=int)
     p.add_argument("--margin", default=1.15, type=float)
     p.add_argument("--device", default="cuda")
+    p.add_argument("--holdout", type=Path, action="append", default=[],
+                   help="benchmark json(s): their member picks are forced into the test split (never train/calibration)")
     a = p.parse_args()
     if a.out.exists():
         p.error("Choose a new output folder; existing bundles are never overwritten")
@@ -41,8 +43,19 @@ def main():
 
     a.out.mkdir(parents=True)
     dataset = build_dataset(a.runs, a.out / "dataset", a.type, a.background)
+    # Adding runs reshuffles the hash split per type, which could move a frozen benchmark pick into train/calibration.
+    # Force every benchmark member back into test so later comparisons on that benchmark stay held out.
+    held = {m["pick"] for h in a.holdout for m in json.loads(h.read_text())["members"]}
+    moved = sorted({s["pick_id"] for s in dataset["samples"] if s["pick_id"] in held and s["split"] != "test"})
+    for s in dataset["samples"]:
+        if s["pick_id"] in held:
+            s["split"] = "test"
+    dataset["holdout"] = {"benchmarks": [str(h) for h in a.holdout], "forced_to_test": moved}
+    (a.out / "dataset" / "dataset.json").write_text(json.dumps(dataset, indent=2))
+    print(f"holdout: {len(held)} benchmark picks; {len(moved)} moved from train/calibration to test", flush=True)
     ds = a.out / "dataset"
     bundle = {"schema": 1, "crop_policy": CROP_POLICY, "models": {}, "skipped": [], "model_family": "efficientad-s",
+              "holdout": dataset["holdout"], "runs": [str(r) for r in a.runs],
               "limitations": dataset["limitations"] + ["Prototype threshold; physical item and defect holdouts still required."]}
     backend = EfficientAD(a.device, steps=a.steps, size=a.size)
     n = 0

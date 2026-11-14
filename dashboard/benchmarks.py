@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 
 class Benchmarks:
@@ -81,19 +82,27 @@ class Benchmarks:
                 else:
                     diagnosis, explanation = 'Matches recorded label', 'This verdict agrees with the recorded collection label.'
                 rows.append(dict(pick=member['pick'], file=member['file'], label=truth, type=row.get('type'),
-                                 selected_type=row.get('selected_type'), category=category,
+                                 selected_type=row.get('selected_type'), category=category, bbox=row.get('bbox'),
+                                 image='/api/history/image?path=' + quote(member['pick'] + '/' + member['file'], safe=''),
                                  diagnosis=diagnosis, explanation=explanation, score=score, oracle=oracle))
             bundle = report.get('bundle', '')
-            label = ('Latest training run' if 'codex_curated_' in bundle else
+            # codex_curated_20261114_003525 is the model the day started with: every later step is compared to it.
+            baseline = 'codex_curated_' in bundle
+            label = ('Morning baseline: PatchCore' if baseline else
                      'Previous version' if 'each_cardboard_v4' in bundle else report.get('label', path.stem))
             ready = not issues and len(rows) == len(definition.get('members', [])) and bool(rows)
             good = sum(m['label'] == 'good' for m in definition.get('members', []))
             defective = len(definition.get('members', [])) - good
             tp, fp = counts['detected'], counts['false_rejects']
+            family = report.get('model_family') or ('efficientad-s' if 'effad' in bundle else 'patchcore')
             versions.append(dict(id=path.stem, label=label, source_label=report.get('label'), bundle=bundle,
+                                 baseline=baseline, family=family, type_clf=bool(report.get('type_clf')),
+                                 train_picks=report.get('train_picks'), agent=report.get('agent'),
                                  completed=report.get('completed', 0), device=report.get('device'),
                                  ready=ready, issues=sorted(set(issues)), rows=rows if ready else [],
                                  counts=counts if ready else None, good=good, defective=defective,
                                  precision=tp/(tp+fp) if ready and tp+fp else None,
                                  recall=tp/defective if ready and defective else None))
-        return dict(benchmark=definition, versions=sorted(versions, key=lambda v: v['completed'], reverse=True))
+        # Oldest first: the baseline, then each step in the order it was evaluated.
+        versions.sort(key=lambda v: (not v['baseline'], v['completed']))
+        return dict(benchmark=definition, versions=versions)

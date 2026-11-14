@@ -674,3 +674,28 @@ EfficientAD bundle: train_efficientad.py -> models/effad_top_v1 (top view, 7 typ
 bundles, loads in vh.anomaly unchanged; trained on Fri runs + Sat runs synced by 12:10). CPU ~145 ms/crop on a desktop
 CPU via OpenVINO; station device timings pending (uploading models now). Today's capture runs: 0 "part not seen" in 82
 attempts (Fri: 34/282).
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/model-compare · 2026-11-14 13:10]
+Done:
+- Pulled aayush/integration (7654c07, EfficientAD handoff) into a new worktree/branch ali/model-compare. The main
+  checkout (new-pipeline) has 21 uncommitted live-arm files overlapping this branch; it was NOT merged there.
+- train_efficientad.py --holdout <benchmark.json>: adding runs reshuffles the per-type hash split; 4 development-v1
+  picks would have moved into train/calibration. They are now forced to test (recorded in bundle.json "holdout").
+- Station: models/effad_top_v2 = EfficientAD-S top, all cardboard collect runs incl. 093856 hex (44), 100113 socket
+  thin long (13), 101431 button ss long (30); xpu, ~150 s/type, 7 types. ImageNette at /opt/viam/sorter-ali/datasets.
+- Replays on development-v1 (62 held-out, Intel CPU), reports in runs/_analysis/claude-*.json:
+    PatchCore cv-p95 (Aayush's each_cardboard_cvp95_v1), size routing   24/28 caught, 6/34 good rejected
+    effad_top_v2 + type_clf_v1                                           26/28, 4/34  (v1: 26/28, 2/34)
+    effad_top_v2, size routing                                           26/28, 6/34  (v1: 26/28, 5/34)
+  Retraining did not improve this benchmark. Flips v1->v2: a Friday button_ss_long good 0.17x->1.29x threshold
+  (hypothesis: Sat coverage-pipeline top views differ from the Friday-only benchmark; unverified), hex_bolt_short good
+  0.96x->1.33x (7 train picks, no new data: training variance). Best on this benchmark remains effad_top_v1 + type clf.
+- Dashboard Models tab rewritten: step cards vs morning baseline (codex_curated PatchCore) + failures side by side
+  (fixed / newly wrong / still wrong). Deployed LIVE to web-releases/20261114_111617/app (static files + benchmarks.py);
+  backup /opt/viam/sorter-ali/web-archive/models-ui-104800. NOT restarted (a collect run was active): benchmarks.py
+  extras (bbox, family, train size) apply at next service restart; JS falls back without them.
+Not done: effad_top_v1 bundle.json is missing on the station (only model dirs), so v1 cannot run live there yet; no
+  latency measurement on station; no live sort with EfficientAD; benchmark has no Saturday-setup images.
+Robot: untouched. No machine config, no model activation.
+Revert UI: copy the 4 files from web-archive/models-ui-104800 back into the app/dashboard folder.
+Next: build a Saturday-setup held-out benchmark (reviewed labels) before choosing v1 vs v2 for the live sort.

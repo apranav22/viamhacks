@@ -33,6 +33,9 @@ def main():
     ap.add_argument("--type-clf", default=None)
     ap.add_argument("--device", default="CPU")
     ap.add_argument("--background", default="cardboard")
+    ap.add_argument("--agent", default="claude-code/claude-fable-5-2")
+    ap.add_argument("--operator", default="aayus (git: aayus@sticker)")
+    ap.add_argument("--branch", default="aayush/integration")
     a = ap.parse_args()
     if a.out.exists():
         ap.error("--out exists; reports are never overwritten")
@@ -71,8 +74,10 @@ def main():
                      "selected_type": selected, "size": am.last_size})
     report = {"schema": "dashboard-replay-v1", "label": a.label, "bundle": str(a.bundle),
               "bundle_sha256": hashlib.sha256(a.bundle.read_bytes()).hexdigest(), "crop_policy": man.get("crop_policy"),
-              "device": a.device, "type_clf": a.type_clf, "agent": "claude-code/claude-fable-5-2",
-              "operator": "aayus (git: aayus@sticker)", "host": socket.gethostname(), "branch": "aayush/integration",
+              "device": a.device, "type_clf": a.type_clf, "agent": a.agent,
+              "operator": a.operator, "host": socket.gethostname(), "branch": a.branch,
+              "model_family": man.get("model_family", "patchcore"),
+              "train_picks": len({p for e in man["models"].values() if e["view"] == "top" for p in e.get("train_pick_ids", [])}),
               "limitations": ["Development picks, repeated specimens; top-view anomaly only, no tape rule."],
               "rows": rows, "errors": errors, "completed": time.time()}
     a.out.parent.mkdir(parents=True, exist_ok=True)
