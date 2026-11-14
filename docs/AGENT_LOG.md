@@ -631,3 +631,15 @@ over) and steps down to the halfway rule. Steps only go down. High first, not lo
 tall part is the 15:48 collision (controller collision detection is off); a high miss closes on air. Readings >= 46 mm
 or a known --type: one grasp, as before. Offline tests cover miss -> step down, probe holds, knocked over, tall read.
 NOT run on the arm.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:05]
+Upright guard reversed to LOW FIRST (Pranav: "collisions are ok. low first."): every upright part is grasped at the
+halfway rule for the measured height (>= 10 mm held). If that descent faults (arm ended > 1 deg short, or a controller
+error such as C31: the part's top ran into the sensor body), sort.py sends clear_error, goes straight back up to the
+hover, re-reads depth (not standing -> back to watch) and descends ONCE more at the sensor-safe height (longest part
+76.9 mm kept 8 mm under tip_to_sensor_mm 61.8: tips 23.1 mm); a second fault ends the run. A fault where the low height
+was already safe is not retried. NOTE for every agent: this automatic retry after a contact is an operator-approved
+exception to AGENTS.md section 2 ("on any error during motion: arm.stop(), report, don't retry blindly"), for the upright
+descent only. Controller collision detection is off, so a contact may also just tip the part over without a fault.
+Offline tests cover: no hit, hit -> retry high, second hit -> stop, knocked over, no retry when low was safe. NOT run
+on the arm.

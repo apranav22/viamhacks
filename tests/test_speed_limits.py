@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 from vh.config import CHECKPOINT as CP, POSES  # noqa: E402
 from vh.kinematics import (flip, ik, line_joints, peak_chain_tcp_speed, peak_tcp_speed, safe_chain_speed,  # noqa: E402
                            safe_joint_speed, tcp, tcp_speed_profile)
-from vh.motion import PROBE_TOL_MM, SENSOR_MARGIN_MM, upright_tips  # noqa: E402
+from vh.motion import SENSOR_MARGIN_MM, upright_tips  # noqa: E402
 
 G = POSES["grasp"]
 FRONT = flip(CP["views"]["front"]["joints_deg"])
@@ -67,41 +67,28 @@ class UprightGuard(unittest.TestCase):
     g = {**G, "tip_to_sensor_mm": 70.0}
 
     def test_unmeasured_gap_refuses(self):
-        tips, probe, why = upright_tips(60, {k: v for k, v in G.items() if k != "tip_to_sensor_mm"}, 77)
-        self.assertIsNone(tips)
+        low, high, why = upright_tips(60, {k: v for k, v in G.items() if k != "tip_to_sensor_mm"}, 77)
+        self.assertIsNone(low)
         self.assertIn("not measured", why)
 
-    def test_true_height_keeps_the_halfway_rule(self):
-        tips, probe, why = upright_tips(77, self.g, 77)       # the longest part, read right: half stands above the tips
-        self.assertEqual((tips, probe, why), (38.5, False, None))
-        self.assertLessEqual(77 - tips, 70 - SENSOR_MARGIN_MM)
-
-    def test_under_read_probes_high_first_then_steps_down(self):
+    def test_low_first_is_the_halfway_rule(self):
         # 15:48: one bolt read 20-22 mm and 80 mm. Measured gap 61.8 (config/poses.json), longest part ~76.9 mm.
         import sort
         L = sort.longest_part_mm("auto")
-        tips, probe, why = upright_tips(21, G, L)
-        self.assertTrue(probe)
-        self.assertLessEqual(L - tips, G["tip_to_sensor_mm"] - SENSOR_MARGIN_MM + 1e-9)   # even 77 mm stays clear
-        low, probe2, why2 = upright_tips(21, G, L, top_below=tips + PROBE_TOL_MM)          # closed on nothing up there
-        self.assertEqual((low, probe2, why2), (10.5, False, None))                          # now the halfway rule
-        self.assertLess(low, tips)
+        low, high, why = upright_tips(21, G, L)
+        self.assertIsNone(why)
+        self.assertEqual(low, 10.5)
+        self.assertGreater(high, low)                                                    # the retry after a hit
+        self.assertLessEqual(L - high, G["tip_to_sensor_mm"] - SENSOR_MARGIN_MM + 1e-9)  # keeps even 77 mm clear
 
-    def test_steps_only_go_down(self):
-        tips, top = None, None
-        for _ in range(4):                                      # a miss at every height
-            t, probe, _ = upright_tips(70, {**G, "tip_to_sensor_mm": 30.0}, 77, top)
-            if tips is not None:
-                self.assertLess(t, tips)
-            tips, top = t, t + PROBE_TOL_MM
-            if not probe:
-                break
-        self.assertFalse(probe)
+    def test_no_retry_when_low_is_already_safe(self):
+        low, high, why = upright_tips(77, self.g, 77)           # read right: half stands above the tips, 62 mm room
+        self.assertEqual((low, high, why), (38.5, None, None))
 
-    def test_too_short_to_hold_is_left(self):
-        tips, probe, why = upright_tips(11, self.g, 11)
-        self.assertIsNone(tips)
-        self.assertIn("too short", why)
+    def test_short_parts_hold_at_least_the_minimum(self):
+        low, high, why = upright_tips(16, self.g, 16)
+        self.assertEqual(low, 6.0)                              # under halfway: 10 mm above the tips
+        self.assertIsNone(upright_tips(11, self.g, 11)[0])      # too short to hold 10 mm of it
 
 
 if __name__ == "__main__":

@@ -232,38 +232,30 @@ def grasp_height(item, table_z: float, g: dict) -> float:
 
 
 
-# Upright grasp guard (policy, not measurements): keep the part's top this far under the sensor body above the tips,
-# keep at least this much of the part above the closed tips to hold it, and after a high grasp closed on nothing, take
-# the part's top to be at most this far above those tips (closing, the tips sweep ~4.5 mm below their closed height).
+# Upright grasp guard (policy, not measurements): keep the part's top this far under the sensor body above the tips
+# on the fallback grasp, and keep at least this much of the part above the closed tips to hold it.
 SENSOR_MARGIN_MM = 8.0
 MIN_GRIP_MM = 10.0
-PROBE_TOL_MM = 5.0
 
 
-def upright_tips(height_mm: float, g: dict, longest_mm: float, top_below=None):
-    """Closed-fingertip height above the surface for grasping an upright part: (tips_mm, probe, None), or
-    (None, False, why) to leave it.
+def upright_tips(height_mm: float, g: dict, longest_mm: float):
+    """Closed-fingertip heights above the surface for grasping an upright part: (low, high, None), or
+    (None, None, why) to leave it.
 
-    Pranav's halfway rule puts the tips at height/2 (lower if that holds less than MIN_GRIP_MM). The longest part
-    (socket_m16, ~77 mm) is longer than the gap from the closed tips up to the sensor body (g["tip_to_sensor_mm"]), and
-    the wrist depth under-reads upright parts (15:48: one bolt read 20-22 mm and 80 mm, hit the gripper body on the way
-    down). So the part is assumed to be as long as max(measured, longest_mm), and the tips go high enough that even
-    that length stays SENSOR_MARGIN_MM under the sensor. probe=True: that is above where the measured part would be
-    held, so the grasp may close on nothing; that proves the part's top is under tips + PROBE_TOL_MM, and the caller
-    asks again with top_below set, which steps the next grasp down (never back up: top_below only shrinks)."""
+    low: Pranav's halfway rule for the measured height (lower if that holds less than MIN_GRIP_MM), tried first.
+    Low first is the operator's choice (Pranav, 2026-11-14: "collisions are ok. low first."): the wrist depth
+    under-reads upright parts (15:48: one bolt read 20-22 mm and 80 mm and hit the gripper body on the way down), so
+    for a part taller than read the low descent can run its top into the sensor body. high: the height that keeps even
+    max(measured, longest_mm) SENSOR_MARGIN_MM under the sensor (g["tip_to_sensor_mm"]), for the one retry after such
+    a contact; None when low is already that safe."""
     gap = g.get("tip_to_sensor_mm")
     if gap is None:
-        return None, False, "tip_to_sensor_mm not measured (config/poses.json grasp): upright grasp refused"
-    room = gap - SENSOR_MARGIN_MM                    # how much part may stand above the closed tips
-    worst = max(height_mm, longest_mm)
-    if top_below is not None:                        # a higher grasp found nothing: the top is under top_below
-        worst = min(worst, top_below)
-        height_mm = min(height_mm, top_below)
-    grip = max(g["min_table_clearance_mm"], min(height_mm / 2, height_mm - MIN_GRIP_MM))
-    if height_mm - grip < MIN_GRIP_MM:
-        return None, False, f"upright part ({height_mm:.0f} mm) too short to hold {MIN_GRIP_MM:.0f} mm of it"
-    safe = worst - room
-    return (safe, True, None) if safe > grip else (grip, False, None)
+        return None, None, "tip_to_sensor_mm not measured (config/poses.json grasp): upright grasp refused"
+    low = max(g["min_table_clearance_mm"], min(height_mm / 2, height_mm - MIN_GRIP_MM))
+    if height_mm - low < MIN_GRIP_MM:
+        return None, None, f"upright part ({height_mm:.0f} mm) too short to hold {MIN_GRIP_MM:.0f} mm of it"
+    high = max(height_mm, longest_mm) - (gap - SENSOR_MARGIN_MM)
+    return low, (high if high > low else None), None
 
 
 def held(pos, g: dict):

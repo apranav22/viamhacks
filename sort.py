@@ -47,7 +47,7 @@ from viam.components.camera import Camera
 from viam.services.generic import Generic
 
 from viam.proto.component.arm import JointPositions
-from vh.motion import PROBE_TOL_MM, Mover, cam_to_world, grasp_height, held, tcp_pose, upright_tips
+from vh.motion import Mover, cam_to_world, grasp_height, held, tcp_pose, upright_tips
 from vh.detection import WristView, detect
 from station import connect
 from station_shell import execute as station_exec
@@ -624,7 +624,7 @@ class Sorter:
                     plan = self.upright_guard(height, dxy)
                     if plan is None:
                         return False, item, t_cmd
-                    up_tips, probe = plan
+                    up_tips, up_high = plan
                     self.upright = height
                     item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
                     self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
@@ -633,48 +633,29 @@ class Sorter:
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
-            # lying: closed tips 2 mm above the table (vh.motion.grasp_height); standing: Pranav's halfway rule, raised
-            # so even the longest part stays under the sensor body above the tips (the upright guard above)
+            # lying: closed tips 2 mm above the table (vh.motion.grasp_height); standing: Pranav's halfway rule first,
+            # then once higher if the descent hits the part (the upright guard above)
             gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G)
             if self.upright:
                 gz = TZ + up_tips + G["tcp_to_tip_mm"]
             self.pose = "upright" if self.upright else "lying"
-            await self.straight(item[0], item[1], gz, f"descend {attempt}", holding=False)
+            try:
+                await self.straight(item[0], item[1], gz, f"descend {attempt}", holding=False)
+            except PathBlocked:
+                raise
+            except Exception as e:
+                if not (self.upright and up_high is not None):
+                    raise
+                # Low first (operator's choice, 2026-11-14): a low descent that faulted (ended short, or a controller
+                # error such as C31) ran the part's top into the sensor body: it is taller than read. Clear the fault,
+                # back up, check it still stands, and descend once more where even the longest part stays under the
+                # sensor. A second fault ends the run (ArmFault).
+                gz = await self.upright_retry_high(e, item, hz, heading, attempt, up_high)
+                if gz is None:
+                    return False, item, t_cmd
+                item = self.upright_item
             with self.tel.span(f"grab {attempt}", phase="grab", item=self.n):
                 pos = await self.mv.grab()
-            # A high (probe) grasp that closed on nothing: the part's top is under those tips, so a lower grasp can't
-            # reach the sensor. Back up to the hover, check with depth that it still stands (closing fingers can tip it
-            # over, and the descent would then land on it), and step down.
-            probes = 0
-            while self.upright and probe and held(pos, G) is False:
-                probes += 1
-                top_below = up_tips + PROBE_TOL_MM
-                self.tel.emit("recovery", level="L1", what=f"upright probe at tips {up_tips:.0f} mm closed on nothing: "
-                                                           f"top under {top_below:.0f} mm, stepping down")
-                print(f"  probe at tips {up_tips:.0f} mm missed: part top under {top_below:.0f} mm")
-                with self.tel.span("open", phase="pick", item=self.n):
-                    await self.release()
-                await self.straight(item[0], item[1], hz, f"probe up {probes}", holding=False)
-                height, dxy = await self.depth_look(item[:2])
-                if not (height and height > STANDING_MM and dxy is not None) or probes > 3:
-                    self.skip_reason = (f"upright part not standing after a high grasp at tips {up_tips:.0f} mm "
-                                        f"(depth {height and round(height)} mm): back to watch")
-                    self.rewatch = True                     # the next look finds it lying, if it was knocked over
-                    self.tel.emit("recovery", level="L1", what=self.skip_reason)
-                    print("  " + self.skip_reason)
-                    return False, item, t_cmd
-                plan = self.upright_guard(height, dxy, top_below)
-                if plan is None:
-                    return False, item, t_cmd
-                up_tips, probe = plan
-                self.upright = height
-                item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
-                q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
-                await self.jmove(q, f"aim upright {attempt}.{probes}", holding=False)
-                gz = TZ + up_tips + G["tcp_to_tip_mm"]
-                await self.straight(item[0], item[1], gz, f"descend {attempt}.{probes}", holding=False)
-                with self.tel.span(f"grab {attempt}.{probes}", phase="grab", item=self.n):
-                    pos = await self.mv.grab()
             if self.upright:
                 self.upright = (gz - G["tcp_to_tip_mm"]) - TZ      # what hangs below the tips once lifted
             self.state("LIFT")
@@ -692,21 +673,49 @@ class Sorter:
             self.tel.emit("recovery", level="L1", what=f"missed grasp {attempt}: retry with the jaws turned 90 deg")
         return False, item, t_cmd
 
-    def upright_guard(self, height, dxy, top_below=None):
-        """vh.motion.upright_tips for a part the depth look reads as standing: (tips_mm, probe), or None after logging
-        why it is left in place. 15:48 an upright bolt hit the gripper body on the way down (E-stop)."""
+    def upright_guard(self, height, dxy):
+        """vh.motion.upright_tips for a part the depth look reads as standing: (low_tips_mm, high_tips_mm or None), or
+        None after logging why it is left in place. 15:48 an upright bolt hit the gripper body on the way down."""
         longest = longest_part_mm(self.args.type)
-        tips, probe, why = upright_tips(height, G, longest, top_below)
-        self.tel.emit("note", step="upright guard", height=round(height, 1), longest=round(longest, 1), top_below=top_below,
-                      tips=tips and round(tips, 1), probe=probe, gap=G.get("tip_to_sensor_mm"), refused=why)
-        if tips is None:
+        low, high, why = upright_tips(height, G, longest)
+        self.tel.emit("note", step="upright guard", height=round(height, 1), longest=round(longest, 1),
+                      tips=low and round(low, 1), retry_tips=high and round(high, 1), gap=G.get("tip_to_sensor_mm"),
+                      refused=why)
+        if low is None:
             self.skip_reason = why
             self.ignore_xy.append((float(dxy[0]), float(dxy[1])))
             self.tel.emit("recovery", level="L1", what=why)
             print("  " + why)
             return None
-        print(f"  upright {height:.0f} mm: tips at {tips:.0f} mm{' (high probe first)' if probe else ''}")
-        return tips, probe
+        print(f"  upright {height:.0f} mm: tips at {low:.0f} mm" + (f", {high:.0f} mm if that hits" if high else ""))
+        return low, high
+
+    async def upright_retry_high(self, err, item, hz, heading, attempt, high):
+        """After a low upright descent faulted: clear the controller error, straight back up to the hover, re-read
+        depth, then aim and descend at the high (sensor-safe) tips. Returns the grasp TCP z, or None (part no longer
+        standing: back to watch; self.skip_reason set). self.upright_item: the part's re-read position."""
+        self.tel.emit("recovery", level="L2", what=f"upright descent {attempt} hit the part ({err}): clearing, retry higher")
+        print(f"  descent hit the part ({err}): clear error, back up, retry with tips at {high:.0f} mm")
+        await self.arm.do_command({"clear_error": True})
+        await self.joints()
+        await self.straight(item[0], item[1], hz, f"back up {attempt}", holding=False)
+        height, dxy = await self.depth_look(item[:2])
+        if not (height and height > STANDING_MM and dxy is not None):
+            self.skip_reason = f"upright part not standing after the low descent hit it (depth {height and round(height)} mm): back to watch"
+            self.rewatch = True                     # the next look finds it lying, if it was knocked over
+            self.tel.emit("recovery", level="L1", what=self.skip_reason)
+            print("  " + self.skip_reason)
+            return None
+        _, high2, _ = upright_tips(height, G, longest_part_mm(self.args.type))
+        tips = max(high, high2 or 0.0)          # it is taller than the first reading said: never lower than before
+        self.upright = height
+        self.upright_item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
+        x, y = self.upright_item[:2]
+        q, _, _ = ik(np.array([x, y, hz]), seed=self.q, jaw_heading_deg=heading)
+        await self.jmove(q, f"aim upright {attempt}.high", holding=False)
+        gz = TZ + tips + G["tcp_to_tip_mm"]
+        await self.straight(x, y, gz, f"descend {attempt}.high", holding=False)
+        return gz
 
     async def oblique_looks(self, item, look_q):
         """--views coverage: wrist-cam looks tilted +-OBLIQUE_DEG about the part's long axis (vh/coverage.py), then back

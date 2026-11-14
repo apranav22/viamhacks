@@ -136,16 +136,16 @@ class Inspect(unittest.TestCase):
 
 
 class UprightPick(unittest.TestCase):
-    """pick() on a squat blob that the depth look reads as standing: the guard decides; an ambiguous reading is
-    grasped high first (safe for the longest part) and stepped down only after that grasp closed on nothing."""
+    """pick() on a squat blob that the depth look reads as standing: halfway rule first; if that descent hits the
+    part (fault), clear, back up, re-check it stands and descend once more at the sensor-safe height."""
 
-    def pick(self, heights, grabs, part_type="auto"):
+    def pick(self, heights, hits=(), part_type="auto"):
         s = sorter(FakeArm([0] * 6))
         s.args.type, s.args.assume_lying, s.args.views = part_type, False, "classic"
         s.ignore_xy, s.state, s.rewatch = [], lambda *a, **k: None, False
         moves, straights = [], []
         item = (300.0, 300.0, 500, 0.0, (100, 100, 130, 130))
-        heights, grabs = iter(heights), iter(grabs)
+        heights = iter(heights)
 
         async def jmove(q, label, holding):
             moves.append(label); s.q = list(q)
@@ -159,14 +159,13 @@ class UprightPick(unittest.TestCase):
 
         async def straight(x, y, z, label, holding):
             straights.append((label, round(z - sort.G["tcp_to_tip_mm"] - sort.TZ, 1)))   # closed-tip height
+            if label in hits:
+                raise sort.ArmFault(f"{label}: arm ended 3.0 deg from its target")
 
         async def grab():
-            return next(grabs)
+            return 300.0
 
-        async def release():
-            return 800.0
-
-        s.jmove, s.look, s.depth_look, s.straight, s.release = jmove, look, depth, straight, release
+        s.jmove, s.look, s.depth_look, s.straight = jmove, look, depth, straight
         s.look_joints = lambda it: sort.WATCH_J
         s.mv = SimpleNamespace(finger_pos=lambda: _const(800.0), grab=grab)
         with unittest.mock.patch.object(sort, "round_part", lambda it: True), \
@@ -174,34 +173,36 @@ class UprightPick(unittest.TestCase):
             ok, _, _ = asyncio.run(s.pick(item))
         return s, ok, moves, straights
 
-    def safe_tips(self):
-        return round(sort.longest_part_mm("auto") - (sort.G["tip_to_sensor_mm"] - 8.0), 1)
+    def high_tips(self, h=0.0):
+        return round(max(h, sort.longest_part_mm("auto")) - (sort.G["tip_to_sensor_mm"] - 8.0), 1)
 
-    def test_under_read_probes_high_then_grasps_lower(self):
-        s, ok, moves, straights = self.pick([21.0, 21.0], [0.0, 300.0])     # the 15:48 bolt's reading; first grab: air
+    def test_low_first_and_nothing_hit(self):
+        s, ok, moves, straights = self.pick([21.0])
         self.assertTrue(ok)
-        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "probe up 1", "descend 1.1", "lift 1"])
-        self.assertEqual(straights[0][1], self.safe_tips())                  # high first: safe for the longest part
-        self.assertEqual(straights[2][1], 10.5)                              # then Pranav's halfway rule
-        self.assertIn("aim upright 1.1", moves)
+        self.assertEqual(straights, [("descend 1", 10.5), ("lift 1", straights[1][1])])
+        self.assertNotIn(("do", {"clear_error": True}), s.arm.calls)
 
-    def test_probe_that_holds_lifts_from_up_there(self):
-        s, ok, moves, straights = self.pick([40.0], [300.0])
+    def test_hit_on_the_way_down_retries_higher_once(self):
+        s, ok, moves, straights = self.pick([21.0, 21.0], hits={"descend 1"})
         self.assertTrue(ok)
-        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "lift 1"])
-        self.assertEqual(straights[0][1], self.safe_tips())
+        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "back up 1", "descend 1.high", "lift 1"])
+        self.assertEqual(straights[2][1], self.high_tips())
+        self.assertIn(("do", {"clear_error": True}), s.arm.calls)
+        self.assertIn("aim upright 1.high", moves)
 
-    def test_knocked_over_by_the_probe_goes_back_to_watch(self):
-        s, ok, moves, straights = self.pick([21.0, 4.0], [0.0])
+    def test_second_hit_ends_the_run(self):
+        with self.assertRaises(sort.ArmFault):
+            self.pick([21.0, 21.0], hits={"descend 1", "descend 1.high"})
+
+    def test_knocked_over_by_the_hit_goes_back_to_watch(self):
+        s, ok, moves, straights = self.pick([21.0, 4.0], hits={"descend 1"})
         self.assertFalse(ok)
         self.assertTrue(s.rewatch)
-        self.assertIn("not standing", s.skip_reason)
-        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "probe up 1"])
+        self.assertEqual([lbl for lbl, _ in straights], ["descend 1", "back up 1"])
 
-    def test_tall_reading_goes_straight_to_the_halfway_grasp(self):
-        s, ok, moves, straights = self.pick([80.0], [300.0])
-        self.assertTrue(ok)
-        self.assertEqual(straights, [("descend 1", 40.0), ("lift 1", straights[1][1])])
+    def test_no_retry_when_low_was_already_safe(self):
+        with self.assertRaises(sort.ArmFault):                   # 80 mm read: halfway keeps it clear; a fault is real
+            self.pick([80.0], hits={"descend 1"})
 
 
 class Moves(unittest.TestCase):
