@@ -115,6 +115,7 @@ class ResNetPatchCore(Backbone):
             l2, l3 = (F.avg_pool2d(f, 3, 1, 1) for f in (l2, l3))
             f = torch.cat([l2, F.interpolate(l3, size=l2.shape[-2:], mode="bilinear", align_corners=False)], 1)
             emb = torch.cat([F.adaptive_avg_pool2d(n.layer4(l3), 1).flatten(1), f.mean((2, 3))], 1)
+        self.grid = tuple(f.shape[-2:])
         return f.flatten(2).transpose(1, 2).float().cpu().numpy(), emb.float().cpu().numpy()
 
 
@@ -132,6 +133,7 @@ class DinoV2(Backbone):
         import timm
         self.net = timm.create_model(arch, pretrained=pretrained, img_size=self.size, num_classes=0).eval().to(device)
         self.prefix = getattr(self.net, "num_prefix_tokens", 1)
+        self.grid = (self.size // patch, self.size // patch)
 
     def embed(self, images):
         import torch
@@ -166,10 +168,14 @@ def features(backbone, records, batch=8, augment=True):
                     [im.transpose(Image.Transpose.ROTATE_180) for im in ims]
             pf, _ = backbone.embed(flips)
         for j, r in enumerate(chunk):
-            aug = np.concatenate([p[j], pf[j], pf[k + j], pf[2 * k + j]]) if augment else p[j]
+            if LOCAL_R:
+                # position-aware: keep the patch grid; only the top-bottom flip keeps part-top-v2's head-left layout
+                aug = np.stack([p[j], pf[k + j]]) if augment else p[j][None]
+            else:
+                aug = np.concatenate([p[j], pf[j], pf[k + j], pf[2 * k + j]]) if augment else p[j]
             if backbone.metric == "cos":
-                p_j = p[j] / np.linalg.norm(p[j], axis=1, keepdims=True)
-                aug = aug / np.linalg.norm(aug, axis=1, keepdims=True)
+                p_j = p[j] / np.linalg.norm(p[j], axis=-1, keepdims=True)
+                aug = aug / np.linalg.norm(aug, axis=-1, keepdims=True)
             else:
                 p_j = p[j]
             out[id(r)] = {"query": p_j.astype(np.float32), "bank": aug.astype(np.float32), "emb": e[j]}
@@ -177,7 +183,34 @@ def features(backbone, records, batch=8, augment=True):
     return out, float(np.median(times)) if times else None
 
 
+LOCAL_R = 0        # --local-radius: 0 = match any bank patch; R = only bank patches within R grid cells of the same spot
+GRID = None        # (H, W) patch grid of the current backbone, set in main()
+
+
+def nn_dist_local(query, bank, metric, r=None, grid=None):
+    """Nearest bank patch per query patch, searching only a (2R+1)^2 window around the same grid position.
+    query [H*W, C]; bank [N, H*W, C] (aligned part-top-v2 crops)."""
+    import torch
+    import torch.nn.functional as F
+    r, (H, W) = r or LOCAL_R, grid or GRID
+    q = torch.from_numpy(query).view(H, W, -1)
+    b = torch.from_numpy(bank).view(-1, H, W, q.shape[-1])
+    qq = (q * q).sum(-1)
+    best = torch.full((H, W), float("inf"))
+    for s in range(0, b.shape[0], 16):
+        bp = F.pad(b[s:s + 16].permute(0, 3, 1, 2), (r, r, r, r), value=float("nan")).permute(0, 2, 3, 1)
+        for di in range(2 * r + 1):
+            for dj in range(2 * r + 1):
+                sh = bp[:, di:di + H, dj:dj + W]
+                dot = (sh * q).sum(-1)
+                d = 1 - dot if metric == "cos" else (qq + (sh * sh).sum(-1) - 2 * dot).clamp_min(0).sqrt()
+                best = torch.minimum(best, torch.nan_to_num(d, nan=float("inf")).min(0).values)
+    return best.flatten().numpy()
+
+
 def nn_dist(query, bank, metric):
+    if LOCAL_R:
+        return nn_dist_local(query, bank, metric)
     import torch
     q, b = torch.from_numpy(query), torch.from_numpy(bank)
     best = []
@@ -304,7 +337,10 @@ def main():
     p.add_argument("--no-augment", action="store_true", help="skip flipped bank copies (4x faster, weaker bank)")
     p.add_argument("--no-pretrained", action="store_true", help="smoke test only: random weights")
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--local-radius", type=int, default=0, help="position-aware kNN: match only within R patch cells (aligned crops)")
     a = p.parse_args()
+    global LOCAL_R, GRID
+    LOCAL_R = a.local_radius
     dirs = sorted({d for pat in a.runs for d in (glob.glob(pat) or [pat]) if (Path(d) / "decisions.jsonl").exists()})
     if not dirs:
         raise SystemExit("No run folders with decisions.jsonl")
@@ -328,6 +364,7 @@ def main():
         bb = make_backbone(name, a.device, not a.no_pretrained, {"resnet18": a.resnet_size, "dinov2": a.dino_size})
         print(f"BACKBONE {bb.name} input {bb.size}px metric {bb.metric}", flush=True)
         feats, ms = features(bb, records, augment=not a.no_augment)
+        GRID = bb.grid
         res = {"input_px": bb.size, "metric": bb.metric, "torch_ms_per_crop": ms, "groups": {}, "picks": {}}
         for key, recs in sorted(groups.items()):
             g, per_pick = score_group(recs, feats, bb.metric, a.aggregate)
