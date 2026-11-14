@@ -61,13 +61,29 @@ def collect_samples(run_dirs, part_type, background):
                     records.append({**common, "view": "top", "image": str(folder / f"{name}.jpg"), "bbox": bbox})
                 else:
                     skipped.append({"pick": pick, "reason": "top crop touches frame border"})
+            sharp = meta.get("sharpness", {})
             for view, value in meta.get("views", {}).items():
-                records.append({**common, "view": view, "image": str(folder / f"web_{view}.jpg"), "bbox": value["crop_box"]})
+                records.append({**common, "view": view, "image": str(folder / f"web_{view}.jpg"), "bbox": value["crop_box"],
+                                "sharpness": sharp.get(view)})
             for view in meta.get("oblique", {}):              # coverage: oblique wrist looks (crop saved at capture)
                 crop = folder / f"crop_{view}.jpg"
                 if crop.exists():
-                    records.append({**common, "view": view, "image": str(crop), "bbox": None})
-    return records, skipped
+                    records.append({**common, "view": view, "image": str(crop), "bbox": None, "sharpness": sharp.get(view)})
+    # 2026-11-14: blurred frames and crops that missed the part (round nut, pad seam) score far below their view's
+    # median sharpness. Keep them out of the normal bank: < 0.5 x the (type, view) median is skipped.
+    by = defaultdict(list)
+    for r in records:
+        if r.get("sharpness") is not None:
+            by[(r["part_type"], r["view"])].append(r["sharpness"])
+    kept = []
+    for r in records:
+        vals = by.get((r["part_type"], r["view"]))
+        if r.get("sharpness") is not None and vals and len(vals) >= 5 and r["sharpness"] < 0.5 * sorted(vals)[len(vals) // 2]:
+            skipped.append({"pick": r["pick_id"], "view": r["view"],
+                            "reason": f"sharpness {r['sharpness']} < 0.5 x view median {sorted(vals)[len(vals) // 2]}"})
+            continue
+        kept.append(r)
+    return kept, skipped
 
 
 def build_dataset(run_dirs, output, part_type, background, seed=17):

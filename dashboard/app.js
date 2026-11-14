@@ -198,9 +198,29 @@ $('evaluation').addEventListener('change',event=>{ui.evaluationChoice=ui.evaluat
 $('item-picker').addEventListener('change',event=>selectItem(event.target.value));
 for(const [id,step] of [['previous-item',-1],['next-item',1]])$(id).addEventListener('click',()=>{const items=itemList(),current=ui.mode==='live'?ui.liveItem:ui.item,index=items.findIndex(i=>i.id===current);if(items[index+step])selectItem(items[index+step].id);});
 $('follow').addEventListener('change',render);$('camera').addEventListener('change',event=>{ui.camera=event.target.value;renderLive();});
+// Arm-moving warning, played by the browser: the dashboard server runs on the station, which has no speaker.
+// Mirrors the old laptop server.py behaviour: chime + speech on the run event, ping on every PICK/PLACE, only for
+// runs on a non-macOS host (a laptop run already sounds its own alarm). Backlog replayed on connect stays silent.
+const armAlarm=(()=>{
+  let ctx=null,live=false,remote=false,on=true;
+  try{on=localStorage.getItem('armSound')!=='off';}catch(e){}
+  const button=$('arm-sound'),paint=()=>{button.textContent=on?'Sound on':'Sound off';button.setAttribute('aria-pressed',String(on));};
+  const unlock=()=>{try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();}catch(e){}};
+  const tone=(freqs,len)=>{if(!on)return;unlock();if(!ctx)return;let t=ctx.currentTime;for(const f of freqs){const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;g.gain.setValueAtTime(0.25,t);g.gain.exponentialRampToValueAtTime(0.001,t+len);o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+len);t+=len*0.8;}};
+  const speak=text=>{if(!on||!window.speechSynthesis)return;try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(text));}catch(e){}};
+  button.addEventListener('click',()=>{on=!on;try{localStorage.setItem('armSound',on?'on':'off');}catch(e){}paint();if(on){unlock();tone([880],0.15);}});
+  document.addEventListener('pointerdown',unlock,{once:true});   // browsers only allow audio after a user gesture
+  paint();
+  return {reset(){live=false;},event(ev){
+    if(ev.k==='backlog_done'){live=true;return;}
+    if(!live)return;
+    if(ev.k==='run'){remote=(ev.platform||'darwin')!=='darwin';if(remote){tone([660,440],0.35);speak('Robot arm moving. Stand clear.');}}
+    else if(ev.k==='state'&&remote&&(ev.state==='PICK'||ev.state==='PLACE'))tone([1320],0.12);
+  }};
+})();
 const stream=new EventSource('/events');
-stream.onopen=()=>{ui.connected=true;schedule();};stream.onerror=()=>{ui.connected=false;schedule();};
-stream.onmessage=event=>{try{const ev=JSON.parse(event.data);live.ingest(ev);if(ui.mode==='live')schedule();}catch(e){console.error('Invalid dashboard event',e);}};
+stream.onopen=()=>{armAlarm.reset();ui.connected=true;schedule();};stream.onerror=()=>{ui.connected=false;schedule();};
+stream.onmessage=event=>{try{const ev=JSON.parse(event.data);armAlarm.event(ev);live.ingest(ev);if(ui.mode==='live')schedule();}catch(e){console.error('Invalid dashboard event',e);}};
 setInterval(()=>{if(ui.mode==='live')renderLive();},1000);
 
 $('nav-models').addEventListener('click',()=>mode('models'));

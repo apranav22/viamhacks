@@ -56,6 +56,7 @@ from vh.kinematics import check_path, flip, frames, ik, load_obstacles, safe_joi
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
 from vh import coverage
+from vh import multi_pick
 
 POSES = json.load(open(ROOT / "config" / "poses.json"))
 CP = json.load(open(ROOT / "config" / "checkpoint.json"))
@@ -495,9 +496,16 @@ class Sorter:
             items = sorted(detect(rgb, self.view, self.zone), key=lambda it: -it[2])
             if not items:
                 self.ignore_xy = []                     # zone empty: forget parts we chose to leave
-            items = [it for it in items if all(math.dist(it[:2], q) > 25 for q in self.ignore_xy)]
+            if self.args.multi:
+                # several parts on the pad (vh/multi_pick.py): largest part with no neighbour within --min-gap-mm,
+                # sticky while it stays put so the stability check below sees the same part frame to frame
+                it = multi_pick.choose(items, self.ignore_xy, last[:2] if last else None, self.args.min_gap_mm)
+                if it and not (last and math.dist(it[:2], last[:2]) < multi_pick.STICK_MM):
+                    print(f"  multi: target ({it[0]:.0f}, {it[1]:.0f}) of {len(items)} in view", flush=True)
+            items = [x for x in items if all(math.dist(x[:2], q) > 25 for q in self.ignore_xy)]
             t2 = time.perf_counter()
-            it = items[0] if items else None
+            if not self.args.multi:
+                it = items[0] if items else None
             now = time.time()
             if it and t_appeared is None:
                 t_appeared = now
@@ -568,7 +576,11 @@ class Sorter:
         view = WristView(props.intrinsic_parameters, rot, t, TZ)
         rgb = np.asarray(Image.open(io.BytesIO(jpg)).convert("RGB"))
         self.meta.setdefault("sharpness", {})[f"top_{attempt}"] = sharpness(rgb)
-        near = [it for it in detect(rgb, view, None, ends=True) if math.dist(it[:2], item[:2]) < 60]
+        blobs = detect(rgb, view, None, ends=True)
+        if self.args.multi:
+            near = multi_pick.own_part(blobs, item[:2])    # only blobs on the target's axis, never a neighbour
+        else:
+            near = [it for it in blobs if math.dist(it[:2], item[:2]) < 60]
         new = None
         if near:
             # At 0.21 mm/px a shiny head can split off from the threads as its own blob. 18:20 socket_m16 #17/#27: the
@@ -1332,6 +1344,11 @@ async def main():
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--no-share", action="store_true",
                    help="don't push this run to the shared HF dataset when it ends (sync_data.py push later)")
+    p.add_argument("--multi", action="store_true",
+                   help="several parts on the pad: pick the largest clear one first, merge only blobs on its axis "
+                        "in the close-up (vh/multi_pick.py; keep ~8-10 cm between parts)")
+    p.add_argument("--min-gap-mm", type=float, default=multi_pick.MIN_GAP_MM,
+                   help="--multi: a part with no other part within this distance counts as clear")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
     if a.mode == "sort" and not a.anomaly_bundle:

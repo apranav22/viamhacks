@@ -793,3 +793,28 @@ Robot: untouched. No commits.
   skipped view. Not taken: waypoint-chain straight moves, still-frame gate, upright high-retry, pipelined view scoring,
   demo.py / ops console.
 - Tests: 87 run, only the 3 pre-existing OpenVINO-not-installed errors. NOT deployed, NOT run on the arm.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:28]
+- hex_nut run 20261114_110941_collect stopped at item 12 (operator: move to evals): 11 items.
+- vh/anomaly_data: skips captures < 0.5 x (type, view) median sharpness (17 oblique crops dropped). Release 20261114_131522.
+- Training PatchCore coverage_v1 on station (--type each, 9 coverage runs, 36 groups, xpu, nice 10): models/coverage_v1, log train_coverage_v1.log.
+- ARM taken: sort mode (--type auto, coverage views, each_cardboard_v4 m103, --decide top) for operator evaluation.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:35]
+- Pulled Pranav's multi-part pick (origin/pranav/fast-carry 42c3a13, ops/multi/sort.py wrapper) into sort.py itself:
+  `--multi [--min-gap-mm 70]`. Logic in vh/multi_pick.py (choose: largest part with no neighbour within the gap, sticky
+  while it stays put, left parts count as neighbours; own_part: close-up merges only blobs on the target's axis).
+  Without --multi, watch/look behave as before. The ops/multi/sort.py wrapper was NOT brought over.
+- Consolidated parallel work onto new-pipeline (operator chose: station line + self-contained add-ons; no merge of the
+  clean-base refactor lineage). From pranav/fast-carry: demo.py, ops/ (console, presets, Stream Deck tools/docs,
+  test_ops_console); the "multi" preset now runs current/sort.py --multi (no cwd / incoming/multi). From
+  aayush/integration: train_efficientad.py, trainable_backends.py, train_type_clf.py, vh/type_clf.py, vh/confidence.py,
+  tools/{dashboard_replay,device_agreement,device_bench,threshold_replay}.py, docs/EFFICIENTAD_HANDOFF.md, test_type_clf
+  (files only; sort.py does not use them yet). Also commits the pending working-tree work (dashboard, anomaly_data
+  sharpness filter, sheet_run kind arg, exp_coverage_anomaly.py).
+- NOT brought over: clean-base refactor (vh/motion, vh/detection, tools/ moves), Live-tab run control (dashboard/runner.py),
+  ali/model-compare Models tab, Aayush's train_anomaly cv-p95 and type-auto classifier wiring in sort.py.
+- Tests: 101 run, only the 3 pre-existing OpenVINO errors (+ test_type_clf needs pytest; its 3 tests pass with a stub).
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:45]
+- Operator: use all data. coverage_v1 (today only) stopped at 7/36 groups; coverage_v2 training on station: every day-1 collect run (20261113_17-23h, 32 dirs; trainer filters background/type/label/exclude.json) + 9 coverage runs. Day-1 defects land in the test split. Script train_coverage_v2.sh, log train_coverage_v2.log. Sort mode run continues on each_cardboard_v4 --decide top.

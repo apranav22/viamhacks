@@ -3,7 +3,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Spot it, sort it</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/viewport.css"><script defer src="/state.js"></script><script defer src="/app.js"></script><script defer src="/models.js"></script></head>
 <body>
-<header class="app-header"><h1>Spot it, sort it</h1><nav aria-label="Dashboard views"><button id="nav-live" type="button" aria-controls="live" aria-pressed="false">Live</button><button id="nav-history" type="button" aria-controls="history" aria-pressed="true">History</button><button id="nav-models" type="button" aria-controls="models" aria-pressed="false">Models</button></nav><span id="connection" class="subtle" role="status">Connecting…</span></header>
+<header class="app-header"><h1>Spot it, sort it</h1><nav aria-label="Dashboard views"><button id="nav-live" type="button" aria-controls="live" aria-pressed="false">Live</button><button id="nav-history" type="button" aria-controls="history" aria-pressed="true">History</button><button id="nav-models" type="button" aria-controls="models" aria-pressed="false">Models</button></nav><span id="connection" class="subtle" role="status">Connecting…</span><button id="arm-sound" type="button" aria-pressed="true" title="Speak the arm-moving warning in this browser">Sound on</button></header>
 <main>
 <section id="live" hidden aria-label="Live monitoring">
   <div class="live-tools"><label>View<select id="live-view"><option value="camera">Camera</option><option value="inspection">Inspection</option></select></label><label class="check"><input id="follow" type="checkbox" checked> Follow item</label><span id="live-status" class="status">No telemetry</span></div>
