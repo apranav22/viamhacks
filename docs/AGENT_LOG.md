@@ -541,3 +541,16 @@ Done: prepared the operator-requested new publication branch ali/clean-base from
 Verified: 80 Python tests passed (one optional training integration skipped), nine JS tests, three geometry/UDP checks, runtime/tool imports, supported CLI help, overview selftest, presentation TypeScript and Vite production build under Node 22.23.1, offline ZIP packaging, and local dashboard app/health/History/Models HTTP checks with preview and recording disabled. No live inference or physical reliability claim. Credentials/artifacts/build outputs excluded from Git.
 Robot: no motion, gripper actuation, Viam config, model activation, deployment or service changes. Physical arm state not queried.
 Next: review the published cleanup branch and rehearse a reviewed station release under AGENTS.md; continued shared-checkout work remains independent.
+
+[op Aayush (git: Aayush Poudel, github: apoudel20) · cloud workspace · aayush/dinov2-eval · 2026-11-14 09:30 EST]
+Added `exp_backbone_eval.py`: offline comparison of the anomaly backbone, ResNet-18 PatchCore features (current) vs
+DINOv2 ViT-S/14 patch features, same `model_crop` crops and groups. Good picks are scored leave-one-RUN-out (a collect
+run repeats one physical part), thresholds from good only, per-group FR/misses at margins 1.0/1.03/1.15, whole-pick
+anomaly-only fusion, development-v1 top-view counts, and a frozen-feature known-defect probe (tape, LORO, plus transfer
+to other families). Smoke-tested on synthetic runs with random weights only: no real-data result yet (the cloud
+workspace cannot download HF dataset files or model weights). No robot, station, config, threshold or model changes.
+Run on the station or a laptop with the runs pulled:
+  pip install timm scikit-learn
+  python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --views top --out exp/backbone_top
+  python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --out exp/backbone_all   # all views, slower
+Add --device xpu on the station GPU; --no-augment to cut time 4x. Send back exp/*/summary.md and report.json.
