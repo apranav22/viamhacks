@@ -23,7 +23,7 @@ CHUNK = 8000
 
 class Telemetry:
     def __init__(self, host="127.0.0.1", port=8766, enabled=True, run_id=None, log_path=None,
-                 log_kinds=("span", "move", "error", "recovery")):
+                 log_kinds=("span", "move", "error", "recovery", "still")):
         self.addr = (host, port)
         # timing kept on disk (no frames): UDP to the dashboard is lost when nothing listens
         self.log = open(log_path, "a", buffering=1) if log_path else None

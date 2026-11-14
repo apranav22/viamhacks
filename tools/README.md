@@ -14,6 +14,7 @@ Run these from the repository root with `python -m tools.<name>`. `sort.py` is t
 | `pad_touch` | Touch-measure the pad surface | `--dry` read-only; otherwise moves with operator input |
 | `record_pose` | Record a manually positioned destination | Read-only pose RPC; writes local measured config |
 | `recover_station` | Retrieve station source/config/model artifacts | Remote reads, local writes; no deployment or activation |
+| `still_report` | Still-frame waits per capture (from `runs/<id>/timeline.jsonl`) and picture sharpness vs a baseline run | Offline, read-only |
 
 For example: `python -m tools.motion_probe --help`, `python -m tools.overview selftest`.
 

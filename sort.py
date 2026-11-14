@@ -378,7 +378,7 @@ class Sorter:
         camera can hand out a frame exposed during the move, and the gripper / held part ring for a moment after a
         fast stop: blurred captures. Grab until two consecutive, distinct frames match (frame_change <=
         REF_STEADY_FRAC); the second is used. Every result is logged (timeline.jsonl) to tune the gate."""
-        prev, prev_jpg, changes = None, None, []
+        prev, prev_jpg, changes, t0 = None, None, [], time.perf_counter()
         for i in range(STILL_TRIES):
             jpg = await grab()
             if jpg == prev_jpg:                       # the same buffered frame again: not a new exposure
@@ -388,9 +388,12 @@ class Sorter:
             if prev is not None and prev.shape == rgb.shape:
                 changes.append(round(frame_change(rgb, prev), 4))
                 if changes[-1] <= REF_STEADY_FRAC:
-                    self.tel.emit("note", step=f"{label}: still frame", frames=i + 1, change=changes)
+                    self.tel.emit("still", label=label, item=self.n, still=True, frames=i + 1, change=changes,
+                                  ms=round((time.perf_counter() - t0) * 1000))
                     return jpg
             prev, prev_jpg = rgb, jpg
+        self.tel.emit("still", label=label, item=self.n, still=False, frames=STILL_TRIES, change=changes,
+                      ms=round((time.perf_counter() - t0) * 1000))
         self.tel.emit("recovery", level="L1", what=f"{label}: no still frame in {STILL_TRIES}, using the last",
                       change=changes)
         return jpg
