@@ -621,3 +621,13 @@ tip_to_sensor_mm 61.8) gives a grasp height; otherwise the part is left in place
 after the depth look, before the "aim upright" move. README / ARCHITECTURE / PLAN status lines updated. Offline tests:
 pick() on a 21 mm reading is left in place without aiming; on 40 mm grasps with tips raised to 23.1 mm. NOT run on the
 arm: the first live upright pick needs the operator at the E-stop.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:55]
+Upright guard rewritten (Pranav: "attempt a pick from higher up if it realises that the part is too tall"). An ambiguous
+reading (unknown type, read under ~46 mm) is no longer left in place: the first grasp is at the height that keeps even
+the longest part (76.9 mm) 8 mm under the sensor (tips 23.1 mm); if it closes on nothing, the part's top is under those
+tips + 5 mm, so sort.py goes back up to the hover, re-reads depth (still standing? else back to watch: it was knocked
+over) and steps down to the halfway rule. Steps only go down. High first, not low first: a low grasp on an under-read
+tall part is the 15:48 collision (controller collision detection is off); a high miss closes on air. Readings >= 46 mm
+or a known --type: one grasp, as before. Offline tests cover miss -> step down, probe holds, knocked over, tall read.
+NOT run on the arm.
