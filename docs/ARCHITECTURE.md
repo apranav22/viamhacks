@@ -7,7 +7,7 @@
 ## One item through the system
 
 1. **WATCH:** wrist color frames, the shared local-contrast detector, a fixed pick zone, placement stability and the hand/reference gate.
-2. **PICK:** move to the camera-centred look pose, save a top image, re-detect the part, orient the jaws, descend and close. Collection makes one attempt; sorting retains the configured retries. Upright grasping is disabled by default.
+2. **PICK:** move to the camera-centred look pose, save a top image, re-detect the part, orient the jaws, descend and close. Collection makes one attempt; sorting retains the configured retries. Upright parts (depth look) are grasped under the upright guard (`vh.motion.upright_tips`): the halfway rule, raised so even the longest part stays 8 mm under the sensor (`grasp.tip_to_sensor_mm`); a part it can't hold that way is left in place.
 3. **LIFT:** lift and check settled finger position. The small-part slip and transfer failures documented in DAY1_RECAP remain unresolved.
 4. **INSPECT:** present the held item at recorded webcam views over the reject compartment. Each saved view retains its crop, tape evidence and anomaly result.
 5. **DECIDE:** apply the selected anomaly-view policy and the tape rule. Missing/failed model evidence is uncertain. Automatic type selection uses measured top-view size and `config/part_sizes.json`.

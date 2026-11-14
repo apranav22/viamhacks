@@ -20,7 +20,7 @@
 
 ## Status / next (day 1 evening)
 
-- **Built and exercised live:** `sort.py` collection and sorting on the Intel station, shared runs/models across releases, per-type OpenVINO anomaly banks, measured-size auto type, multi-view capture, dashboards and HF backup. Upright grasp remains unvalidated and off by default.
+- **Built and exercised live:** `sort.py` collection and sorting on the Intel station, shared runs/models across releases, per-type OpenVINO anomaly banks, measured-size auto type, multi-view capture, dashboards and HF backup. Upright grasp is on by default under the upright guard; not yet validated on the arm.
 - **Read first:** `THRESHOLD_FINDINGS.md` for the new defect runs, threshold experiments, misses, false rejects and safety incidents; `AGENT_LOG.md` for chronological evidence; `DATA_PLAN.md` for data access.
 - **Next:** curate the latest captures, freeze independent calibration/audit data, verify thin-socket coverage and size-based typing, rehearse safely. Teammate access to private HF data still needs a team org.
 - The ownership table below is the original bring-up allocation, not a claim that these tasks remain undone.

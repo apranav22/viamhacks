@@ -613,3 +613,11 @@ delete the key. Upright guard now: tips >= 23.1 mm above the surface for an unkn
 8 mm under the sensor), so with --type auto an upright part read under 33 mm is left in place (the 15:48 bolt read
 20-22); 34-46 mm: tips raised to 23.1; >= 46 mm: halfway rule. Upright grasps still need --allow-upright; not run on
 the arm. 16 offline tests (tests/test_speed_limits.py, test_sort_offline.py) pass.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:40]
+Removed --allow-upright (Pranav: "we want to natively support it"). sort.py now grasps every part the depth look reads
+as standing (> 15 mm, squat blobs only, not with --assume-lying) whenever the upright guard (vh.motion.upright_tips,
+tip_to_sensor_mm 61.8) gives a grasp height; otherwise the part is left in place as before. The guard now runs right
+after the depth look, before the "aim upright" move. README / ARCHITECTURE / PLAN status lines updated. Offline tests:
+pick() on a 21 mm reading is left in place without aiming; on 40 mm grasps with tips raised to 23.1 mm. NOT run on the
+arm: the first live upright pick needs the operator at the E-stop.

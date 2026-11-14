@@ -4,7 +4,7 @@
 
 Viam × Intel Track 3 fastener inspection. One item is placed on the pad; the arm finds it with the wrist camera, picks it, presents it to the fixed webcam, and releases it over the good or reject compartment. PatchCore anomaly models run locally through OpenVINO. Unknown or unavailable model evidence rejects as uncertain.
 
-The collection and sorting loop has run on the Intel station. Picking remains unreliable for some small parts; upright grasping is disabled by default. Saved-image evaluation uses repeated grasps of a few physical specimens, so it does not establish unseen-part or unseen-defect accuracy. See the [day-one recap](docs/DAY1_RECAP.md) and [latest training evidence](docs/TRAINING_RUN_20261114.md).
+The collection and sorting loop has run on the Intel station. Picking remains unreliable for some small parts; upright parts are grasped natively under a measured-clearance guard (not yet validated on the arm). Saved-image evaluation uses repeated grasps of a few physical specimens, so it does not establish unseen-part or unseen-defect accuracy. See the [day-one recap](docs/DAY1_RECAP.md) and [latest training evidence](docs/TRAINING_RUN_20261114.md).
 
 ## Start here
 

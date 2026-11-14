@@ -6,6 +6,7 @@ import io
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -132,6 +133,55 @@ class Inspect(unittest.TestCase):
         self.assertEqual((decision, at), ("reject", "front"))
         self.assertEqual(moves, ["view front", "view yaw-20"])
         self.assertNotIn("yaw-20", scores)
+
+
+class UprightPick(unittest.TestCase):
+    """pick() on a squat blob that the depth look reads as standing: the guard decides, no flag."""
+
+    def pick(self, height, part_type="auto"):
+        s = sorter(FakeArm([0] * 6))
+        s.args.type, s.args.assume_lying, s.args.views = part_type, False, "classic"
+        s.ignore_xy, s.state = [], lambda *a, **k: None
+        moves, straights = [], []
+        item = (300.0, 300.0, 500, 0.0, (100, 100, 130, 130))
+
+        async def jmove(q, label, holding):
+            moves.append(label); s.q = list(q)
+            return 0.0
+
+        async def look(it, attempt, heading):
+            return it, 0.0
+
+        async def depth(xy):
+            return height, np.array(xy)
+
+        async def straight(x, y, z, label, holding):
+            straights.append((label, z))
+
+        async def grab():
+            return 300.0
+
+        s.jmove, s.look, s.depth_look, s.straight = jmove, look, depth, straight
+        s.look_joints = lambda it: sort.WATCH_J
+        s.mv = SimpleNamespace(finger_pos=lambda: _const(800.0), grab=grab)
+        with unittest.mock.patch.object(sort, "round_part", lambda it: True), \
+                unittest.mock.patch.object(sort, "sound", lambda *a: None):
+            ok, _, _ = asyncio.run(s.pick(item))
+        return s, ok, moves, straights
+
+    def test_short_reading_is_left_in_place_without_aiming(self):
+        s, ok, moves, straights = self.pick(21.0)                  # the 15:48 bolt's reading
+        self.assertFalse(ok)
+        self.assertIn("hold only", s.skip_reason)
+        self.assertNotIn("aim upright 1", moves)
+        self.assertEqual(straights, [])
+
+    def test_tall_part_is_grasped_with_raised_tips(self):
+        s, ok, moves, straights = self.pick(40.0)
+        self.assertTrue(ok)
+        self.assertIn("aim upright 1", moves)
+        tips = straights[0][1] - sort.G["tcp_to_tip_mm"] - sort.TZ
+        self.assertAlmostEqual(tips, sort.longest_part_mm("auto") - (sort.G["tip_to_sensor_mm"] - 8.0), places=6)
 
 
 class Moves(unittest.TestCase):

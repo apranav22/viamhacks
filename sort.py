@@ -231,7 +231,7 @@ class Sorter:
         self.good_j_up = ik(np.array(GOOD_TCP[:2] + (300.0,)), seed=UPRIGHT_J["side-120"])[0]   # hanging part clears the divider
         self.view = None              # WristView at the watch pose (fixed: computed once)
         self.pad = dict(ZONE)         # pixel bounds are added at the watch pose
-        self.ignore_xy = []           # parts deliberately left in place (upright, grasp disabled)
+        self.ignore_xy = []           # parts deliberately left in place (upright, refused by the upright guard)
 
     # ---- helpers ---------------------------------------------------------------------------------
     def state(self, s, **kw):
@@ -620,15 +620,20 @@ class Sorter:
             if squat and attempt == 1 and not getattr(self.args, "assume_lying", False):
                 height, dxy = await self.depth_look(item[:2])
                 print(f"  height from depth: {height if height is None else round(height)} mm")
-                if height and height > STANDING_MM and dxy is not None and not self.args.allow_upright:
-                    # 15:48 an upright bolt hit the gripper body on the way down (E-stop). Until the grasp height
-                    # keeps the part top below the palm (measured), leave upright parts where they are.
-                    self.skip_reason = f"upright part ({height:.0f} mm tall): not picked, upright grasp disabled"
-                    self.ignore_xy.append((float(dxy[0]), float(dxy[1])))
-                    self.tel.emit("recovery", level="L1", what=self.skip_reason)
-                    print("  " + self.skip_reason)
-                    return False, item, t_cmd
                 if height and height > STANDING_MM and dxy is not None:
+                    # 15:48 an upright bolt hit the gripper body on the way down (E-stop): the grasp height comes from
+                    # the upright guard (vh.motion.upright_tips), which leaves the part in place when it can't keep
+                    # even the longest part under the sensor and still hold it
+                    longest = longest_part_mm(self.args.type)
+                    up_tips, why = upright_tips(height, G, longest)
+                    self.tel.emit("note", step="upright guard", height=round(height, 1), longest=round(longest, 1),
+                                  tips=up_tips and round(up_tips, 1), gap=G.get("tip_to_sensor_mm"), refused=why)
+                    if up_tips is None:
+                        self.skip_reason = why
+                        self.ignore_xy.append((float(dxy[0]), float(dxy[1])))
+                        self.tel.emit("recovery", level="L1", what=why)
+                        print("  " + why)
+                        return False, item, t_cmd
                     self.upright = height
                     item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
                     self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
@@ -638,20 +643,10 @@ class Sorter:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
             # lying: closed tips 2 mm above the table (vh.motion.grasp_height); standing: Pranav's halfway rule, raised
-            # so even the longest part stays under the sensor body above the tips (vh.motion.upright_tips)
+            # so even the longest part stays under the sensor body above the tips (the upright guard above)
             gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G)
             if self.upright:
-                longest = longest_part_mm(self.args.type)
-                tips, why = upright_tips(self.upright, G, longest)
-                self.tel.emit("note", step="upright guard", height=round(self.upright, 1), longest=round(longest, 1),
-                              tips=tips and round(tips, 1), gap=G.get("tip_to_sensor_mm"), refused=why)
-                if tips is None:
-                    self.skip_reason = why
-                    self.ignore_xy.append((float(item[0]), float(item[1])))
-                    self.tel.emit("recovery", level="L1", what=why)
-                    print("  " + why)
-                    return False, item, t_cmd
-                gz = TZ + tips + G["tcp_to_tip_mm"]
+                gz = TZ + up_tips + G["tcp_to_tip_mm"]
             self.pose = "upright" if self.upright else "lying"
             if self.upright:
                 self.upright = (gz - G["tcp_to_tip_mm"]) - TZ      # what hangs below the tips once lifted
@@ -864,7 +859,7 @@ class Sorter:
             rec.update(decision="none", reason=self.skip_reason or ("part not seen from hover" if self.not_seen else "could not grasp"),
                        t_decided=iso(time.time()))
             if self.args.mode == "sort" and self.skip_reason and getattr(self, "top_image", None) and self.top_bbox:
-                # left in place (upright grasp disabled), but the top image was taken: decide from it, mark not moved
+                # left in place (refused by the upright guard), but the top image was taken: decide from it, mark not moved
                 top, _ = await self.infer_crop(self.top_image, self.top_bbox, "top")
                 f = top.fields()
                 rec.update(decision="reject" if f["anomalous"] is not False else "good", picked=False,
@@ -995,7 +990,6 @@ async def main():
     p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")
-    p.add_argument("--allow-upright", action="store_true", help="grasp upright parts (UNSAFE: hit the gripper 15:48)")
     p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
     p.add_argument("--decide", choices=["all", "top"], default="all",
                    help="sort: which anomaly views can reject (top = wrist top view only; webcam scores logged as evidence)")
