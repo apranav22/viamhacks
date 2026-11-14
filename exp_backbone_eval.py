@@ -122,11 +122,14 @@ class DinoV2(Backbone):
     """DINOv2 ViT patch tokens (14 px patches), cosine distance."""
     metric = "cos"
 
-    def __init__(self, size, device, variant="s", pretrained=True):
-        super().__init__(size - size % 14, device)
-        self.name = f"dinov2_{variant}"
+    ARCH = {"dinov2_s": ("vit_small_patch14_dinov2.lvd142m", 14), "dinov2_b": ("vit_base_patch14_dinov2.lvd142m", 14),
+            "dinov3_s": ("vit_small_patch16_dinov3.lvd1689m", 16), "dinov3_splus": ("vit_small_plus_patch16_dinov3.lvd1689m", 16)}
+
+    def __init__(self, size, device, variant="dinov2_s", pretrained=True):
+        arch, patch = self.ARCH[variant]
+        super().__init__(size - size % patch, device)
+        self.name = variant
         import timm
-        arch = {"s": "vit_small_patch14_dinov2.lvd142m", "b": "vit_base_patch14_dinov2.lvd142m"}[variant]
         self.net = timm.create_model(arch, pretrained=pretrained, img_size=self.size, num_classes=0).eval().to(device)
         self.prefix = getattr(self.net, "num_prefix_tokens", 1)
 
@@ -142,8 +145,8 @@ class DinoV2(Backbone):
 def make_backbone(name, device, pretrained, sizes):
     if name == "resnet18":
         return ResNetPatchCore(sizes["resnet18"], device, pretrained)
-    if name in ("dinov2_s", "dinov2_b"):
-        return DinoV2(sizes["dinov2"], device, name[-1], pretrained)
+    if name in DinoV2.ARCH:
+        return DinoV2(sizes["dinov2"], device, name, pretrained)
     raise ValueError(name)
 
 
@@ -292,7 +295,7 @@ def main():
     p.add_argument("--runs", nargs="+", required=True, help="run folders or globs (collect runs)")
     p.add_argument("--background", default="cardboard", choices=["white", "cardboard"])
     p.add_argument("--views", nargs="*", default=None, help="limit views, e.g. top front")
-    p.add_argument("--backbones", nargs="+", default=["resnet18", "dinov2_s"], choices=["resnet18", "dinov2_s", "dinov2_b"])
+    p.add_argument("--backbones", nargs="+", default=["resnet18", "dinov2_s"], choices=["resnet18", "dinov2_s", "dinov2_b", "dinov3_s", "dinov3_splus"])
     p.add_argument("--resnet-size", type=int, default=320, help="train_anomaly.py default")
     p.add_argument("--dino-size", type=int, default=448)
     p.add_argument("--aggregate", default="top1", choices=["top1", "max"])

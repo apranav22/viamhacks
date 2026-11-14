@@ -598,3 +598,9 @@ For Ali (motion), read-only check of ali/clean-base ce6f73b poses with vh.kinema
   the obliques (station bundles cover top/front/yaw-20/yaw+35/pitch-25 only). Use --decide top until banks exist.
 - Type features, held-out runs (112 picks, 5 multi-run types): size rule 78, size+colour 93, ResNet-18 103, DINOv2-S 95,
   DINOv2-S + ResNet-18 concatenated 107. The shipped classifier is ResNet-18 only; the combination is +4 picks.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 11:40]
+Backbone bake-off, top view, cardboard, leave-one-run-out (exp_backbone_eval.py, now with dinov3_s / dinov3_splus):
+defects caught with 0 good rejected (margin 1.03): ResNet-18 PatchCore 10/28, DINOv2-S 3/28, DINOv3-S 11/28, DINOv3-S+ 12/28.
+At margin 1.0 all ResNet-18/DINOv3 variants catch 12/28 with 7 good rejected. CPU torch: 14.8 / 88.8 / 145 / 185 ms per crop.
+DINOv3 recovers DINOv2's gap but adds ~2 defects at 10-12x the cost; keeping ResNet-18 for deployment. Next: EfficientAD.
