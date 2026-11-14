@@ -1,0 +1,32 @@
+{
+  "_comment": "Start presets for ops/console.py. Each is passed unchanged to: station_run.py start -- <args> --dash-host 127.0.0.1 (telemetry to the dashboard that runs on the station, :8775). Before starting, the console checks the deployed /opt/viam/sorter-ali/current/sort.py knows every --flag, so a preset for a newer release is refused until that release is deployed. Sources: README.md 'Supported commands', sort.py --help, dashboard/runner.py DEFAULT_BUNDLE, station incoming/device_bench.out (2026-11-14 11:16).",
+  "judged": {
+    "title": "Judged sort (6 items, CPU)",
+    "args": ["--mode", "sort", "--items", "6", "--background", "cardboard", "--type", "auto",
+             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--anomaly-device", "CPU",
+             "--decide", "top", "--views", "coverage", "--watch-timeout", "300"]
+  },
+  "judged_npu": {
+    "title": "Judged sort (6 items, NPU)",
+    "args": ["--mode", "sort", "--items", "6", "--background", "cardboard", "--type", "auto",
+             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--anomaly-device", "NPU",
+             "--decide", "top", "--views", "coverage", "--watch-timeout", "300"]
+  },
+  "judged_typeclf": {
+    "title": "Judged sort + type classifier (needs a release with --type-clf)",
+    "args": ["--mode", "sort", "--items", "6", "--background", "cardboard", "--type", "auto",
+             "--anomaly-bundle", "models/each_cardboard_v4/bundle_m103.json", "--anomaly-device", "CPU",
+             "--decide", "top", "--views", "coverage", "--watch-timeout", "300",
+             "--type-clf", "models/type_clf_v1/type_clf.json"]
+  },
+  "collect_socket_m16": {
+    "title": "Collect good socket_m16 (10 reps)",
+    "args": ["--mode", "collect", "--background", "cardboard", "--label", "good", "--type", "socket_m16",
+             "--reps", "10", "--views", "coverage", "--watch-timeout", "300"]
+  },
+  "collect_hex_bolt_short": {
+    "title": "Collect good hex_bolt_short (10 reps)",
+    "args": ["--mode", "collect", "--background", "cardboard", "--label", "good", "--type", "hex_bolt_short",
+             "--reps", "10", "--views", "coverage", "--watch-timeout", "300"]
+  }
+}

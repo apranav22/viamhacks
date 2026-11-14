@@ -10,6 +10,7 @@ One loop at a time: start refuses while any sort.py runs on the station (or on t
 import argparse
 import asyncio
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -35,7 +36,8 @@ def laptop_ip():
 async def main(a):
     async with await connect() as m:
         if a.cmd == "start":
-            if subprocess.run(["pgrep", "-f", "sort.py --mode"], capture_output=True).returncode == 0:
+            # Windows has no pgrep (FileNotFoundError before); the local check only matters where sort.py can run locally
+            if shutil.which("pgrep") and subprocess.run(["pgrep", "-f", "sort.py --mode"], capture_output=True).returncode == 0:
                 raise SystemExit("a sort.py loop runs on this laptop; stop it first")
             rc, out = await execute(m, "pgrep -f 'python3.12 -u sort.py' || true")
             if out.strip():
