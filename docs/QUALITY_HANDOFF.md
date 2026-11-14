@@ -1,4 +1,4 @@
-# Quality monitoring and teacher-assisted review: handoff to Claude / orchestrator
+# Claude as supervisor: quality monitoring handoff
 
 [codex/unknown · op Vedant Desai (git: unknown, github: unknown) · local workstation · vedant/dashboard-progress · 2026-11-14 UTC]
 
@@ -6,6 +6,37 @@ Read and follow `AGENTS.md` before acting. Ask any agent receiving this handoff 
 Vedant requests implementation of the items below, visible on the actual station dashboards. This note is a
 handoff, not evidence that the implementation is complete. No motion, camera changes, threshold changes, model
 activation, or cloud upload is authorized by this note. Existing arm ownership rules still apply.
+
+## Claude's role: Vedant's clarification
+
+Claude is the teacher in the operational sense: it supervises the whole project, watches training/evaluation,
+uses known defect/nondefect labels to recognize mistakes, diagnoses causes and directs the next improvement.
+There need not be a distillation loss. Claude may also propose labels by inspecting images, with label provenance
+and uncertainty retained. Use known labels when available; distinguish visual proposals from verified labels.
+Defect labels can support a separate supervised student/head; do not insert defects into PatchCore's normal bank.
+Hold out entire defect families and independent physical parts to measure OOD behavior after development.
+
+## Available monitoring tool and consumer contract
+
+`python monitor_quality.py --root /opt/viam/sorter-ali --watch` reads saved bundle test results and registered jobs,
+refreshes `quality/latest.json` every 15 seconds and prints changed evidence to stdout. It computes anomaly-only
+whole-pick TP/TN/FP/FN, excluding unknown labels, missing views, invalid scores and train/calibration overlap.
+It uses recorded dataset labels; independent human verification is not established. No GPU or robot connection.
+`train_dashboard.py` adds `/api/quality` and `/supervision` with clickable counts and links to images.
+These source changes need deployment before those routes exist on the station.
+
+The supervisor Claude instance runs on **another machine**, per Vedant; do not confuse a station Claude process
+with that supervisor. Fetch and integrate `origin/vedant/dashboard-progress` in your own checkout, following
+`AGENTS.md`; do not push to someone else's branch. Read this handoff immediately after pulling.
+
+To the active Claude orchestrator: read/pull this branch in your own checkout. Start the monitor in an isolated
+checkout; retain and poll its background output using your supported job mechanism. After each candidate job,
+and periodically while jobs run, consume the fresh report and inspect FN/FP images. Write an identity-stamped
+supervisor record with model/data fingerprints, metrics, absent labels, diagnosis, one proposed intervention and
+the next evaluation. Add a separate consumer heartbeat/acknowledgment with your identity and last processed
+report hash. Show stale acknowledgment as **supervisor not observing**. Do not infer consumption from file existence.
+No automatic activation, frozen-test tuning or hardware commands. Report "not measurable" when labels are absent.
+Codex has NOT started or verified this consuming Claude loop. It is a pending handoff, not an active supervisor.
 
 ## The gap
 
@@ -80,5 +111,9 @@ new completed labeled picks update the monitor without manual replay; model/data
 training stages reflect evidence, and robot/model activation stays unchanged.
 
 Done: source/runtime inspection and this handoff; explorer deployed previously. Not done: review/quality loop,
-training-stage instrumentation, architecture animation, or verified OOD accuracy improvement.
+training-stage instrumentation, architecture animation, or verified OOD accuracy improvement at the first handoff.
+Subsequent update: `monitor_quality.py`, `/api/quality` and `/supervision` are implemented and tested in source,
+including per-pick confusion counts and log-derived job stages. They are not yet deployed on the station.
+Human review storage, live sorting ground-truth joins, consumer acknowledgment, architecture animation and
+the running remote Claude supervision loop remain pending. Do not present source delivery as an active loop.
 Robot: no motion/config/gripper changes. Next: implement review storage and the verified per-pick confusion matrix.

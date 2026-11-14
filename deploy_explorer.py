@@ -36,7 +36,7 @@ async def main():
         rc, output = await execute(machine, 'mkdir -p ' + shlex.quote(target))
         if rc:
             raise RuntimeError(output)
-        for name in ('train_dashboard.py', 'data_explorer.py', 'data_explorer.html'):
+        for name in ('train_dashboard.py', 'data_explorer.py', 'data_explorer.html', 'monitor_quality.py', 'quality_supervision.html'):
             await upload(machine, root / name, target + '/' + name)
             print('Verified upload:', name)
         setup = '''from pathlib import Path
