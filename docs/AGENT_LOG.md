@@ -711,3 +711,85 @@ Robot: untouched. No commits.
   over the pad), stayed put; cycle 2 picked it lying (aspect 4.51) with all coverage views (oblique +-45, under, end_a,
   end_b), placed back. 22.7 s for the real cycle. No controller error. Run tagged label test:upright (auto-shared).
 - ARM released (watch pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 12:35]
+- ARM taken: collection socket_m16, --reps 25.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 12:52]
+- socket_m16 run 20261114_104102_collect: 25 items, 23 with all views; items 11 and 23 dropped during view under (heavy part, grip near head). Pushed to HF post-run (b5eacd4).
+- sort.py: oblique looks keep the sharper of two frames 0.2 s apart (sharper_wrist_jpeg). Deployed. ARM released at WATCH.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 12:55]
+- ARM taken: collection hex_bolt_short, --reps 25, release 20261114_125026.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:00]
+- PatchCore on coverage-pipeline data (station, no robot, Arc GPU feature extraction, niced; collection keeps running):
+  train_anomaly.py --type each --background cardboard -> models/pc_coverage_v1 from the 7 coverage runs
+  (20261114_090848/092312/093446/093856/100113/101431/104102; 090722 speed-test and 084057 tilt-view runs excluded).
+  New exp_coverage_anomaly.py evaluates any bundle (PatchCore or EfficientAD, same contract) per view: held-out good
+  false rejects, seeded SYNTHETIC defects (tape/marker/cutpaste/chip; sensitivity proxy only), and day-1 REAL
+  defects (top view only: no real coverage-view defects exist yet). Report runs/_analysis/ali-pc_coverage_v1-coverage-eval.json.
+  Script/log: /opt/viam/sorter-ali/exp/ali-patchcore/. Not activated anywhere.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline (uncommitted) · 2026-11-14 13:00]
+- Demo decision rule in sort.py (operator request): the first capture that is not clean (tape / anomaly / failed score
+  on a modeled view) -> no more captures, straight to the reject drop (top and oblique defects skip the remaining
+  obliques and every webcam view; the arm only reaches the first checkpoint over reject). Good only when EVERY modeled
+  capture is clean; a modeled view that was skipped (path blocked) is now "uncertain: <view> not captured". Views with no
+  model for any type (coverage obliques/end/under) stay evidence only. --decide top unchanged.
+- Top view now scored right after the look, before the obliques (score_top): fixes --type auto's type first. Before,
+  coverage obliques ran with the previous item's type (item 1: unknown_type -> uncertain reject). Per-item type reset.
+- config/part_sizes.json <- models/part_sizes_v4.json (same part_sizes.py method; 4 shared types identical; LONGEST_PART_MM
+  unchanged at 76.9). The old 4-type table silently routed socket_thin_long/short -> button_ss_long, hex_nut ->
+  hex_bolt_short under --type auto.
+- Sort-mode start guards (before any motion): need --anomaly-bundle, --type auto|<type>, a top model per loaded type, and
+  every loaded type in the size table.
+- tests/test_sort_decision.py 11/11. Full suite 85: only the 3 pre-existing OpenVINO-not-installed errors on the laptop.
+- NOT deployed, NOT run on the arm. Robot untouched.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:25]
+- pc_coverage_v1 done (24 models, 4 types x 6 views). Report runs/_analysis/ali-pc_coverage_v1-coverage-eval.json.
+  Held-out good whole-pick rejects: hex 0/14, thin_long 0/3, m16 1/5, button 3/7 (button under 2/7, obl+45 1/7).
+  Synthetic (sensitivity proxy): tape/chip/marker AUROC ~0.9-1.0 on most views; cutpaste weak on obliques (0.5-0.7);
+  button/thin_long TOP view nearly blind to cutpaste/chip (AUROC ~0.5).
+  Day-1 real top defects: hex 12/12, m16 12/12, button 3/4. Session-shift control (day-1 GOOD top, same models):
+  hex 3/26 rejected, button 0/21 -> real separation; m16 26/37 rejected -> m16 day-1 result is session/specimen
+  shift, NOT evidence of defect detection.
+- effad_coverage_v1 (same runs/splits, all 6 views) training on the Arc GPU; log exp/ali-patchcore/run_effad.log.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:05]
+- hex_bolt_short run 20261114_105053_collect stopped at item 21 (missed grasp): 20 items, post-run HF push.
+- ARM taken: collection hex_nut with coverage views (first try of the new pipeline on nuts), --reps 25.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:12]
+- hex_nut run 20261114_110230_collect stopped at item 5 WATCH (nut stuck to finger after release). sort.py --shake-release (default 2 for *nut): close+reopen at set-down height. Release 20261114_130132.
+- ARM taken: hex_nut collection restart, --reps 21.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:18]
+- A dashboard-launched sort run (pid 895327, --mode sort --type auto, started 11:04 station time, not mine) held the arm; operator said take over: stopped at item 4 WATCH after 3 sorted items. Nut went to a bin.
+- ARM taken: hex_nut collection, --reps 21, waits at WATCH for the nut.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/judges-presentation · 2026-11-14 13:22]
+- hex_nut first grasp missed (run 20261114_110822_collect). sort.py: collect mode allows grasp retries (poses.json retries 2, jaws +90 = +30 on a hex) for *nut types only. Release 20261114_130927. Restarting hex_nut --reps 21.
+
+[claude-code/claude-opus-5-5 · op Ali · ali-macbook · new-pipeline · 13:09]
+- Arm-moving warning restored for station runs. Cause: since telemetry moved to the station dashboard (UDP 8776), the
+  macOS `afplay`/`say` warning in dashboard/server.py runs on the speakerless station and fails silently.
+  Fix: dashboard/app.js `armAlarm` plays it in the viewer's browser (chime + "Robot arm moving. Stand clear." on the run
+  event, ping on PICK/PLACE, non-macOS runs only, silent during backlog replay). Sound on/off button in the header;
+  one click on the page is needed before the browser allows audio.
+- Deployed by patching only app.js, index.html, style.css in web-releases/20261114_111617/app/dashboard (the
+  viamhacks-dashboard service dir), after confirming no sort.py was running; backup in
+  dashboard/.bak-armsound-130920/. index.html kept the station's newer Models section (not in git) with only the
+  button added. Restarted viamhacks-dashboard only. No deploy_station.py, `current`, sort.py, station_run.py or ops/
+  (Stream Deck, on pranav/fast-carry) touched. Revert: copy the backup files back and restart the service.
+- Not yet heard on a live run. No arm motion by this agent. Other agents: follow AGENTS.md.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · new-pipeline · 2026-11-14 13:40]
+- Ported safety fixes from origin/pranav/fast-carry into sort.py: self.pose set at the start of pick() (6fce3a1, 12:31
+  demo crash); jmove reads joints back and raises ArmFault + arm.stop() when a move ends >1 deg short (df52799: the
+  module clears C60 silently); arm.stop() on any exception in the run loop (AGENTS.md). Path-blocked is now its own
+  PathBlocked exception and the 5 jmove fallback/skip sites catch only that, so an ArmFault is never swallowed as a
+  skipped view. Not taken: waypoint-chain straight moves, still-frame gate, upright high-retry, pipelined view scoring,
+  demo.py / ops console.
+- Tests: 87 run, only the 3 pre-existing OpenVINO-not-installed errors. NOT deployed, NOT run on the arm.

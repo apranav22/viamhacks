@@ -232,6 +232,31 @@ class AnomalyModels:
             self.models[key] = (entry, compiled, request, shape, outputs)
         return list(self.models)
 
+    def modeled_views(self, pose, background):
+        """Views with at least one loaded model. A view outside this set (e.g. a new coverage view nobody trained yet)
+        is evidence only; a view inside it must score clean before a part may go to good."""
+        return {e["view"] for e, *_ in self.models.values() if e["pose"] == pose and e["background"] == background}
+
+    def reset_item(self):
+        """Forget the previous part's measured size/type: webcam views must never reuse the last item's type."""
+        self.last_size, self.last_type = None, None
+
+    def readiness(self, part_type, pose="lying"):
+        """Reasons a sort run would reject parts for configuration (not appearance) reasons; empty = ready."""
+        loaded = {e["part_type"] for e, *_ in self.models.values()}
+        if not loaded:
+            return ["no model loaded for this type/background"]
+        problems = []
+        no_top = sorted(t for t in loaded if not any(e["part_type"] == t and e["view"] == "top" and e["pose"] == pose
+                                                     for e, *_ in self.models.values()))
+        if no_top:
+            problems.append(f"no {pose} top-view model for {no_top} (top is always required)")
+        if part_type == "auto":
+            unsized = sorted(loaded - set(self.sizes))
+            if unsized:
+                problems.append(f"--type auto can't route to {unsized}: missing from the size table (config/part_sizes.json)")
+        return problems
+
     def crop(self, image, bbox, view, mm_per_px=None):
         """Model crop; for the top view with mm_per_px also measures the part (length, width, sqrt area in mm)."""
         if view == "top" and self.policy == "part-top-v2":

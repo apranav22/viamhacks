@@ -12,6 +12,19 @@
   ],
   "n": 30
  },
+ "socket_thin_long": {
+  "median": [
+   67.12,
+   8.69,
+   17.98
+  ],
+  "spread": [
+   9.5,
+   1.43,
+   3.03
+  ],
+  "n": 20
+ },
  "socket_m16": {
   "median": [
    69.45,
@@ -24,6 +37,32 @@
    3.63
   ],
   "n": 40
+ },
+ "socket_thin_short": {
+  "median": [
+   50.68,
+   7.54,
+   14.94
+  ],
+  "spread": [
+   5.14,
+   2.36,
+   1.81
+  ],
+  "n": 7
+ },
+ "hex_nut": {
+  "median": [
+   19.9,
+   19.06,
+   16.34
+  ],
+  "spread": [
+   3.3,
+   3.27,
+   2.21
+  ],
+  "n": 21
  },
  "button_ss_long": {
   "median": [
@@ -51,5 +90,5 @@
   ],
   "n": 10
  },
- "_comment": "Top-view size per type (mm: length, width, sqrt area) from part_crop at the 190 mm look; median and 1.4826*MAD+0.5. part_sizes.py 2026-11-13 19:41 over 6 runs."
+ "_comment": "Top-view size per type (mm: length, width, sqrt area) from part_crop at the 190 mm look; median and 1.4826*MAD+0.5. part_sizes.py 2026-11-13 18:54 over 15 runs. Copied from models/part_sizes_v4.json 2026-11-14 by claude-code/claude-opus-5-5 (op Ali): the live table had 4 of the 7 types in each_cardboard_v4, so --type auto misrouted or rejected hex_nut, socket_thin_long, socket_thin_short. Shared types unchanged."
 }

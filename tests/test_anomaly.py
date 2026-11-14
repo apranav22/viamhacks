@@ -148,7 +148,7 @@ class AnomalyTests(unittest.TestCase):
             s.web_jpeg=web;s.jmove=move;s.mv=SimpleNamespace(finger_pos=jaw)
             decision,reason,_,_=asyncio.run(s.inspect())
             self.assertEqual(decision,'reject');self.assertIn('unavailable',reason)
-            async def blocked(*a,**kw): raise RuntimeError('blocked path')
+            async def blocked(*a,**kw): raise loop.PathBlocked('blocked path')
             s.jmove=blocked
             with self.assertRaisesRegex(RuntimeError,'No inspection checkpoint reached'):
                 asyncio.run(s.inspect())
