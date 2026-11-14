@@ -256,8 +256,10 @@ class Console:
         sort.py while one runs."""
         if preset not in self.presets:
             return 409, {"error": f"unknown preset {preset!r}", "presets": list(self.presets)}
-        args = " ".join(shlex.quote(x) for x in [*self.presets[preset]["args"], "--dash-host", "127.0.0.1"])
-        rc, out = self.st.sh(f"{SORT_Q} >/dev/null && echo ALREADY_RUNNING || (cd {BASE}/current && setsid nohup "
+        args = " ".join(shlex.quote(x) for x in self.presets[preset]["args"])     # --dash-host defaults to 127.0.0.1
+        # "cwd": a wrapper named sort.py elsewhere (ops/multi/sort.py), so the pgrep guards still see the run
+        cwd = shlex.quote(self.presets[preset].get("cwd", f"{BASE}/current"))
+        rc, out = self.st.sh(f"{SORT_Q} >/dev/null && echo ALREADY_RUNNING || (cd {cwd} && setsid nohup "
                              f"{BASE}/.venv/bin/python3.12 -u sort.py {args} > {LOG} 2>&1 < /dev/null & echo STARTED)")
         if "STARTED" not in out:
             return 409, {"error": out.strip() or "start not confirmed"}

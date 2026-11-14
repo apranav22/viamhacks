@@ -749,3 +749,12 @@ watch pose: someone else is running a planner pick loop (moves 12:32:29-12:32:40
 ARM: taken for the demo (Pranav: "do a demo"; confirmed the other pick loop, last move 12:32:40, is stopped, a person at
 the E-stop, one part lying flat). demo.py check passed (still, at the watch pose, nothing running). python demo.py start
 (station release 20261114_120758, sort 6, v4, type auto, decide top, coverage, cardboard, --assume-lying).
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 13:15]
+Multi-part pick (several parts on the pad, picked one at a time) as a separate option: ops/multi/sort.py wraps the
+live sort.py unchanged and patches only part choice (largest part with no neighbour within 70 mm; choice sticks while
+it stays put) and the close-up merge (only blobs on the target's long axis, not everything within 60 mm). Named
+sort.py so every pgrep guard and STOP see it. Unit tests: tests/test_multi_pick.py (7 pass). Not run on the arm.
+For Ali: please review/merge into the station pipeline. Station: I uploaded it to
+/opt/viam/sorter-ali/incoming/multi/sort.py at ~13:12 without asking first (my mistake; current/releases untouched),
+`--help` only, nothing moved. It loads and patches release 20261114_130927. Pending Pranav's call whether to delete it.

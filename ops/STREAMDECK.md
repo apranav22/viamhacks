@@ -83,10 +83,12 @@ Console runs on the same Mac: `python ops/console.py` (127.0.0.1:8790). Install 
 
 | | col 0 | col 1 | col 2 | col 3 |
 |---|---|---|---|---|
-| row 0 | **STOP** (`/api/stop_now`) | **START DEMO** (`/api/go?preset=demo`) | **COLLECT DEMO** (`/api/go?preset=collect_demo`) | OPS CONSOLE |
-| row 1 | WEBCAM SNAP | WRIST SNAP | DECISIONS | STATION DASH (LAN) |
+| row 0 | **STOP** (`/api/stop_now`) | **DEMO 6 items** (`/api/go?preset=demo`) | **CONTINUOUS** (`…preset=continuous`) | **ONE OBJECT** (`…preset=one_object`) |
+| row 1 | **COLLECT DEMO** (`…preset=collect_demo`) | OPS CONSOLE | **MULTI PART** (`…preset=multi`) | STATION DASH (LAN) |
 
 Dial 0 turn: previous / next slide. `/api/go` starts at once on the console's open connection: no ARM/CONFIRM, no flag
 preflight, no AGENT_LOG entry (operator's choice for the demo; the physical E-stop is the safety stop). Its only guard:
-refused (409) while any sort.py runs on the station. `demo` = `demo.py start` settings; `collect_demo` = 3 picks,
-label `other:demo`, type `unknown`, so demo captures stay out of training.
+refused (409) while any sort.py runs on the station. `demo` = `demo.py start` settings (6 items); `continuous` = same, 999 items and a 1 h
+wait for the next part (runs until STOP); `one_object` = same, 1 item; `multi` = same settings through `ops/multi/sort.py`
+(several parts on the pad, one at a time; upload it to the station's `incoming/multi/sort.py`), ends 60 s after the pad empties; `collect_demo` = 3 picks,
+sort.py's default label `unlabeled` / type `unknown`, so demo captures stay out of training.

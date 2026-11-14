@@ -7,8 +7,8 @@ Writes straight into ~/Library/Application Support/com.elgato.StreamDeck/Profile
 start, so it is quit first and reopened). Re-running replaces the same profile; other profiles are untouched.
 Layout (key ids "col,row"), see ops/STREAMDECK.md:
 
-    row 0   STOP          START DEMO   COLLECT DEMO    OPS CONSOLE
-    row 1   WEBCAM SNAP   WRIST SNAP   DECISIONS       STATION DASH
+    row 0   STOP          DEMO 6 items CONTINUOUS      ONE OBJECT
+    row 1   COLLECT DEMO  OPS CONSOLE  MULTI PART      STATION DASH
     dial 0  turn: previous / next slide (arrow keys to the focused window)
 """
 import argparse
@@ -38,12 +38,12 @@ def keys(c):
     o = lambda u: ("open", u)               # noqa: E731  open in the default browser
     return {
         (0, 0): ("STOP", RED, g("/api/stop_now")),
-        (1, 0): ("START\nDEMO", GREEN, g("/api/go?preset=demo")),
-        (2, 0): ("COLLECT\nDEMO", ORANGE, g("/api/go?preset=collect_demo")),
-        (3, 0): ("OPS\nCONSOLE", BLUE, o(f"{c}/")),
-        (0, 1): ("WEBCAM\nSNAP", GRAY, o(f"{c}/api/snapshot?cam=overview-cam")),
-        (1, 1): ("WRIST\nSNAP", GRAY, o(f"{c}/api/snapshot?cam=cam")),
-        (2, 1): ("DECISIONS", GRAY, o(f"{c}/api/decisions")),
+        (1, 0): ("DEMO\n6 items", GREEN, g("/api/go?preset=demo")),
+        (2, 0): ("CONTIN-\nUOUS", GREEN, g("/api/go?preset=continuous")),
+        (3, 0): ("ONE\nOBJECT", GREEN, g("/api/go?preset=one_object")),
+        (0, 1): ("COLLECT\nDEMO", ORANGE, g("/api/go?preset=collect_demo")),
+        (1, 1): ("OPS\nCONSOLE", BLUE, o(f"{c}/")),
+        (2, 1): ("MULTI\nPART", GREEN, g("/api/go?preset=multi")),
         (3, 1): ("STATION\nDASH", BLUE, o(STATION_DASH)),
     }
 
