@@ -604,3 +604,16 @@ Backbone bake-off, top view, cardboard, leave-one-run-out (exp_backbone_eval.py,
 defects caught with 0 good rejected (margin 1.03): ResNet-18 PatchCore 10/28, DINOv2-S 3/28, DINOv3-S 11/28, DINOv3-S+ 12/28.
 At margin 1.0 all ResNet-18/DINOv3 variants catch 12/28 with 7 good rejected. CPU torch: 14.8 / 88.8 / 145 / 185 ms per crop.
 DINOv3 recovers DINOv2's gap but adds ~2 defects at 10-12x the cost; keeping ResNet-18 for deployment. Next: EfficientAD.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 12:15]
+CORRECTION to my 11:40 entry: the "FR 0" whole-pick numbers in exp_backbone_eval summaries are in-sample (threshold from
+all good picks incl. the one tested). Held-out, the real issue was lopsided run splits (socket_m16 3 vs 37 picks,
+hex_bolt_short 1 vs 10) testing against tiny banks. tools/threshold_replay.py rescores saved per-pick scores with the
+threshold from OTHER runs only, folds whose model saw >= 10 good picks (deployment-like): 28 defects, 59 good.
+  rule                  ResNet-18            DINOv3-S             DINOv3-S+
+  max good x1.03 (now)  10/28 caught, 3/59   11/28, 3/59          12/28, 3/59
+  p95 of good scores    25/28, 6/59          28/28, 4/59          28/28, 5/59
+=> The threshold rule is the big lever (recall x2.5 for a few % good rejects); DINOv3-S is best at p95.
+Position-aware matching (--local-radius 2): no gain for either backbone (ResNet 9/28, DINOv3 10/28 at the old rule).
+Station device bench (tools/device_bench.py): type classifier CPU 12.8 / GPU 1.0 / NPU 1.1 ms; each_cardboard_v4
+hex_bolt_partial top model CPU 12.2 / GPU f32 23.5 / NPU 10.3 ms (NPU compiles here; score agreement NOT checked yet).
