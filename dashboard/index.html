@@ -33,15 +33,18 @@
   <details class="feed" open><summary>Camera feed <span id="feed-age" class="subtle"></span></summary><div class="feed-tools"><label for="camera">Camera<select id="camera" aria-label="Camera"><option value="cam">Wrist</option><option value="overview-cam">Webcam</option></select></label></div><div class="feed-image"><img id="feed-image" alt="Latest camera frame" hidden><p id="feed-empty" class="subtle">No camera frames received</p></div><span id="feed-age-visible" class="subtle"></span></details>
 </section>
 <section id="history" aria-label="Historical captures"><label class="run-picker" for="history-run">Run<select id="history-run" aria-label="Run"><option value="">Loading…</option></select></label></section>
-<section id="models" hidden aria-label="Model comparison">
-  <div class="mc-head"><div><h2>Model progress since this morning</h2><p id="mc-sub" class="mc-sub">Loading…</p></div><label>Benchmark<select id="model-benchmark" aria-label="Benchmark"><option>Loading…</option></select><span id="model-benchmark-count" class="subtle"></span></label></div>
-  <ol id="mc-steps" class="mc-steps" aria-label="Each step compared with the morning baseline"></ol>
-  <div class="mc-compare-head"><h2>Failures side by side</h2><div class="mc-pickers"><label>Before<select id="mc-before" aria-label="Before"></select></label><button id="mc-swap" type="button" aria-label="Swap before and after">⇄</button><label>After<select id="mc-after" aria-label="After"></select></label></div></div>
-  <p id="mc-verdict" class="mc-verdict" aria-live="polite"></p>
-  <div id="mc-filters" class="mc-filters" aria-label="Which items to show"></div>
-  <p id="model-empty" class="subtle" hidden></p>
-  <div id="mc-grid" class="mc-grid"></div>
-  <p class="subtle mc-foot">Same 62 saved top-camera images replayed through every version; recorded collection labels. Click an item to open it in History. <button id="model-details-open" type="button" class="mc-link">How this is measured</button></p>
+<section id="models" hidden aria-label="Model benchmarking">
+  <div class="mb-head"><div><h2>Model benchmarking</h2><p id="mb-sub" class="subtle">Loading…</p></div><button id="model-details-open" type="button" class="mb-link">How this is measured</button></div>
+  <div id="mb-sets" class="mb-sets" aria-label="Evaluation set"></div>
+  <p id="mb-set-note" class="subtle mb-set-note"></p>
+  <div class="mb-board-wrap"><table class="mb-board"><thead><tr><th title="Model A">A</th><th title="Model B">B</th><th>Model</th><th>Pictures by role</th><th class="num">Defects caught</th><th class="num">Missed</th><th class="num">Good wrongly rejected</th><th class="num">Uncertain</th><th class="num">Accuracy</th></tr></thead><tbody id="mb-board"></tbody></table></div>
+  <section class="mb-h2h" aria-label="Head to head">
+    <div class="mb-h2h-head"><h2>Head to head</h2><div class="mb-pickers"><label>A<select id="mb-a" aria-label="Model A"></select></label><button id="mb-swap" type="button" aria-label="Swap A and B">⇄</button><label>B<select id="mb-b" aria-label="Model B"></select></label></div></div>
+    <p id="mb-h2h-note" class="subtle"></p>
+    <div id="mb-quad" class="mb-quad"></div>
+    <div class="mb-kinds"><div><h3>Where B beats A</h3><div id="mb-better" class="mb-chips"></div></div><div><h3>Where B loses to A</h3><div id="mb-worse" class="mb-chips"></div></div></div>
+  </section>
+  <section class="mb-gallery-wrap" aria-label="Pictures"><div class="mb-gallery-head"><h2 id="mb-gallery-title">Pictures</h2><span id="mb-gallery-count" class="subtle"></span></div><p id="model-empty" class="subtle" hidden></p><div id="mb-gallery" class="mb-gallery"></div></section>
 </section>
 <p id="error" class="error" role="alert" hidden></p>
 <div class="workbench" id="capture-workbench"><section class="inspection" aria-label="Capture and detection results">
@@ -60,10 +63,14 @@
   <section id="detail-metadata" class="dialog-page" hidden><dl id="record-fields"></dl><button id="download-record">Save full record</button><pre id="raw-record" hidden></pre></section>
   <section id="detail-run" class="dialog-page" hidden><div class="history-extra"><div class="history-tools"><label for="run-search">Find a run<input id="run-search" type="search" placeholder="Run or part type"></label><label for="run-kind">Kind<select id="run-kind" aria-label="Kind"><option value="">All runs</option><option value="collect">Collection</option><option value="sort">Sorting</option><option value="dry">Dry run</option><option value="experiment">Experiment</option><option value="replay">Replay</option></select></label><button id="refresh">Refresh</button></div><p id="history-count" class="subtle">Reading saved captures…</p><details id="run-notes"><summary>Run notes</summary><p id="run-note" class="subtle"></p></details><p class="subtle">Filters update the Run picker. Close Details to select a run.</p></div></section>
 </dialog>
-<dialog id="model-dialog" class="dashboard-dialog" aria-label="How models are compared"><div class="dialog-heading"><h2>How this is measured</h2><button id="model-details-close">Close</button></div>
-  <p class="model-section">Every version scores the same frozen set of saved top-camera images (hashes checked). A version is shown only when every benchmark image is held out of its training and calibration. Defect = positive; uncertain verdicts never count as correct.</p>
-  <p id="model-note" class="subtle model-section"></p>
-  <p class="subtle model-section">Images in the cards are the saved camera frame cropped around the recorded part box for display; the model's own preprocessed input may differ slightly. Tape rule and physical handling are excluded.</p>
-  <div class="model-summary-wrap"><table class="model-table"><thead><tr><th>Version</th><th>Result</th><th>Bundle · device · agent</th></tr></thead><tbody id="model-versions"></tbody></table></div>
+<dialog id="model-dialog" class="dashboard-dialog" aria-label="How models are measured"><div class="dialog-heading"><h2>How this is measured</h2><button id="model-details-close">Close</button></div>
+  <p class="model-section">Every model is run on every saved top-camera picture of a part on cardboard. Each picture is tagged with its role <em>for that model</em>: <b>Training</b> (the model learned from it), <b>Calibration</b> (set its threshold), <b>Held-out</b> (same collection runs, never used for fitting), <b>Unseen run</b> (collected after the model was built). Only Held-out and Unseen numbers measure generalisation; Training and Calibration are sanity checks.</p>
+  <p class="model-section"><b>Benchmark</b> is a frozen set of 62 pictures (34 good, 28 defective) used to compare models on identical images. A model's benchmark score only counts the pictures it never trained or calibrated on.</p>
+  <p class="model-section">Defect = positive. Labels are the recorded collection labels, not an independent review; the same physical part appears in many pictures. Defective parts are never used for training. "Uncertain" means no usable verdict (part type not recognised); the live sorter rejects these, and they never count as correct.</p>
+  <p class="subtle model-section">Routing: <b>size routing</b> picks the part type from the measured size; <b>type classifier</b> uses a ResNet-18 classifier. Models marked "benchmark only" have results on the benchmark pictures only. Top camera only; tape rule excluded.</p>
+</dialog>
+<dialog id="mb-lightbox" class="dashboard-dialog mb-lightbox" aria-label="Picture"><div class="dialog-heading"><h2 id="mb-lb-title"></h2><div class="mb-lb-nav"><button id="mb-lb-prev" aria-label="Previous picture">‹</button><span id="mb-lb-pos" class="subtle"></span><button id="mb-lb-next" aria-label="Next picture">›</button><button id="mb-lb-close">Close</button></div></div>
+  <div class="mb-lb-body"><div class="mb-lb-images"><canvas id="mb-lb-full" width="960" height="540" aria-label="Full camera picture with the part box"></canvas><canvas id="mb-lb-crop" width="480" height="320" aria-label="Part close-up"></canvas><p id="mb-lb-meta" class="subtle"></p><button id="mb-lb-history" type="button">Open in History</button></div>
+  <div class="mb-lb-table"><table class="mb-board"><thead><tr><th>Model</th><th>Role for this model</th><th>Verdict</th><th class="num">Score vs threshold</th></tr></thead><tbody id="mb-lb-rows"></tbody></table></div></div>
 </dialog>
 </body></html>

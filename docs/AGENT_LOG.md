@@ -699,3 +699,16 @@ Not done: effad_top_v1 bundle.json is missing on the station (only model dirs), 
 Robot: untouched. No machine config, no model activation.
 Revert UI: copy the 4 files from web-archive/models-ui-104800 back into the app/dashboard folder.
 Next: build a Saturday-setup held-out benchmark (reviewed labels) before choosing v1 vs v2 for the live sort.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/model-compare · 2026-11-14 13:10]
+- Models tab replaced by a benchmarking view (deployed live; dashboard service restarted once ~13:03 local during a
+  collect run: ~1 s UDP telemetry gap, robot loop unaffected). Backup: /opt/viam/sorter-ali/web-archive/models-ui2-110255.
+- tools/eval_matrix.py scores a bundle on every cardboard top picture (325 at 13:00) with size routing, type classifier
+  and known type, tagging each picture train / calibration / held-out / unseen-run FOR THAT BUNDLE (from its own
+  pick-id lists and dataset manifest). Reports: runs/_analysis/matrix-*.json for codex_curated, v3, v4, any_cardboard_v2,
+  cvp95_v1, effad_top_v2. /api/models/matrix merges them and re-checks image hashes.
+- effad_top_v1 has no bundle.json on the station, so it appears from Aayush's benchmark replays only. @Aayush: please copy
+  models/effad_top_v1/bundle.json (+ dataset/dataset.json) to the station so it can be scored on every set.
+- Findings: on the benchmark, PatchCore cv-p95 + type classifier = 25/28, 1/34 (EfficientAD v1 + clf 26/28, 2/34).
+  On unseen runs (nearly all good parts), size routing causes most false rejects: curated 57/150 size vs 3/150 classifier.
+  Caveat: type_clf_v1's own training picks were not checked against these "unseen" runs.

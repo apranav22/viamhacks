@@ -440,6 +440,13 @@ def make_handler(hub, history=None, runner=None):
                 self.send_header('Location', '/#history')
                 self.end_headers()
                 return
+            if path == '/api/models/matrix':
+                from dashboard.benchmarks import Matrix
+                try:
+                    data = Matrix(history, ROOT / 'config' / 'benchmarks').build()
+                    return self._send(200, json.dumps(finite_json(data), allow_nan=False).encode(), 'application/json')
+                except (FileNotFoundError, ValueError, OSError) as error:
+                    return self._send(404, json.dumps({'error': str(error)}).encode(), 'application/json')
             if path in ('/api/models/benchmarks', '/api/models/compare'):
                 from dashboard.benchmarks import Benchmarks
                 try:

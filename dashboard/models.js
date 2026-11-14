@@ -1,165 +1,174 @@
 /* [claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/model-compare · 2026-11-14]
- * Models tab: every evaluated step against the morning baseline, then failures side by side.
- * Reads only frozen benchmark replays (/api/models/compare). No inference, no robot access. */
+ * Models tab: leaderboard of every model variant on a chosen evaluation set, head to head A vs B, and the pictures
+ * behind every number. Reads /api/models/matrix (saved offline scores). No inference, no robot access. */
 'use strict';
 window.ModelReview=(()=>{
-  const state={data:null,before:null,after:null,filter:'fixed',images:new Map()};
+  const SETS=[
+    ['bench','Benchmark','The same 62 frozen pictures for every model. Pictures a model trained or calibrated on are left out of its count.'],
+    ['test','Held-out','Pictures from the model\'s own collection runs that it never trained or calibrated on.'],
+    ['unseen','Unseen runs','Pictures from runs collected after the model was built: the closest thing to new data.'],
+    ['heldall','All held-out','Held-out plus unseen runs: everything the model never learned from.'],
+    ['calibration','Calibration','Good pictures used to set the model\'s threshold. Sanity check, not generalisation.'],
+    ['train','Training','Good pictures the model learned from. Sanity check: failures here mean the model cannot fit its own data.']];
+  const ROLE={t:'Training',c:'Calibration',h:'Held-out',u:'Unseen run',x:'Not used'};
+  const OUT={caught:'Caught',missed:'Missed',passed:'Passed',false_reject:'Wrongly rejected',uncertain:'Uncertain'};
+  const state={data:null,set:'bench',a:null,b:null,view:null,list:[],lb:0,images:new Map()};
   const el=id=>document.getElementById(id),txt=(id,v)=>{el(id).textContent=v??'';};
-  const ready=()=>(state.data?.versions||[]).filter(v=>v.ready);
-  const byId=id=>(state.data?.versions||[]).find(v=>v.id===id);
-  const wrong=v=>v.counts.missed+v.counts.false_rejects+v.counts.unknown;
-  const sign=n=>n>0?`+${n}`:n<0?`−${-n}`:'±0';
   const pretty=s=>String(s||'').replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
-  const short=v=>v.baseline?'Morning baseline':v.label.replace(/\s*\((trained|Fri)[^)]*\)\s*$/,'');
+  const model=id=>state.data?.models.find(m=>m.id===id);
+  const title=m=>m?`${m.name}${m.pooled?'':m.routing==='type classifier'?' · classifier':' · size'}`:'';
 
-  function outcome(row){
-    // Correct = the verdict the recorded label asks for. Uncertain is never counted as correct.
-    const defect=row.label!=='good';
-    if(row.category==='unknown')return {ok:false,word:'Uncertain',hint:'no usable verdict'};
-    if(defect)return row.category==='detected'?{ok:true,word:'Caught'}:{ok:false,word:'Missed'};
-    return row.category==='good_passed'?{ok:true,word:'Passed'}:{ok:false,word:'Wrongly rejected'};
+  function inSet(cell,pick,set){
+    if(!cell)return false;const r=cell[0];
+    return set==='bench'?pick.bench&&(r==='h'||r==='u'):set==='test'?r==='h':set==='unseen'?r==='u':set==='heldall'?r==='h'||r==='u':set==='calibration'?r==='c':r==='t';
   }
-  function ratio(score){
-    if(score?.status!=='ok'||!(score.threshold>0))return null;
-    return score.score/score.threshold;
+  function outcome(cell,pick){
+    const v=cell[1];if(v==='?')return 'uncertain';
+    return pick.label!=='good'?(v==='r'?'caught':'missed'):(v==='a'?'passed':'false_reject');
   }
+  const ok=o=>o==='caught'||o==='passed';
+  function stats(m,set){
+    const s={n:0,def:0,good:0,caught:0,missed:0,passed:0,false_reject:0,uncertain:0,items:{}};
+    state.data.picks.forEach((p,i)=>{const c=m.cells[i];if(!inSet(c,p,set))return;s.n++;p.label==='good'?s.good++:s.def++;const o=outcome(c,p);s[o]++;(s.items[o]??=[]).push(i);});
+    s.errors=s.missed+s.false_reject+s.uncertain;s.acc=s.n?(s.caught+s.passed)/s.n:null;return s;
+  }
+  function roles(m){const r={t:0,c:0,h:0,u:0};for(const c of m.cells)if(c&&r[c[0]]!=null)r[c[0]]++;return r;}
 
-  function steps(){
-    const list=el('mc-steps'),versions=ready(),base=versions.find(v=>v.baseline)||versions[0];list.replaceChildren();
-    if(!base){txt('mc-sub','No version has verified results on every benchmark item yet.');return;}
-    const best=[...versions].sort((a,b)=>wrong(a)-wrong(b)||b.completed-a.completed)[0];
-    txt('mc-sub',best===base?'No step has beaten the morning baseline yet.':
-      `Best now: ${short(best)}. ${best.counts.detected}/${best.defective} defects caught (${sign(best.counts.detected-base.counts.detected)} vs morning), `+
-      `${best.counts.false_rejects}/${best.good} good parts rejected (${sign(best.counts.false_rejects-base.counts.false_rejects)}).`);
-    versions.forEach((v,i)=>{
-      const li=node('li',null,'mc-step'+(v===base?' base':'')+(v.id===state.after?' active':'')+(v===best&&v!==base?' best':''));
-      const head=node('div',null,'mc-step-head');
-      head.append(node('span',v===base?'Start':`Step ${i}`,'mc-step-n'));
-      if(v===best&&v!==base)head.append(node('span','Best','mc-tag'));
-      li.append(head,node('strong',short(v),'mc-step-title'));
-      const bits=[v.family==='efficientad-s'?'EfficientAD-S':'PatchCore',v.type_clf?'type classifier':'size routing'];
-      if(v.train_picks)bits.push(`${v.train_picks} training picks`);
-      li.append(node('p',bits.join(' · '),'subtle mc-step-sub'));
-      li.append(metric('Defects caught',v.counts.detected,v.defective,v.counts.detected-base.counts.detected,true,v===base));
-      li.append(metric('Good parts rejected',v.counts.false_rejects,v.good,v.counts.false_rejects-base.counts.false_rejects,false,v===base));
-      if(v.counts.unknown)li.append(node('p',`${v.counts.unknown} uncertain (rejected by live policy)`,'subtle mc-unknown'));
-      if(v!==base){li.tabIndex=0;li.setAttribute('role','button');li.title='Compare this step with the morning baseline';
-        const pick=()=>{state.before=base.id;state.after=v.id;sync();};li.onclick=pick;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}};}
-      list.append(li);
-    });
+  function sets(){
+    const box=el('mb-sets');box.replaceChildren();
+    for(const [id,label] of SETS){const b=node('button',label,'mb-set');b.setAttribute('aria-pressed',String(state.set===id));b.onclick=()=>{state.set=id;state.view=null;render();};box.append(b);}
+    txt('mb-set-note',SETS.find(s=>s[0]===state.set)[2]);
   }
-  function metric(name,value,total,delta,higherBetter,isBase){
-    const wrap=node('div',null,'mc-metric'),line=node('div',null,'mc-metric-line');
-    line.append(node('span',name,'subtle'),node('b',`${value}/${total}`));
-    const good=higherBetter?delta>0:delta<0,bad=higherBetter?delta<0:delta>0;
-    if(!isBase)line.append(node('span',sign(delta),'mc-delta'+(good?' up':bad?' down':'')));
-    const bar=node('div',null,'mc-bar'+(higherBetter?'':' inverse')),fill=node('i');fill.style.width=`${total?100*value/total:0}%`;bar.append(fill);
-    wrap.append(line,bar);return wrap;
+  function link(text,view,cls){
+    if(!text||text==='0')return node('span',text,'mb-zero');
+    const b=node('button',text,'mb-num '+(cls||''));b.onclick=()=>{state.view=view;gallery();el('mb-gallery-title').scrollIntoView({behavior:'smooth',block:'start'});};return b;
   }
-
-  function pairs(){
-    const a=byId(state.before),b=byId(state.after);if(!a?.ready||!b?.ready)return [];
-    const left=new Map(a.rows.map(r=>[r.pick+'/'+r.file,r]));
-    return b.rows.map(r=>{const l=left.get(r.pick+'/'+r.file);if(!l)return null;const x=outcome(l),y=outcome(r);
-      return {before:l,after:r,ob:x,oa:y,group:!x.ok&&y.ok?'fixed':x.ok&&!y.ok?'broken':!x.ok&&!y.ok?'still':'both'};}).filter(Boolean);
-  }
-  function compare(){
-    const all=pairs(),count=g=>all.filter(p=>p.group===g).length,a=byId(state.before),b=byId(state.after);
-    const n={fixed:count('fixed'),broken:count('broken'),still:count('still')};
-    const filters=el('mc-filters'),grid=el('mc-grid');filters.replaceChildren();grid.replaceChildren();
-    if(!all.length){txt('mc-verdict','Choose two versions with verified results.');return;}
-    el('mc-verdict').replaceChildren(
-      node('span',`${short(b)} vs ${short(a)}: `),node('b',`fixes ${n.fixed}`,'up'),node('span',' · '),
-      node('b',`breaks ${n.broken}`,n.broken?'down':''),node('span',' · '),node('b',`${n.still} still wrong in both`));
-    for(const [key,label] of [['fixed','Fixed'],['broken','Newly wrong'],['still','Still wrong'],['failures','All failures']]){
-      const total=key==='failures'?all.filter(p=>p.group!=='both').length:n[key];
-      const btn=node('button',`${label} ${total}`,'mc-filter '+key);btn.setAttribute('aria-pressed',String(state.filter===key));
-      btn.onclick=()=>{state.filter=key;compare();};filters.append(btn);
+  function board(){
+    const body=el('mb-board');body.replaceChildren();
+    const rows=state.data.models.map(m=>({m,s:stats(m,state.set)}));
+    rows.sort((x,y)=>(!!y.s.n-!!x.s.n)||(x.s.errors/(x.s.n||1))-(y.s.errors/(y.s.n||1)));
+    const best=rows.find(r=>r.s.n);
+    for(const {m,s} of rows){
+      const tr=node('tr',null,(m.id===state.a?'is-a ':'')+(m.id===state.b?'is-b':''));
+      for(const side of ['a','b']){const td=node('td');const r=document.createElement('input');r.type='radio';r.name='mb-'+side;r.checked=state[side]===m.id;r.setAttribute('aria-label',`Use ${title(m)} as model ${side.toUpperCase()}`);r.onchange=()=>{state[side]=m.id;state.view=null;render();};td.append(r);tr.append(td);}
+      const name=node('td',null,'mb-name');name.append(node('strong',m.name));
+      const tags=node('div',null,'mb-tags');tags.append(node('span',m.family,'mb-tag '+(m.family==='EfficientAD-S'?'ead':'pc')));
+      if(!m.pooled)tags.append(node('span',m.routing,'mb-tag'));
+      if(m.baseline)tags.append(node('span','morning baseline','mb-tag base'));
+      if(m.scope==='benchmark')tags.append(node('span','benchmark only','mb-tag warn'));
+      if(best&&m===best.m&&s.n)tags.append(node('span','best on this set','mb-tag win'));
+      name.append(tags);tr.append(name);
+      tr.append(splitBar(m));
+      if(!s.n){const td=node('td',m.scope==='benchmark'?'Only benchmark results available':'No pictures in this set','subtle');td.colSpan=5;tr.append(td);body.append(tr);continue;}
+      const caught=node('td',null,'num');caught.append(link(`${s.caught}/${s.def}`,{kind:'model',id:m.id,outs:['caught']}),bar(s.def?s.caught/s.def:0,'good'));
+      const fr=node('td',null,'num');fr.append(link(`${s.false_reject}/${s.good}`,{kind:'model',id:m.id,outs:['false_reject']},'bad'),bar(s.good?s.false_reject/s.good:0,'bad'));
+      const missed=node('td',null,'num');missed.append(link(String(s.missed),{kind:'model',id:m.id,outs:['missed']},'bad'));
+      const unc=node('td',null,'num');unc.append(link(String(s.uncertain),{kind:'model',id:m.id,outs:['uncertain']},'warn'));
+      tr.append(caught,missed,fr,unc,node('td',`${(100*s.acc).toFixed(1)}%`,'num mb-acc'));
+      body.append(tr);
     }
-    const shown=all.filter(p=>state.filter==='failures'?p.group!=='both':p.group===state.filter);
-    txt('model-empty',shown.length?'':({fixed:'Nothing fixed between these two versions.',broken:'No new failures: everything the earlier version got right is still right.',still:'No item is wrong in both versions.',failures:'Both versions agree with every recorded label.'})[state.filter]);
-    el('model-empty').hidden=!!shown.length;
-    for(const p of shown)grid.append(card(p,a,b));
   }
-  function side(label,o,row,v){
-    const s=node('div',null,'mc-side '+(o.ok?'ok':'bad'));
-    s.append(node('span',label,'mc-side-label'),node('b',(o.ok?'✓ ':'✗ ')+o.word));
-    const r=ratio(row.score);
-    const detail=r==null?(o.hint||'no routed score'):`${r.toFixed(2)}× threshold`+(row.selected_type&&row.selected_type!==row.type?` · routed as ${pretty(row.selected_type)}`:'');
-    s.append(node('small',detail));
-    return s;
-  }
-  function card(p,a,b){
-    const row=p.after,art=node('article',null,'mc-card '+p.group),thumb=node('div',null,'mc-thumb');
-    const canvas=document.createElement('canvas');canvas.width=360;canvas.height=240;canvas.setAttribute('aria-label',`Camera image of ${pretty(row.type)}, cropped to the part`);thumb.append(canvas);draw(canvas,row);
-    const defect=row.label!=='good';
-    const meta=node('div',null,'mc-meta');
-    meta.append(node('strong',`${pretty(row.type)} · ${defect?'defect: '+row.label:'good part'}`),node('span',row.pick.replace('_collect',''),'subtle'));
-    const pair=node('div',null,'mc-pair');pair.append(side('Before',p.ob,p.before,a),side('After',p.oa,row,b));
-    art.append(thumb,meta,pair);art.tabIndex=0;art.title='Open this capture in History';
-    const open=()=>openHistory(row);art.onclick=open;art.onkeydown=e=>{if(e.key==='Enter')open();};
-    return art;
-  }
-  async function draw(canvas,row){
-    // Display crop of the saved camera image around the recorded bbox (not the model's own preprocessed input).
-    if(!row.bbox){try{const [run,item]=row.pick.split('/'),d=await get('/api/history/item',{run,item});row.bbox=d.captures.find(c=>c.filename===row.file)?.bbox||null;}catch{}}
-    let img=state.images.get(row.image);
-    if(!img){img=new Image();img.decoding='async';img.src=row.image;state.images.set(row.image,img);}
-    const paint=()=>{const ctx=canvas.getContext('2d'),[x0,y0,x1,y1]=row.bbox||[0,0,img.naturalWidth,img.naturalHeight];
-      const cx=(x0+x1)/2,cy=(y0+y1)/2,ar=canvas.width/canvas.height;let w=(x1-x0)*1.5,h=(y1-y0)*1.5;
-      if(w/h<ar)w=h*ar;else h=w/ar;
-      ctx.drawImage(img,cx-w/2,cy-h/2,w,h,0,0,canvas.width,canvas.height);};
-    if(img.complete&&img.naturalWidth)paint();else img.addEventListener('load',paint,{once:true});
-    img.addEventListener('error',()=>canvas.replaceWith(node('p','Image unavailable','subtle')),{once:true});
-  }
-  async function openHistory(row){
-    const [run,item]=row.pick.split('/');ui.evaluationChoice=state.after;mode('history');await loadRun(run,item);
-    if(ui.mode==='history'&&ui.run===run&&ui.item===item){const c=ui.detail?.captures?.find(c=>c.filename===row.file);if(c){ui.selected.set(captureKey(ui.detail),c.id);render();}}
+  function bar(f,kind){const b=node('div',null,'mb-bar '+kind),i=node('i');i.style.width=`${Math.round(100*f)}%`;b.append(i);return b;}
+  function splitBar(m){
+    const td=node('td',null,'mb-split'),r=roles(m),total=r.t+r.c+r.h+r.u,b=node('div',null,'mb-stack');
+    for(const k of ['t','c','h','u']){if(!r[k])continue;const i=node('i',null,'r'+k);i.style.flex=String(r[k]);i.title=`${ROLE[k]}: ${r[k]}`;b.append(i);}
+    td.append(b,node('small',m.scope==='benchmark'?`${r.h} benchmark pictures`:`${r.t} train · ${r.c} cal · ${r.h} held-out · ${r.u} unseen`,'subtle'));
+    td.title=`${total} pictures scored`;return td;
   }
 
-  function sync(){
-    const entries=ready().map(v=>[v.id,short(v)]);
-    options(el('mc-before'),entries,state.before);options(el('mc-after'),entries,state.after);
-    steps();compare();details();
+  function h2h(){
+    const A=model(state.a),B=model(state.b),entries=state.data.models.map(m=>[m.id,title(m)]);
+    options(el('mb-a'),entries,state.a);options(el('mb-b'),entries,state.b);
+    const quad=el('mb-quad');quad.replaceChildren();el('mb-better').replaceChildren();el('mb-worse').replaceChildren();
+    if(!A||!B||A===B){txt('mb-h2h-note','Pick two different models (A and B columns in the table).');return;}
+    const g={both_right:[],b_better:[],a_better:[],both_wrong:[]};
+    state.data.picks.forEach((p,i)=>{const ca=A.cells[i],cb=B.cells[i];if(!inSet(ca,p,state.set)||!inSet(cb,p,state.set))return;
+      const x=ok(outcome(ca,p)),y=ok(outcome(cb,p));g[x&&y?'both_right':!x&&y?'b_better':x&&!y?'a_better':'both_wrong'].push(i);});
+    const n=Object.values(g).reduce((s,l)=>s+l.length,0);
+    txt('mb-h2h-note',n?`${n} pictures in "${SETS.find(s=>s[0]===state.set)[1]}" for both models. B: ${title(B)}. A: ${title(A)}.`:'These two models share no pictures in this set. Try "All held-out" or "Benchmark".');
+    if(!n)return;
+    for(const [key,label,cls] of [['b_better','B right, A wrong','good'],['a_better','A right, B wrong','bad'],['both_wrong','Both wrong','warn'],['both_right','Both right','']]){
+      const c=node('button',null,'mb-q '+cls);c.append(node('b',String(g[key].length)),node('span',label));c.setAttribute('aria-pressed',String(state.view?.kind==='h2h'&&state.view.cell===key&&!state.view.group));
+      c.onclick=()=>{state.view={kind:'h2h',cell:key,items:g[key]};gallery();};quad.append(c);
+    }
+    chips('mb-better',g.b_better,'b_better');chips('mb-worse',g.a_better,'a_better');
+    if(!state.view)state.view={kind:'h2h',cell:g.b_better.length?'b_better':'a_better',items:g.b_better.length?g.b_better:g.a_better};
   }
-  function details(){
-    const body=el('model-versions');body.replaceChildren();
-    for(const v of state.data?.versions||[]){const tr=node('tr');
-      tr.append(node('td',short(v)),node('td',v.ready?`${v.counts.detected}/${v.defective} caught · ${v.counts.false_rejects}/${v.good} good rejected · ${v.counts.unknown} uncertain`:'Not comparable: '+(v.issues||[]).join('; ')),
-        node('td',[v.bundle,v.device,v.agent].filter(Boolean).join(' · ')));body.append(tr);}
-    txt('model-note',state.data?.benchmark?.limitations||'');
+  function chips(id,items,cell){
+    const box=el(id),groups=new Map();
+    for(const i of items){const p=state.data.picks[i],k=`${pretty(p.type)} · ${p.label==='good'?'good part':'defect: '+p.label}`;(groups.get(k)??groups.set(k,[]).get(k)).push(i);}
+    if(!groups.size){box.append(node('p','None','subtle'));return;}
+    for(const [k,list] of [...groups].sort((a,b)=>b[1].length-a[1].length)){const c=node('button',null,'mb-chip');c.append(node('span',k),node('b',String(list.length)));
+      c.onclick=()=>{state.view={kind:'h2h',cell,group:k,items:list};gallery();el('mb-gallery-title').scrollIntoView({behavior:'smooth',block:'start'});};box.append(c);}
   }
-  async function load(id){
-    try{
-      state.data=await get('/api/models/compare',{benchmark:id});
-      // Tolerate an older server that lacks these fields: derive them from the bundle path / report label.
-      for(const v of state.data.versions){
-        v.baseline??=/codex_curated_/.test(v.bundle||'');v.family??=(/effad/i.test(v.bundle||'')?'efficientad-s':'patchcore');
-        v.type_clf??=/type classifier/i.test(v.source_label||'');
-        for(const r of v.rows||[])r.image??='/api/history/image?path='+encodeURIComponent(r.pick+'/'+r.file);
-      }
-      state.data.versions.sort((a,b)=>(b.baseline-a.baseline)||(a.completed-b.completed));
-      const versions=ready(),base=versions.find(v=>v.baseline)||versions[0];
-      const best=[...versions].sort((a,b)=>wrong(a)-wrong(b)||b.completed-a.completed)[0];
-      if(!byId(state.before)?.ready)state.before=base?.id;
-      if(!byId(state.after)?.ready)state.after=(best!==base?best:versions[versions.length-1])?.id;
-      const m=state.data.benchmark.members,good=m.filter(x=>x.label==='good').length;
-      txt('model-benchmark-count',`${m.length} held-out top-camera picks: ${good} good, ${m.length-good} defective`);
-      state.filter=pairs().some(p=>p.group==='fixed')?'fixed':'failures';
-      sync();
-    }catch(e){txt('model-empty',e.message);el('model-empty').hidden=false;}
+
+  function gallery(){
+    const v=state.view,grid=el('mb-gallery');grid.replaceChildren();
+    for(const b of el('mb-quad').querySelectorAll('.mb-q'))b.setAttribute('aria-pressed','false');
+    if(!v){txt('mb-gallery-title','Pictures');txt('mb-gallery-count','');return;}
+    let list,heading;
+    if(v.kind==='model'){const m=model(v.id),s=stats(m,state.set);list=v.outs.flatMap(o=>s.items[o]||[]);heading=`${title(m)}: ${v.outs.map(o=>OUT[o].toLowerCase()).join(', ')}`;}
+    else{list=v.items;heading={b_better:'B right, A wrong',a_better:'A right, B wrong',both_wrong:'Both wrong',both_right:'Both right'}[v.cell]+(v.group?` · ${v.group}`:'');}
+    state.list=list;txt('mb-gallery-title',heading);txt('mb-gallery-count',`${list.length} picture${list.length===1?'':'s'} · ${SETS.find(s=>s[0]===state.set)[1]}`);
+    el('model-empty').hidden=!!list.length;txt('model-empty','No pictures here.');
+    const A=model(state.a),B=model(state.b),pair=v.kind==='h2h'?[['A',A],['B',B]]:[['',model(v.id)]];
+    list.forEach((i,pos)=>{
+      const p=state.data.picks[i],card=node('article',null,'mb-card'),thumb=node('div',null,'mb-thumb'),c=document.createElement('canvas');c.width=320;c.height=213;thumb.append(c);draw(c,p,1.5);
+      const meta=node('div',null,'mb-meta');meta.append(node('strong',pretty(p.type)),node('span',p.label==='good'?'good part':'defect: '+p.label,'mb-label '+(p.label==='good'?'g':'d')));
+      const verdicts=node('div',null,'mb-verdicts');
+      for(const [k,m] of pair){const cell=m.cells[i],o=outcome(cell,p),d=node('div',null,'mb-v '+(ok(o)?'ok':'bad'));
+        d.append(node('span',k||'Verdict','mb-v-k'),node('b',(ok(o)?'✓ ':'✗ ')+OUT[o]),node('small',cell[2]!=null?`${cell[2].toFixed(2)}× thr`+(cell[3]&&cell[3]!==p.type?` · as ${pretty(cell[3])}`:''):'no score'));verdicts.append(d);}
+      card.append(thumb,meta,verdicts);card.tabIndex=0;card.onclick=()=>open(pos);card.onkeydown=e=>{if(e.key==='Enter')open(pos);};grid.append(card);
+    });
+    if(v.kind==='h2h')for(const b of el('mb-quad').querySelectorAll('.mb-q'))if(b.querySelector('span').textContent===({b_better:'B right, A wrong',a_better:'A right, B wrong',both_wrong:'Both wrong',both_right:'Both right'})[v.cell])b.setAttribute('aria-pressed','true');
+  }
+  function image(p){let img=state.images.get(p.image);if(!img){img=new Image();img.decoding='async';img.src=p.image;state.images.set(p.image,img);}return img;}
+  function draw(canvas,p,pad,box=false){
+    const img=image(p),paint=()=>{const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+      if(!pad){ctx.drawImage(img,0,0,W,H);if(box&&p.bbox){const sx=W/img.naturalWidth,sy=H/img.naturalHeight,[x0,y0,x1,y1]=p.bbox;ctx.lineWidth=3;ctx.strokeStyle='#ffcc00';ctx.strokeRect(x0*sx,y0*sy,(x1-x0)*sx,(y1-y0)*sy);}return;}
+      const [x0,y0,x1,y1]=p.bbox||[0,0,img.naturalWidth,img.naturalHeight],cx=(x0+x1)/2,cy=(y0+y1)/2,ar=W/H;let w=(x1-x0)*pad,h=(y1-y0)*pad;if(w/h<ar)w=h*ar;else h=w/ar;
+      ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.drawImage(img,cx-w/2,cy-h/2,w,h,0,0,W,H);};
+    if(img.complete&&img.naturalWidth)paint();else img.addEventListener('load',paint,{once:true});
+  }
+  function open(pos){state.lb=pos;lightbox();const d=el('mb-lightbox');if(!d.open)d.showModal();}
+  function lightbox(){
+    const i=state.list[state.lb],p=state.data.picks[i];
+    txt('mb-lb-title',`${pretty(p.type)} · ${p.label==='good'?'good part':'defect: '+p.label}`);txt('mb-lb-pos',`${state.lb+1} / ${state.list.length}`);
+    el('mb-lb-prev').disabled=state.lb===0;el('mb-lb-next').disabled=state.lb>=state.list.length-1;
+    draw(el('mb-lb-full'),p,0,true);draw(el('mb-lb-crop'),p,1.3);
+    txt('mb-lb-meta',`${p.pick} · ${p.file}${p.bench?' · in benchmark':''} · recorded label: ${p.label}`);
+    const body=el('mb-lb-rows');body.replaceChildren();
+    for(const m of state.data.models){const c=m.cells[i],tr=node('tr',null,(m.id===state.a?'is-a ':'')+(m.id===state.b?'is-b':''));
+      tr.append(node('td',title(m)));
+      if(!c){tr.append(node('td','Not scored','subtle'),node('td','—'),node('td','—','num'));body.append(tr);continue;}
+      const o=outcome(c,p);tr.append(node('td',ROLE[c[0]],c[0]==='t'||c[0]==='c'?'subtle':''),node('td',(ok(o)?'✓ ':'✗ ')+OUT[o],ok(o)?'clear':'flagged'),
+        node('td',c[2]!=null?`${c[2].toFixed(2)}×`+(c[3]&&c[3]!==p.type?` (as ${pretty(c[3])})`:''):'—','num'));body.append(tr);}
+  }
+
+  function render(){
+    if(!state.data)return;sets();board();h2h();gallery();
+    const d=state.data,good=d.picks.filter(p=>p.label==='good').length;
+    txt('mb-sub',`${d.models.length} model variants · ${d.picks.length} saved top-camera pictures (${good} good, ${d.picks.length-good} defective) from ${d.runs} runs`+(d.mismatched.length?` · ${d.mismatched.length} pictures changed since scoring, left out`:''));
   }
   async function init(){
-    try{const data=await get('/api/models/benchmarks');options(el('model-benchmark'),data.benchmarks.map(b=>[b.id,b.name]),data.benchmarks[0]?.id);
-      if(data.benchmarks.length)await load(data.benchmarks[0].id);else txt('model-empty','No benchmark definitions available.');}
-    catch(e){txt('model-empty',e.message);}
+    try{
+      state.data=await get('/api/models/matrix');const ms=state.data.models;
+      const benchErr=m=>{const s=stats(m,'bench');return s.n?s.errors/s.n:9;};
+      state.a=(ms.find(m=>m.baseline)||ms[0])?.id;state.b=[...ms].filter(m=>m.id!==state.a).sort((x,y)=>benchErr(x)-benchErr(y))[0]?.id;
+      render();
+    }catch(e){txt('mb-sub',e.message);}
   }
-  el('model-benchmark').onchange=e=>load(e.target.value);
-  el('mc-before').onchange=e=>{state.before=e.target.value;sync();};
-  el('mc-after').onchange=e=>{state.after=e.target.value;sync();};
-  el('mc-swap').onclick=()=>{[state.before,state.after]=[state.after,state.before];sync();};
+  el('mb-a').onchange=e=>{state.a=e.target.value;state.view=null;render();};
+  el('mb-b').onchange=e=>{state.b=e.target.value;state.view=null;render();};
+  el('mb-swap').onclick=()=>{[state.a,state.b]=[state.b,state.a];state.view=null;render();};
+  el('mb-lb-prev').onclick=()=>{state.lb--;lightbox();};el('mb-lb-next').onclick=()=>{state.lb++;lightbox();};
+  el('mb-lb-close').onclick=()=>el('mb-lightbox').close();
+  el('mb-lightbox').addEventListener('keydown',e=>{if(e.key==='ArrowLeft'&&state.lb>0){state.lb--;lightbox();}if(e.key==='ArrowRight'&&state.lb<state.list.length-1){state.lb++;lightbox();}});
+  el('mb-lb-history').onclick=async()=>{const p=state.data.picks[state.list[state.lb]],[run,item]=p.pick.split('/');el('mb-lightbox').close();mode('history');await loadRun(run,item);
+    if(ui.mode==='history'&&ui.run===run&&ui.item===item){const c=ui.detail?.captures?.find(c=>c.filename===p.file);if(c){ui.selected.set(captureKey(ui.detail),c.id);render_history();}}};
   el('model-details-open').onclick=()=>el('model-dialog').showModal();
   el('model-details-close').onclick=()=>el('model-dialog').close();
-  return {init,outcome};
+  return {init,outcome,inSet};
 })();
+const render_history=()=>render();
 ModelReview.init();

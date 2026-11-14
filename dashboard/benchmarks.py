@@ -106,3 +106,116 @@ class Benchmarks:
         # Oldest first: the baseline, then each step in the order it was evaluated.
         versions.sort(key=lambda v: (not v['baseline'], v['completed']))
         return dict(benchmark=definition, versions=versions)
+
+
+# [claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/model-compare · 2026-11-14]
+# Model x picture matrix for the Models tab: every variant (bundle x routing) on every saved top-camera picture, with
+# that picture's role for that model. Built from eval-matrix-v1 reports (tools/eval_matrix.py) plus benchmark-only
+# dashboard-replay-v1 reports for bundles with no matrix report. Image identity is re-checked against the saved file.
+SPLIT_CODE = {'train': 't', 'calibration': 'c', 'test': 'h', 'unseen': 'u', 'excluded': 'x'}
+ROUTING = {'size': 'size routing', 'clf': 'type classifier'}
+# Short display names by bundle folder; anything else uses the report's own label.
+NAMES = {'codex_curated_20261114_003525': 'PatchCore curated (morning)', 'each_cardboard_v3': 'PatchCore v3 (Fri)',
+         'each_cardboard_v4': 'PatchCore v4 (Fri night)', 'any_cardboard_v2': 'PatchCore pooled (one model, all types)',
+         'each_cardboard_cvp95_v1': 'PatchCore cv-p95 thresholds', 'effad_top_v1': 'EfficientAD-S v1 (Aayush)',
+         'effad_top_v2': 'EfficientAD-S v2 (+ Sat picks)'}
+
+
+def _bundle_name(path):
+    import re
+    m = re.search(r'models[\\/]+([^\\/]+)[\\/]+[^\\/]+$', str(path or ''))
+    return m.group(1) if m else str(path)
+
+
+def _verdict(score):
+    if not score or score.get('status') != 'ok' or not isinstance(score.get('anomalous'), bool):
+        return '?'
+    return 'r' if score['anomalous'] else 'a'
+
+
+def _ratio(score):
+    try:
+        return round(score['score'] / score['threshold'], 3) if score.get('status') == 'ok' and score['threshold'] > 0 else None
+    except (KeyError, TypeError):
+        return None
+
+
+class Matrix:
+    _digests = {}
+
+    def __init__(self, history, definitions):
+        self.history = history
+        self.benchmarks = Benchmarks(history, definitions)
+
+    def digest(self, relative):
+        try:
+            path = self.history.path(relative)
+            key = (str(path), path.stat().st_mtime_ns)
+        except (OSError, ValueError, FileNotFoundError):
+            return None
+        if key not in self._digests:
+            self._digests[key] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return self._digests[key]
+
+    def build(self):
+        folder = self.history.root / '_analysis'
+        reports = []
+        for path in sorted(folder.glob('*.json')) if folder.is_dir() else []:
+            try:
+                report = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if isinstance(report, dict) and report.get('schema') == 'eval-matrix-v1':
+                reports.append((path, report))
+        picks, index, mismatched = [], {}, set()
+
+        def pick_index(row):
+            key = row['pick'] + '/' + row['file']
+            if key not in index:
+                if self.digest(key) != row.get('image_sha256'):
+                    mismatched.add(key)
+                    return None
+                index[key] = len(picks)
+                picks.append(dict(pick=row['pick'], file=row['file'], type=row.get('type'), label=row.get('label'),
+                                  bench=bool(row.get('bench')), bbox=row.get('bbox'),
+                                  image='/api/history/image?path=' + quote(key, safe='')))
+            return index[key]
+
+        models = []
+        for path, report in reports:
+            rows = [(pick_index(r), r) for r in report.get('rows', [])]
+            covered = {i for i, _ in rows if i is not None}
+            for routing in report.get('routings', ['size']):
+                cells = {}
+                for i, r in rows:
+                    if i is None:
+                        continue
+                    s = r.get(routing) or {}
+                    cells[i] = [SPLIT_CODE.get(r.get('split'), 'x'), _verdict(s), _ratio(s), s.get('type')]
+                models.append(dict(id=f'{path.stem}:{routing}', bundle=_bundle_name(report.get('bundle')),
+                                   name=NAMES.get(_bundle_name(report.get('bundle')), report.get('label', path.stem)), routing=ROUTING.get(routing, routing),
+                                   family='EfficientAD-S' if report.get('model_family') == 'efficientad-s' else 'PatchCore',
+                                   pooled=bool(report.get('pooled')), train_picks=report.get('train_picks'),
+                                   completed=report.get('completed', 0), scope='all', cells=cells, n=len(covered)))
+        # Benchmark-only results for bundles that have no full matrix (e.g. a bundle whose manifest is not on this host).
+        have = {m['bundle'] for m in models}
+        for bench in self.benchmarks.index()['benchmarks']:
+            for v in self.benchmarks.compare(bench['id'])['versions']:
+                if not v['ready'] or _bundle_name(v['bundle']) in have:
+                    continue
+                cells = {}
+                for r in v['rows']:
+                    i = index.get(r['pick'] + '/' + r['file'])
+                    if i is not None:
+                        cells[i] = ['h', _verdict(r['score']), _ratio(r['score']), r.get('selected_type')]
+                models.append(dict(id=f'{v["id"]}:bench', bundle=_bundle_name(v['bundle']),
+                                   name=NAMES.get(_bundle_name(v['bundle']), (v.get('source_label') or v['label']).split(' (')[0]), routing='type classifier' if 'type classifier' in (v.get('source_label') or '') else 'size routing',
+                                   family='EfficientAD-S' if v.get('family') == 'efficientad-s' else 'PatchCore',
+                                   pooled=False, train_picks=None, completed=v.get('completed', 0), scope='benchmark',
+                                   cells=cells, n=len(cells)))
+        for m in models:
+            m['baseline'] = 'codex_curated' in m['bundle'] and m['routing'] == 'size routing'
+            m['cells'] = [m['cells'].get(i) for i in range(len(picks))]
+        models.sort(key=lambda m: m['completed'])
+        return dict(picks=picks, models=models, mismatched=sorted(mismatched),
+                    runs=len({p['pick'].split('/')[0] for p in picks}))
