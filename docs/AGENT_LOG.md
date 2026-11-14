@@ -554,3 +554,34 @@ Run on the station or a laptop with the runs pulled:
   python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --views top --out exp/backbone_top
   python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --out exp/backbone_all   # all views, slower
 Add --device xpu on the station GPU; --no-augment to cut time 4x. Send back exp/*/summary.md and report.json.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker, github: unknown) · Sticker · snapshot (no git) · 2026-11-14 09:55]
+Done:      Backbone eval (run.ps1): ResNet-18 PatchCore 12/28 defects vs DINOv2-S 6/28 at margin 1.0, 14.8 vs 88.8 ms/crop CPU
+           torch, leave-one-run-out, top/cardboard -> exp/backbone_top/summary.md. Keep ResNet-18.
+           Judge log confidence: new vh/confidence.py (threshold margin, not a calibrated probability), written by
+           sort.py finish() for good/reject lines as `confidence` + `confidence_basis`. tests/test_confidence.py 5/5.
+           Replayed on all saved sort logs: tape rejects ~1.0, near-threshold anomaly rejects 0.57-0.70.
+           Latency cause from saved logs: ~385 ms floor = STILL_S 0.3 s + one frame; hand-placed items ~1 s because of
+           HAND_HOLDOFF_S 0.8 s after the hand leaves. Constants NOT changed (safety call for the team).
+           Size routing recheck on 7 types: leave-one-out 128/153 (was 95/101 on 4). Confusions mostly button_ss_long <->
+           socket_thin_short/long (15) and hex_bolt_short -> hex_nut (3). config/part_sizes.json NOT changed.
+           Deck: new "How the pieces connect" step (deploy/system), receipt note updated for confidence, device and
+           recovery talk track carry the two measurements above. tsc + vite build pass; judges-presentation.zip built.
+Not done:  None of this is on the station or tested on the arm. sort.py change is dry-run only (syntax + unit test).
+Robot:     not touched.
+Next:      Port sort.py + vh/confidence.py to the real repo branch, deploy, and check one live line carries confidence.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker, github: unknown) · Sticker · snapshot (no git) · 2026-11-14 11:30]
+Done:      Type classifier for `--type auto`: vh/type_clf.py (OpenVINO ResNet-18 avgpool features + linear head),
+           train_type_clf.py (exports IR, trains through the same OpenVINO path), models/type_clf_v1/ (IR 44.7 MB + head).
+           Eval on 153 good cardboard top crops: leave-one-pick-out 151/153, leave-one-run-out 103/112 (size rule 78/112),
+           type right on 26/28 defective picks never trained on. button_ss_long and socket_thin_long have one run each,
+           so they are untested on a new specimen.
+           vh/anomaly.py: classifier picks the type among loaded banks; the size gate (UNKNOWN_SIZE_DIST 6) still runs first;
+           classifier failure falls back to the size type and says so in `detail`. sort.py: --type-clf (default
+           models/type_clf_v1/type_clf.json, 'none' = size rule; missing file = size rule with a printed note).
+           tests: test_type_clf 3, test_confidence 5, test_anomaly pass (18 total).
+Not done:  Not run with a real anomaly bundle (models/ not in this snapshot). Not on the station. models/type_clf_v1 must be
+           copied to the station (sync_data.py push --models type_clf_v1, or station_shell upload in <=2 MiB chunks).
+Robot:     not touched.
+Next:      Copy models/type_clf_v1 + code to the station, dry-run sort with --type auto, check `detail` says "by classifier".
