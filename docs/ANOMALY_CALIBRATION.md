@@ -114,11 +114,14 @@ that falsely assume all repeated picks are independent.
   calibration-only fitting, invalid scores, operational-vs-detector metrics and immutable output artifacts.
 - Remaining human inputs: verified specimen IDs/roles, numeric good-reject budget, supported category/view recipe.
 
-## Team access to the private dataset
+## Team access to the dataset
 
-Ali is currently `aliriz` with no HF org. Create a free org at https://huggingface.co/organizations/new, then use its
-**Settings → Members → Invite members** to invite teammates using their HF accounts. Give data contributors write
-permission and readers read permission as appropriate. Send the org slug to the operator of the sync setup.
-Move `aliriz/armfarm04-fastener-runs` into that org, then update BOTH `config/data_repo.json` and `VH_DATA_REPO` in the
-installed station cron wrapper. Verify access with a teammate's own login. Nobody needs Ali's token. A scoped station
-token remains preferable to the currently installed full-access token.
+Ali made https://huggingface.co/datasets/aliriz/armfarm04-fastener-runs public. Anonymous index download is verified:
+28 runs and 8 models at commit `9fec29754efb4df0481589808217847476d7ef61`. No login or invite is needed to read it.
+Anyone on the internet can download the images/models, so never upload credentials or material unsuitable for public sharing.
+
+The org `viamhacks` (display name "viam hacks 4b") exists, but the current OAuth credentials were denied permission to
+transfer ownership. The dataset remains under `aliriz`; existing station sync continues without changes.
+For team write access, transfer it through HF settings and invite contributors through the org's
+**Settings → Members**. Then update BOTH `config/data_repo.json` and the installed cron wrapper's `VH_DATA_REPO`.
+Public visibility alone does not allow uploads. Nobody needs Ali's token. A scoped station token remains preferable.

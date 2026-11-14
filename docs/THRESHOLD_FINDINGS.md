@@ -8,12 +8,13 @@ Evidence: `docs/AGENT_LOG.md`, saved run decisions/images, and the Intel station
 ## Where the evidence lives
 
 - Code/docs: this GitHub repo, branch `ali/live-dashboard`; data sync setup is also on `ali/pipeline`.
-- Images, metadata, decisions, exclusions, models: private HF dataset
+- Images, metadata, decisions, exclusions, models: public HF dataset (Ali changed visibility; anonymous download verified)
   https://huggingface.co/datasets/aliriz/armfarm04-fastener-runs . See `DATA_PLAN.md` for pull/push commands.
 - Verified shared snapshot `68db3dd684a8ded39fe777c6d6f0b2445d34b864`: 24 runs, 199 picks, 8 bundles.
   Later finished station runs upload automatically every 10 minutes when `sort.py` is not running.
-- Private personal namespace is still an access blocker for teammates: move into an HF team org and invite them.
-  Do not share Ali's full-access token with teammates. Station uses that token by explicit operator choice; replace with a scoped token.
+- Reading now needs no login or invite. Public visibility does not grant write access; team-managed uploads still
+  require appropriate ownership/permissions. Do not share Ali's full-access token with teammates. Station uses that
+  token by explicit operator choice; replace with a scoped token.
 
 ## New station defect captures (station names use MST, laptop names EST)
 

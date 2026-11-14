@@ -81,12 +81,13 @@ Per pick on disk: `runs/<run>/item_NNN/` watch.jpg, top_N.jpg, web_<view>.jpg (1
 ## Sharing the data with the team (19:27, [claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline])
 
 Collected runs lived in two places only (Ali's laptop `runs/`, the station's `/opt/viam/sorter-ali/runs/`), with no
-backup and no way in for teammates. The shared home is now **one private Hugging Face dataset repo**, managed by
+backup and no way in for teammates. The shared home is now **one public Hugging Face dataset repo** (made public by Ali; anonymous index download verified), managed by
 `sync_data.py`. Layout in the repo = layout on disk (`runs/<run>/item_NNN/...`, `models/<name>/...`) plus
 `index.json` (per run: host, items, labels, types, backgrounds, excluded, content fingerprint).
 
 ```sh
-pip install huggingface_hub==2.4.0 && hf auth login     # once per laptop; account must be in the team org
+pip install huggingface_hub==2.4.0                     # no login needed for public downloads
+# hf auth login                                        # required only for authorized uploads
 python sync_data.py status                               # what's shared, what's only here, what differs
 python sync_data.py pull                                 # every shared run you don't have (or 'pull "*_18*"')
 python sync_data.py push                                 # your finished runs (skips runs written < 2 min ago)
@@ -94,10 +95,12 @@ python sync_data.py push --models any_cardboard_v2       # share a trained bundl
 python sync_data.py pull --revision <commit>             # exact snapshot a model was trained on
 ```
 
-**Repo:** https://huggingface.co/datasets/aliriz/armfarm04-fastener-runs (private, `config/data_repo.json`). It is on
-Ali's personal account, which can't share a private repo: create a free HF org, invite the team, then move it with
-`HfApi().move_repo("aliriz/armfarm04-fastener-runs", "<org>/armfarm04-fastener-runs", repo_type="dataset")` and update
-`config/data_repo.json` + `VH_DATA_REPO` in `station_sync_cron.sh`. First push 19:35: 19 laptop runs + 3 models
+**Repo:** https://huggingface.co/datasets/aliriz/armfarm04-fastener-runs (public, `config/data_repo.json`).
+Anyone can browse/download; teammates do not need an invite or Ali's token. Public visibility does NOT grant write
+access. The team org is `viamhacks` (display name "viam hacks 4b"); transferring there was denied by the current
+OAuth credentials, so the repo remains under `aliriz` and station syncing needs no namespace change.
+If team-managed uploads are wanted later, transfer ownership via HF settings and grant appropriate org roles.
+First push 19:35: 19 laptop runs + 3 models
 (`any_cardboard_v2`, `button_white_v1`, `hexbolt_cardboard_v1`); pull round trip verified byte-identical.
 
 **Station (automatic):** root cron every 10 min runs `/opt/viam/sorter-ali/tools/sync_cron.sh` (= `station_sync_cron.sh`)
