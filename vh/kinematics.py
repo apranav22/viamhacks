@@ -155,3 +155,40 @@ def ik(pos, axis=(0, 0, -1), seed=None, jaw_heading_deg=None, reg=0.02):
             raise ValueError(f"IK solution outside joint limits: {np.round(q, 1).tolist()}")
     p, z = tcp(q)
     return [round(float(v), 2) for v in q], float(np.linalg.norm(p - pos)), float(np.degrees(np.arccos(np.clip(z @ axis, -1, 1))))
+
+
+def tcp_speed_profile(j_from, j_to, n=60):
+    """(d, mm_per_deg): the leading joint's travel d (deg) and, per segment of the joint-space line, how many mm the
+    TCP moves per degree of the leading joint. Geometry only; multiply by the leading joint's speed for mm/s."""
+    a, b = np.array(j_from, float), np.array(j_to, float)
+    d = float(np.abs(b - a).max())
+    if d < 1e-6:
+        return 0.0, np.zeros(n - 1)
+    P = np.array([tcp(a + (b - a) * s)[0] for s in np.linspace(0, 1, n)])
+    return d, np.linalg.norm(np.diff(P, axis=0), axis=1) / (d / (n - 1))
+
+
+def peak_tcp_speed(d, mm_per_deg, v, acc):
+    """Peak TCP speed (mm/s) of a joint move whose leading joint follows a trapezoid profile (cruise v deg/s,
+    acceleration acc deg/s^2; a triangle when the move is too short to reach v), as the xArm module runs joint moves."""
+    if d <= 0:
+        return 0.0
+    n = len(mm_per_deg) + 1
+    vp = min(v, math.sqrt(acc * d))
+    pos = np.linspace(0, 1, n)[1:] * d
+    vel = np.minimum(vp, np.sqrt(2 * acc * np.minimum(pos, d - pos + d / (n - 1))))
+    return float((mm_per_deg * vel).max())
+
+
+def safe_joint_speed(j_from, j_to, tcp_limit, acc, v_max=180.0, v_min=10.0):
+    """Fastest leading-joint speed (deg/s, whole degrees, <= v_max) whose peak TCP speed stays <= tcp_limit mm/s.
+    The xArm firmware limits the TCP to 1000 mm/s (UFACTORY: TCP 1000 mm/s, joints 180 deg/s, 1146 deg/s^2); one
+    joint speed for every move drove the tool tip to 2.4-2.9 m/s on the long swings at 180 deg/s."""
+    d, k = tcp_speed_profile(j_from, j_to)
+    if d <= 0 or peak_tcp_speed(d, k, v_max, acc) <= tcp_limit:
+        return float(v_max)
+    lo, hi = v_min, v_max
+    for _ in range(20):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if peak_tcp_speed(d, k, mid, acc) <= tcp_limit else (lo, mid)
+    return float(max(v_min, math.floor(lo)))

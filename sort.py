@@ -49,7 +49,7 @@ from vh.motion import Mover, cam_to_world, grasp_height, held, tcp_pose
 from vh.detection import WristView, detect
 from station import connect
 from station_shell import execute as station_exec
-from vh.kinematics import check_path, flip, frames, ik, load_obstacles, tcp as fk_tcp
+from vh.kinematics import check_path, flip, frames, ik, load_obstacles, safe_joint_speed, tcp as fk_tcp
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
 
@@ -57,6 +57,11 @@ from vh.config import POSES, CHECKPOINT as CP
 G = POSES["grasp"]
 TZ = G["table_z"]
 WATCH_J = CP["watch_pose"]["joints_deg"]
+# Per-move joint speed (--tcp-limit): every joint move runs at the fastest leading-joint speed whose peak TOOL speed stays
+# under a limit, from the move's own joint path (vh.kinematics.safe_joint_speed). The xArm firmware limits the TCP to
+# 1000 mm/s; one speed for every move put the tip at 2.4-2.9 m/s on lift -> front at 180 deg/s, and ~874 mm/s even at 60.
+NORMAL_SPEED, NORMAL_ACCEL = 60.0, 381.67   # the module defaults: restored at run end; also every straight (planner) move
+RUN_ACCEL = 600.0                   # deg/s^2 during a run (module limit 1145): the value the speed limits were analysed at
 LIFT_Z = 280.0                      # TCP height before swinging to the checkpoint: clears the box walls (100) + flap (140)
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
 VIEW_ORDER = ["front", "yaw-20", "yaw+35", "pitch-25"]   # this order keeps every leg clear of the box
@@ -209,25 +214,47 @@ class Sorter:
         return self.q
 
     async def jmove(self, q, label, holding):
-        """Joint move to q after checking the joint-space path against the obstacles."""
+        """Joint move to q after checking the joint-space path against the obstacles, at the fastest joint speed that
+        keeps this move's peak tool speed under --tcp-limit (--tcp-limit-holding with a part in the gripper)."""
         q0 = self.q or await self.joints()
         ok, c, where = check_path(q0, q, self.obs, holding=holding, margin=0)
         if not ok:
             self.tel.emit("error", msg=f"{label}: path blocked ({c} mm, {where}); not moving")
             raise RuntimeError(f"{label}: joint path would hit {where} ({c} mm)")
+        speed = NORMAL_SPEED
+        if self.args.tcp_limit:
+            limit = self.args.tcp_limit_holding if holding else self.args.tcp_limit
+            speed = safe_joint_speed(q0, q, limit, RUN_ACCEL)
+        await self.set_joint_speed(speed)
         t = time.time()
         p, _ = fk_tcp(q)
         self.tel.emit("move", label=label, component="arm", joints=[round(v, 1) for v in q], target={"x": p[0], "y": p[1], "z": p[2]},
-                      clearance_mm=c)
+                      clearance_mm=c, joint_speed=speed)
         with self.tel.span(label, phase=label.split()[0], item=self.n):
             await self.arm.move_to_joint_positions(JointPositions(values=list(q)))
         self.q = list(q)
         return t
 
     async def straight(self, x, y, z, label):
+        # the module plans straight moves itself (motion service), so their joint path, and tool speed, isn't ours to
+        # bound: always the default 60 deg/s
+        await self.set_joint_speed(NORMAL_SPEED)
         with self.tel.span(label, phase=label.split()[0], item=self.n):
             await self.mv.straight(x, y, z, label)
         self.q = None
+
+    async def set_joint_speed(self, deg_s, accel=None):
+        """Arm joint speed (and acceleration) via the module's set_speed / set_acceleration DoCommand; sent only when
+        it changes. Lasts until changed or the module restarts, so run() restores the defaults at the end."""
+        cmd = {}
+        if getattr(self, "joint_speed", None) != deg_s:
+            cmd["set_speed"] = float(deg_s)
+        if accel is not None and getattr(self, "joint_accel", None) != accel:
+            cmd["set_acceleration"] = float(accel)
+        if cmd:
+            await self.arm.do_command(cmd)
+            self.joint_speed = deg_s
+            self.joint_accel = accel if accel is not None else getattr(self, "joint_accel", None)
 
     async def release(self):
         """Open and wait until the fingers are really open: gripper.open() can return while they are still closed,
@@ -737,11 +764,17 @@ class Sorter:
         if a.refs:
             await self.capture_refs()
         count = a.reps if a.mode == "collect" else a.items
+        self.joint_speed = self.joint_accel = None
+        await self.set_joint_speed(NORMAL_SPEED, RUN_ACCEL if a.tcp_limit else NORMAL_ACCEL)
         try:
             for _ in range(count):
                 if not await self.cycle():
                     break
         finally:
+            try:   # also after an error: never leave the arm faster than the module defaults
+                await self.set_joint_speed(NORMAL_SPEED, NORMAL_ACCEL)
+            except Exception as e:
+                print(f"  could not restore the arm speed ({e}): arm DoCommand set_speed 60, set_acceleration 381.67")
             self.state("IDLE")
             print("telemetry", self.tel.report(), "->", self.dir)
 
@@ -763,9 +796,16 @@ async def main():
     p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
     p.add_argument("--decide", choices=["all", "top"], default="all",
                    help="sort: which anomaly views can reject (top = wrist top view only; webcam scores logged as evidence)")
+    p.add_argument("--tcp-limit", type=float, default=900.0, metavar="MM_S",
+                   help="per joint move: the fastest joint speed (<= 180 deg/s) whose peak tool speed stays under this; "
+                        "the xArm firmware's TCP limit is 1000 mm/s. 0 = off (60 deg/s for every move)")
+    p.add_argument("--tcp-limit-holding", type=float, default=800.0, metavar="MM_S",
+                   help="the same limit while a part is in the gripper (it can swing loose)")
     p.add_argument("--refs", action="store_true", help="first capture every webcam view with the EMPTY gripper")
     p.add_argument("--watch-timeout", type=float, default=120, help="give up waiting for a part after this many s")
     a = p.parse_args()
+    if a.tcp_limit and not (0 < a.tcp_limit_holding <= a.tcp_limit <= 1000):
+        raise SystemExit("need 0 < --tcp-limit-holding <= --tcp-limit <= 1000 mm/s (the xArm firmware's TCP limit)")
     global TZ, HOVER_Z, ZONE        # every pick height, the planner's table and the zone follow the pick surface
     if a.background not in SURFACE_Z:
         raise SystemExit(f"no measured surface_z for {a.background!r} in config/poses.json")
