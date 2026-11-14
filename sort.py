@@ -16,7 +16,7 @@ One cycle:
 Moves between known poses are joint moves to recorded / IK-solved joint vectors (no motion planner: the planner took
 4-7 s for these legs and picked wrapped joint configurations), each checked against the workcell obstacles first
 (vh/kinematics.py: forward kinematics from the arm's own URDF). Descend / lift are Pranav's straight moves; grasp
-height, jaw direction, held check and retries come from pipeline.py and config/poses.json unchanged.
+height, jaw direction, held check and retries come from vh/motion.py and config/poses.json unchanged.
 
 Every stage is sent to the dashboard as UDP telemetry (vh/telemetry.py: non-blocking, measured in microseconds).
 Every decision is written to runs/<run>/decisions.jsonl with ms timestamps (the judge log).
@@ -44,21 +44,18 @@ sys.path.insert(0, str(ROOT))
 from viam.components.camera import Camera
 from viam.services.generic import Generic
 
-from viam.proto.common import GeometriesInFrame, WorldState
 from viam.proto.component.arm import JointPositions
-from pipeline import Mover, box, cam_to_world, grasp_height, held, tcp_pose, world_state
-from screws import WristView, detect
+from vh.motion import Mover, cam_to_world, grasp_height, held, tcp_pose
+from vh.detection import WristView, detect
 from station import connect
 from station_shell import execute as station_exec
 from vh.kinematics import check_path, flip, frames, ik, load_obstacles, tcp as fk_tcp
 from vh.telemetry import Telemetry
 from vh.anomaly import AnomalyModels, Score, context_crop, reject_reason
 
-POSES = json.load(open(ROOT / "config" / "poses.json"))
-CP = json.load(open(ROOT / "config" / "checkpoint.json"))
+from vh.config import POSES, CHECKPOINT as CP
 G = POSES["grasp"]
 TZ = G["table_z"]
-PAD = CP["pick_pad"]["pick_region"]
 WATCH_J = CP["watch_pose"]["joints_deg"]
 LIFT_Z = 280.0                      # TCP height before swinging to the checkpoint: clears the box walls (100) + flap (140)
 HOVER_Z = TZ + 10 + G["approach_height_mm"]
@@ -77,7 +74,7 @@ HOVER_HIGH_Z = 230.0                # TCP height for a squat blob (nut flat or s
 ZONE = {"x_min": 190, "x_max": 450, "y_min": 260, "y_max": 410}   # pick zone on the bare table (kit storage starts ~y 470)
 # Per --background: surface z (poses.json grasp.surface_z, touch-measured) and pick zone. The cardboard pad spans
 # world x ~104-415 (flap seam at ~415), y ~162-546 from the wrist image, so its zone stops 25 mm short of the seam.
-SURFACE_Z = G.get("surface_z", {"white": G["table_z"]})
+SURFACE_Z = G["surface_z"]
 ZONES = {"white": ZONE, "cardboard": {"x_min": 150, "x_max": 400, "y_min": 200, "y_max": 500}}
 # 18:35 pad (larger sheet) measured from the watch frame: x 109-454 (flap seam ~410), y 168-531. Zone keeps >=40 mm
 # inside; IK + joint-path checks pass at a 5x5 grid x 4 yaws over it (look, low hover, lift).
@@ -89,6 +86,8 @@ ZONES = {"white": ZONE, "cardboard": {"x_min": 150, "x_max": 400, "y_min": 200, 
 LOOK_LENS_MM = 190.0
 STILL_S = 0.3                       # part unchanged this long ...
 HAND_FRAC, HAND_HOLDOFF_S = 0.02, 0.8   # ... and no hand (2% of the frame changed outside the pad) for 0.8 s
+REF_STEADY_FRAC = 0.002             # outside-pad change between consecutive frames: scene is steady
+REF_STALE_S = 3.0                   # a "hand" not moving at all this long = stale reference; re-take it
 # Webcam crops are the whole gripper window: the blue-zinc socket_m16 reads up to 2.2% "tape" there (18:17 run, 153
 # views; 18:50 a clean socket screw was rejected at 1.9%). Top view: part-only bbox, good parts <= 0.08%.
 TAPE_FRAC_WEB = 0.04
@@ -135,35 +134,6 @@ def tape_fraction(rgb):
     blue = hue_blue & (sat > 0.45) & (mx > 0.25) & ((b - g) > 0.4 * (b - r))    # deep blue, not cyan (g close to b)
     return float(blue.mean())
 
-
-def find_pad(rgb, view):
-    """The brown cardboard pick pad, found in the watch frame (people move it): its interior as a world-xy region."""
-    from scipy import ndimage
-    f = rgb.astype(np.int16)
-    r, g, b = f[..., 0], f[..., 1], f[..., 2]
-    mask = (r > g) & (g > b) & (r - b > 25) & (r < 235)
-    mask = ndimage.binary_opening(mask, iterations=2)
-    lab, n = ndimage.label(mask)
-    if not n:
-        return None
-    k = 1 + int(np.argmax(ndimage.sum(mask, lab, range(1, n + 1))))
-    ys, xs = np.nonzero(lab == k)
-    if len(xs) < 5000:
-        return None
-    m = 12                                   # stay off the pad's edge
-    corners = [view.to_world(u, v, view.table_z) for u, v in ((xs.min() + m, ys.min() + m), (xs.max() - m, ys.min() + m),
-                                                            (xs.min() + m, ys.max() - m), (xs.max() - m, ys.max() - m))]
-    X, Y = [c[0] for c in corners], [c[1] for c in corners]
-    return {"x_min": float(min(X)), "x_max": float(max(X)), "y_min": float(min(Y)), "y_max": float(max(Y)),
-            "px": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]}
-
-
-PAD_MM = (232, 129)       # the cardboard pad, measured 14:50
-
-
-def pad_plausible(pad):
-    a, b = pad["x_max"] - pad["x_min"], pad["y_max"] - pad["y_min"]
-    return 80 < a < 1.3 * PAD_MM[0] and 80 < b < 1.3 * PAD_MM[1]     # may run off the frame edge
 
 
 def outside_change(rgb, ref, pad_px):
@@ -226,10 +196,8 @@ class Sorter:
         self.good_j = ik(np.array(GOOD_TCP), seed=VIEW_J["front"])[0]
         self.good_j_up = ik(np.array(GOOD_TCP[:2] + (300.0,)), seed=UPRIGHT_J["side-120"])[0]   # hanging part clears the divider
         self.view = None              # WristView at the watch pose (fixed: computed once)
-        self.pad = dict(PAD)          # replaced by the pad found in the first watch frame
+        self.pad = dict(ZONE)         # pixel bounds are added at the watch pose
         self.ignore_xy = []           # parts deliberately left in place (upright, grasp disabled)
-        extra = [box(n, *c, *d) for n, (c, d) in self.obs[4:]]     # tripod, lamp, box (for the one planner move)
-        self.mv.ws = WorldState(obstacles=list(world_state(TZ).obstacles) + [GeometriesInFrame(reference_frame="world", geometries=extra)])
 
     # ---- helpers ---------------------------------------------------------------------------------
     def state(self, s, **kw):
@@ -324,7 +292,6 @@ class Sorter:
             rot, t = await cam_to_world(self.m)
             k = (await self.cam.get_properties()).intrinsic_parameters
             self.view = WristView(k, rot, t, TZ)
-            self.ref = np.asarray(Image.open(io.BytesIO(await self.wrist_jpeg())).convert("RGB"))
             # Fixed pick zone on the bare table. No cardboard pad: the grasp goes 2 mm above the TABLE, so a pad
             # thicker than that gets pinched and dragged (it moved ~10 cm in 3 picks at 15:15).
             self.pad = dict(ZONE)
@@ -332,7 +299,11 @@ class Sorter:
             self.zone = self.pad
             print(f"pick zone x {ZONE['x_min']}..{ZONE['x_max']}, y {ZONE['y_min']}..{ZONE['y_max']} (pixels {self.pad['px']})")
             self.tel.emit("note", step="pick pad", **{k: round(v) if isinstance(v, float) else v for k, v in self.pad.items()})
+            # 20:25 run 182455_sort: ONE reference frame, grabbed right after the arm/camera settings changed, latched
+            # the "hand" gate on for 2180/2181 frames of a still scene. Take it only once frames stop changing.
+            self.ref = await self.settled_ref()
         last, t_appeared, still_since, hand_until = None, None, None, 0.0
+        prev_rgb, static_since = None, None
         while True:
             t0 = time.perf_counter()
             jpg = await self.wrist_jpeg()
@@ -350,6 +321,19 @@ class Sorter:
             if not it:
                 t_appeared, last = None, None
             hand = outside_change(rgb, self.ref, self.pad["px"]) > HAND_FRAC
+            # Frame-to-frame steady outside the pad: either nothing is there, or the "hand" is just a stale reference.
+            steady = prev_rgb is not None and outside_change(rgb, prev_rgb, self.pad["px"]) <= REF_STEADY_FRAC
+            static_since = (static_since or now) if steady else None
+            prev_rgb = rgb
+            if hand and static_since and (not it or now - static_since >= REF_STALE_S):
+                # zone empty and steady, or a "hand" that hasn't moved a pixel for REF_STALE_S: re-take the reference
+                self.ref = rgb
+                self.ref_updates += 1
+                Image.fromarray(rgb).save(self.dir / f"ref_{self.ref_updates:02d}.jpg", quality=92)
+                self.tel.emit("note", step="watch reference refreshed", reason="zone empty" if not it else "static",
+                              n=self.ref_updates)
+                print(f"  watch reference refreshed ({'zone empty' if not it else 'static change'})", flush=True)
+                hand, static_since = False, None
             if hand:
                 hand_until = now + HAND_HOLDOFF_S          # wait a moment after the hand leaves
             same = bool(it and last and math.dist(it[:2], last[:2]) < STABLE_MM
@@ -363,6 +347,22 @@ class Sorter:
             last = it
             if self.args.watch_timeout and t_appeared is None and now - self._watch_start > self.args.watch_timeout:
                 return None, None, None, None
+
+    async def settled_ref(self, max_s=5.0):
+        """Reference for the hand gate: the first frame that matches the one before it outside the pad (arm and
+        camera exposure/WB have settled). Saved as ref_00.jpg."""
+        prev, t0 = None, time.monotonic()
+        while True:
+            rgb = np.asarray(Image.open(io.BytesIO(await self.wrist_jpeg())).convert("RGB"))
+            d = None if prev is None else outside_change(rgb, prev, self.pad["px"])
+            if d is not None and (d <= REF_STEADY_FRAC or time.monotonic() - t0 > max_s):
+                break
+            prev = rgb
+            await asyncio.sleep(0.15)
+        self.ref_updates = 0
+        Image.fromarray(rgb).save(self.dir / "ref_00.jpg", quality=92)
+        print(f"  watch reference taken (frame-to-frame change {d:.4f})", flush=True)
+        return rgb
 
     def look_joints(self, item):
         """Joints putting the wrist lens LOOK_LENS_MM straight above the part, by translating the watch pose (same
@@ -459,8 +459,6 @@ class Sorter:
                 self.not_seen = True
                 return False, item, t_cmd
             self.top_tape = tape
-            shift = math.dist(new[:2], item[:2])
-            turn = abs((new[3] - item[3] + 90) % 180 - 90)
             item = new
             height = None
             # hover with the gripper (not the camera) over the part, jaws across it. The depth look for squat parts
@@ -484,14 +482,13 @@ class Sorter:
                 if height and height > STANDING_MM and dxy is not None:
                     self.upright = height
                     item = (float(dxy[0]), float(dxy[1])) + tuple(item[2:])
-                    shift = 99.0
                     self.tel.emit("note", step="standing", height=round(height, 1), x=item[0], y=item[1])
                     q, _, _ = ik(np.array([item[0], item[1], hz]), seed=self.q, jaw_heading_deg=heading)
                     await self.jmove(q, f"aim upright {attempt}", holding=False)
             if await self.mv.finger_pos() < 780:
                 with self.tel.span("open", phase="pick", item=self.n):
                     await self.release()
-            # lying: closed tips 2 mm above the table; standing: halfway up (pipeline.grasp_height, Pranav's rule)
+            # lying: closed tips 2 mm above the table; standing: halfway up (vh.motion.grasp_height, Pranav's rule)
             gz = grasp_height(SimpleNamespace(top_z=TZ + 10), TZ, G)
             if self.upright:                                         # Pranav's halfway rule, for any upright part
                 gz = TZ + self.upright / 2 + G["tcp_to_tip_mm"]

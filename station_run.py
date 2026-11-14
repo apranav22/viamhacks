@@ -42,8 +42,9 @@ async def main(a):
                 raise SystemExit(f"sort.py already running on the station: {out.strip()}")
             args = " ".join(shlex.quote(x) for x in a.rest)
             # setsid: fully detach, or the shell stream stays open until the run ends (19:15: start timed out)
-            cmd = (f"cd {BASE}/current && setsid nohup {BASE}/.venv/bin/python3.12 -u sort.py {args} "
-                   f"--dash-host {laptop_ip()} > {LOG} 2>&1 < /dev/null & echo $! > {PIDF}; sleep 1; cat {PIDF}")
+            dash = "" if any(x == "--dash-host" or x.startswith("--dash-host=") for x in a.rest) else f" --dash-host {laptop_ip()}"
+            cmd = (f"cd {BASE}/current && setsid nohup {BASE}/.venv/bin/python3.12 -u sort.py {args}{dash} "
+                   f"> {LOG} 2>&1 < /dev/null & echo $! > {PIDF}; sleep 1; cat {PIDF}")
             try:
                 rc, out = await execute(m, cmd, 30)
                 print("started on station, pid", out.strip())

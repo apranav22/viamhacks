@@ -1,38 +1,74 @@
-# viamhacks: Track 3, "Spot it, sort it"
+# Spot it, sort it
 
-Viam × Intel "Edge of Intelligence" hackathon, Nov 13–14 2026. A judge places **one fastener at a time**; we look, pick it, check it from every side, and drop it in the **box** (good) or the **reject bin** (defective / unsure). Models run through OpenVINO on the station.
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
 
-| Doc | What's in it |
-|---|---|
-| [`docs/CONTEXT.md`](docs/CONTEXT.md) | Event, scoring, the station as measured, what Viam gives us |
-| [`docs/PLAN.md`](docs/PLAN.md) | Decisions, who does what, next steps, open questions |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The cycle, grasp recipes, recovery levels, dashboard, code map |
-| [`docs/NOTES.md`](docs/NOTES.md) | Findings and failures (feeds the design explanation) |
-| `site/` | Visual overview: `python3 site/build.py && python3 -m http.server 8899 -d site` |
+Viam × Intel Track 3 fastener inspection. One item is placed on the pad; the arm finds it with the wrist camera, picks it, presents it to the fixed webcam, and releases it over the good or reject compartment. PatchCore anomaly models run locally through OpenVINO. Unknown or unavailable model evidence rejects as uncertain.
 
-## Run it
+The collection and sorting loop has run on the Intel station. Picking remains unreliable for some small parts; upright grasping is disabled by default. Saved-image evaluation uses repeated grasps of a few physical specimens, so it does not establish unseen-part or unseen-defect accuracy. See the [day-one recap](docs/DAY1_RECAP.md) and [latest training evidence](docs/TRAINING_RUN_20261114.md).
 
-```bash
-pip install -r requirements.txt                 # numpy, scipy, pillow, viam-sdk (+ optional opencv-python-headless)
-# api-key.json: {"address": ..., "api_key": ..., "api_key_id": ...}   (gitignored)
+## Start here
 
-python dashboard/server.py                      # http://localhost:8765 (add --host 0.0.0.0 on the station)
-python tests/test_pipeline.py                   # offline, ~3 s
-python run.py pick --fake site/img/home_color.jpg --cycles 3   # whole cycle offline, no robot
-python run.py watch                             # live cameras, never moves
-python run.py pick                              # live cameras, DRY RUN: every move only logged
-python run.py pick --live --step                # real motion, Enter before each move (bring-up)
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+python dashboard/server.py --no-preview
+# Open http://localhost:8765: Live telemetry, saved-run History and Models; no robot connection.
 ```
 
-**Status (day 1, ~12:15):** baseline cycle (watch → hover → look → pick → home) built and tested offline and in dry run; **not yet run with live motion**. Defect detection is next.
+For local model scoring, also install `requirements-anomaly.txt`. Training has a separate environment; tested Intel/XPU dependencies are documented in [ANOMALY.md](docs/ANOMALY.md). Credentials belong in ignored `api-key.json` or `.env`; see `station.py`.
 
+## Supported commands
 
-## Offline anomaly-only candidate calibration
+| Purpose | Command / entrypoint |
+|---|---|
+| Live / History / Models dashboard | `python dashboard/server.py --no-preview` |
+| Download team captures/models | `python sync_data.py pull` (see [DATA_PLAN.md](docs/DATA_PLAN.md)) |
+| Export a static run catalog | `python catalog.py` → `runs/index.html` |
+| Train a candidate on selected runs | `python train_anomaly.py --help` |
+| Score saved picks / compare calibrated policies | `python eval_bundle.py --help` / `python compare_anomaly.py --help` |
+| Benchmark explicit OpenVINO devices | `python benchmark_anomaly.py --help` |
+| Training jobs and model management | `python train_dashboard.py` (separate station service) |
+| Read-only quality reports | `python monitor_quality.py --help` |
+| Station source/model recovery | `python -m tools.recover_station --help` |
+| Calibration and diagnostics | [tools/README.md](tools/README.md) |
 
-`compare_anomaly.py` scores frozen datasets and compares a calibrated anomaly-only policy with the matched-view
-bundle+tape baseline. It never changes the live robot policy. See `docs/ANOMALY_CALIBRATION.md` for commands,
-required specimen IDs/splits, rejection-budget selection, limitations, and Hugging Face team invitations.
+`sort.py` is the **only supported robot loop**. Both modes move the arm; there is no implicit dry-run mode:
 
-## Day-1 evening handoff
+```sh
+# Examples for an authorized, supervised station session only; follow AGENTS.md first.
+python sort.py --mode collect --background cardboard --type socket_m16 --label good --reps 6
+python sort.py --mode sort --background cardboard --type auto \
+  --anomaly-bundle models/REVIEWED_BUNDLE/bundle.json --anomaly-device CPU --decide top --items 6
+```
 
-See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.
+`--decide top` makes webcam anomaly scores evidence-only; the tape rule still checks captured views. Model selection is explicit; `--anomaly-bundle active` reads the existing `models/ACTIVE` pointer. Recovery of a candidate does not activate it.
+
+`station_run.py start/status/stop` manages the station loop. Pass `--dash-host 127.0.0.1` after `start --` when the dashboard runs on the station; otherwise the launcher uses the laptop address. `deploy_station.py` builds a release from source and refuses a dirty checkout unless explicitly overridden. See [dashboard deployment notes](dashboard/README.md).
+
+## Code and configuration
+
+- `sort.py`: watch → pick → lift → inspect → decide → release → return; collection reuses the same capture path.
+- `vh/`: shared detection, motion, kinematics, anomaly preprocessing/inference, datasets, telemetry and preview support.
+- `config/poses.json`, `config/checkpoint.json`: measured geometry; `config/part_sizes.json`: latest recovered seven-type size catalog. No environment overrides of measured constants.
+- `dashboard/`: operational Live/History/Models interface. Training workers remain separate.
+- `tools/`: maintained hardware diagnostics, calibration and recovery utilities.
+- `presentation/`: judges presentation; `cd presentation && npm ci && npm run build` (Node 22.12+). See its README for presenter mode and offline packaging.
+- `archive/station/`: provenance and recovered historical station experiments; these are not deployed as runtime code.
+- `runs/`, `models/`, `logs/`: ignored local artifacts. Old tracked logs were retained locally under `runs/_legacy_logs/`.
+
+## Verification
+
+```sh
+python -m unittest discover -s tests
+python tests/test_motion.py
+node --test tests/test_dashboard_ui.cjs
+```
+
+These checks use local fixtures, mocked robot interfaces and saved data. They do not command the arm or establish physical grasp/placement reliability. The optional training integration test needs its separate dependencies.
+
+## Team and judging references
+
+[Architecture](docs/ARCHITECTURE.md) · [Operating rules](AGENTS.md) · [Current cleanup/recovery notes](docs/CLEANUP.md) · [Event/scoring](docs/CONTEXT.md) · [Data and sharing](docs/DATA_PLAN.md) · [Calibration protocol](docs/ANOMALY_CALIBRATION.md) · [Chronological agent log](docs/AGENT_LOG.md).
+
+`site/` contains the design explanation and historical experiment figures (`python site/build.py`). Treat dated planning and experiment notes as historical evidence; the current entrypoints and configuration are described above.

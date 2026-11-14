@@ -1,6 +1,6 @@
 """Forward kinematics of the xArm 850 from the URDF the arm reports (arm.get_kinematics), plus a check of
 joint-space moves against the workcell obstacles. Lets us replace planner moves with recorded joint moves and
-still prove they don't hit the box, tripod, lamp, table or walls.
+screen their sampled paths against the box, tripod, lamp, table and walls.
 
 The arm controller moves joint-space linearly (all joints start and stop together), so sampling the straight
 line between two joint vectors gives the path the arm actually takes."""
@@ -9,6 +9,8 @@ import math
 from pathlib import Path
 
 import numpy as np
+
+from .config import GRASP, TABLE_Z
 
 # joint origins from the URDF (xyz in m, rpy in rad); every axis is local z
 URDF_JOINTS = [
@@ -20,7 +22,7 @@ URDF_JOINTS = [
     ((0, -0.09, 0), (1.5708, 0, 0)),
 ]
 TCP_MM = 150.0            # gripper frame: flange + 150 mm along the flange z
-TIP_CLOSED_MM = 20.5      # closed fingertips past the TCP (poses.json tcp_to_tip_mm)
+TIP_CLOSED_MM = GRASP["tcp_to_tip_mm"]
 
 
 def _rpy(r, p, y):
@@ -82,13 +84,14 @@ def body_points(joints_deg, holding=True):
     return pts
 
 
-def load_obstacles(path=None, table_z=-1.3):
+def load_obstacles(path=None, table_z=None):
     """Workcell boxes as (center, dims) in mm: Pranav's table/walls/ceiling + config/obstacles.json."""
+    table_z = TABLE_Z if table_z is None else table_z
     boxes = [((0, 0, table_z - 105), (3000, 3000, 200)), ((740, 0, 300), (100, 3000, 1600)),
              ((0, -500, 300), (3000, 100, 1600)), ((0, 0, 1050), (3000, 3000, 100))]
     names = ["table", "wall-front", "wall-side", "ceiling"]
     p = Path(path or Path(__file__).resolve().parent.parent / "config" / "obstacles.json")
-    for k, v in json.load(open(p)).items():
+    for k, v in json.loads(p.read_text()).items():
         if not k.startswith("_"):
             boxes.append((tuple(v["center"]), tuple(v["dims"]))); names.append(k)
     return list(zip(names, boxes))

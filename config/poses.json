@@ -1,5 +1,5 @@
 {
-  "_comment": "Positions are the gripper TCP in the world frame, mm. Record destinations with: python record_pose.py <name>",
+  "_comment": "Positions are the gripper TCP in the world frame, mm. Record destinations with: python -m tools.record_pose <name>",
   "scan_joints_deg": [0.0, 22.571, -50.684, 0.0, -74.053, 0.0],
   "destinations": {
     "box": null,
@@ -7,7 +7,7 @@
     "hold": null
   },
   "overview": {
-    "_comment": "overview-cam calibration grid (world mm) and fingertip heights above the table; see overview.py",
+    "_comment": "overview-cam calibration grid (world mm) and fingertip heights above the table; see tools/overview.py",
     "_grid": "where the overview-cam sees the claws whole (it sits on the -y side looking toward +y; at y<=0 the claws leave the frame)",
     "cal_grid_x": [200, 350, 500],
     "cal_grid_y": [100, 225, 350],

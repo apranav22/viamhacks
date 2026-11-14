@@ -161,7 +161,7 @@ class AnomalyTests(unittest.TestCase):
         d.ellipse((300,190,326,216),fill=(220,220,220));d.ellipse((307,197,319,209),fill=(30,30,30))
         b=io.BytesIO();im.save(b,format='JPEG')
         result=wrist(b.getvalue())
-        self.assertEqual(result['detector'],'screws.detect')
+        self.assertEqual(result['detector'],'vh.detection.detect')
         self.assertIsNone(result['hand'])
         self.assertEqual(result['hand_status'],'not_evaluated')
         self.assertTrue(any(295<i['c'][0]<330 and 185<i['c'][1]<220 for i in result['items']))

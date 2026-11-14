@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Run catalog · viamhacks</title>
+<!-- Template for catalog.py: it replaces the data placeholder below and writes runs/index.html. Open that file directly. -->
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16202b;--mute:#667382;--line:#dde2e8;--accent:#0b6bcb;
+ --ok:#1a7f4b;--partial:#5b7d12;--caution:#b26a00;--exclude:#c0352b;--probe:#6b4fbb;--live:#0b6bcb;--empty:#8a94a0}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;gap:18px;align-items:baseline;padding:10px 18px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+h1{font-size:16px;margin:0}h2{font-size:15px;margin:22px 0 8px}h3{font-size:13px;margin:14px 0 6px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+nav a{margin-right:14px;color:var(--mute);text-decoration:none;font-weight:600;padding:4px 0;border-bottom:2px solid transparent}
+nav a.on{color:var(--ink);border-color:var(--accent)}a{color:var(--accent)}
+.mute{color:var(--mute)}.small{font-size:12px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+main{padding:14px 18px;max-width:1500px;margin:0 auto}
+table{border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:6px}
+th,td{padding:5px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:12px;color:var(--mute);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}tr:last-child td{border-bottom:0}
+.flag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
+.f-ok{background:var(--ok)}.f-partial{background:var(--partial)}.f-caution{background:var(--caution)}.f-exclude{background:var(--exclude)}
+.f-probe{background:var(--probe)}.f-live{background:var(--live)}.f-empty{background:var(--empty)}.f-none{background:#b8c0c9}
+.split{display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start}
+#list{background:var(--card);border:1px solid var(--line);border-radius:6px;max-height:calc(100vh - 80px);overflow:auto;position:sticky;top:60px}
+.filters{padding:8px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:6px;position:sticky;top:0;background:var(--card);z-index:1}
+.filters input[type=search]{grid-column:1/3}select,input[type=search]{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff}
+.run{padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;display:grid;grid-template-columns:44px 1fr auto;gap:2px 8px;align-items:center}
+.run:hover{background:#f0f4f9}.run.on{background:#e4eefb}.run .t{font-variant-numeric:tabular-nums;font-weight:600}
+.run .what{grid-column:2/4;color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.facts{display:flex;flex-wrap:wrap;gap:6px 18px;margin:8px 0}.facts div b{display:block;font-size:11px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.note{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--mute);border-radius:4px;padding:8px 12px;margin:10px 0;max-width:1000px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:hidden;cursor:pointer;border-top:4px solid var(--empty)}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}.card img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#e9edf1}
+.card .noimg{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:var(--mute);background:#e9edf1}
+.card .cap{padding:6px 8px;font-size:12px}.card .cap b{font-size:13px}
+.o-captured,.o-good{border-top-color:var(--ok)}.o-reject{border-top-color:var(--exclude)}.o-dropped{border-top-color:var(--caution)}
+.card.x{opacity:.55}.tag{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:0 5px;font-size:11px;margin:2px 3px 0 0;background:#f4f6f8}
+.tag.bad{border-color:var(--exclude);color:var(--exclude)}.tag.good{border-color:var(--ok);color:var(--ok)}
+dialog{border:0;border-radius:8px;padding:0;width:min(1400px,96vw);height:92vh;box-shadow:0 10px 40px rgba(0,0,0,.4)}dialog::backdrop{background:rgba(10,20,30,.6)}
+.dlg{display:grid;grid-template-rows:auto 1fr;height:100%}.dlgbar{display:flex;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line)}
+.dlgbar b{flex:1}button{font:inherit;padding:4px 10px;border:1px solid var(--line);border-radius:4px;background:#fff;cursor:pointer}button:hover{background:#f0f4f9}
+.dlgbody{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);overflow:hidden}
+.viewer{padding:12px;overflow:auto;background:#10161d;color:#cfd8e3}.viewer img.big{max-width:100%;max-height:62vh;display:block;margin:0 auto}
+.strip{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.strip figure{margin:0;cursor:pointer;text-align:center;font-size:11px}
+.strip img{height:74px;display:block;border:2px solid transparent;border-radius:3px}.strip figure.on img{border-color:#4ea3ff}
+.side{padding:12px 16px;overflow:auto}.side table{width:100%;margin:4px 0 10px}pre{background:#f1f3f6;border:1px solid var(--line);border-radius:4px;padding:8px;overflow:auto;font-size:11.5px;max-height:420px}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:3px 10px;margin:6px 0}.kv span:nth-child(odd){color:var(--mute)}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}.gal figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:4px;overflow:hidden;font-size:11px}
+.gal img{width:100%;display:block}.gal figcaption{padding:3px 6px}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--line);width:70px;vertical-align:middle;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+@media(max-width:1000px){.split{grid-template-columns:1fr}#list{position:static;max-height:340px}.dlgbody{grid-template-columns:1fr;overflow:auto}}
+</style></head><body>
+<header><h1>Run catalog · day 1</h1><nav id="nav"></nav><span class="mute small" id="gen"></span></header>
+<main id="app"></main>
+<dialog id="dlg"><div class="dlg"><div class="dlgbar"><b id="dlgtitle"></b><button id="prev">← prev</button><button id="next">next →</button><button id="close">Close (Esc)</button></div><div class="dlgbody"><div class="viewer" id="viewer"></div><div class="side" id="side"></div></div></div></dialog>
+<script id="data" type="application/json">__CATALOG_JSON__</script>
+<script>
+const C=JSON.parse(document.getElementById('data').textContent),$=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const enc=p=>p.split('/').map(encodeURIComponent).join('/');
+const RUN=Object.fromEntries(C.runs.map(r=>[r.name,r]));
+const plain=d=>Object.entries(d||{}).sort((a,b)=>b[1]-a[1]).map(([k,v])=>Object.keys(d).length>1?k+' '+v:k).join(', ')||'–',counts=d=>esc(plain(d));
+const CURRENT='cardboard 1280x720';
+function group(i,r){if(r.kind!=='collect'||i.outcome!=='captured'||i.excluded||['exclude','empty'].includes(r.flag))return'';return i.recipe!==CURRENT?'legacy':['caution','probe'].includes(r.flag)?'caution':'current'}
+const flag=f=>'<span class="flag f-'+(f||'none')+'" title="'+esc(C.flags[f]||'no note')+'">'+esc(f||'–')+'</span>';
+const done=r=>r.kind==='collect'?r.captured:['good','reject','dropped'].reduce((a,k)=>a+(r.outcomes[k]||0),0);
+const num=(v,d=1)=>v==null?'–':(+v).toFixed(d);
+let F={kind:'data',part:'',label:'',host:'',flag:'',q:''},P={part:'',label:'',outcome:'captured',recipe:'',use:''},shown=120,cur=null;
+
+function route(){const h=decodeURIComponent(location.hash.slice(2)).split('/');return{tab:h[0]||'overview',a:h[1],b:h[2]}}
+function go(...p){location.hash='#/'+p.map(encodeURIComponent).join('/')}
+function nav(tab){$('nav').innerHTML=[['overview','Overview'],['runs','Runs'],['picks','All picks'],['experiments','Experiments'],['models','Models']].map(([k,n])=>'<a href="#/'+k+'" class="'+(k===tab?'on':'')+'">'+n+'</a>').join('')}
+
+function matrix(cells,title,sub,grp){const keys=Object.keys(cells||{});if(!keys.length)return'';
+ const types=[...new Set(keys.map(k=>k.split('|')[0]))].sort(),labels=[...new Set(keys.map(k=>k.split('|')[1]))].sort((a,b)=>(a!=='good')-(b!=='good')||a.localeCompare(b));
+ let h='<h3>'+esc(title)+'</h3><p class="small mute" style="margin:0 0 6px">'+sub+'</p><table><tr><th>Part</th>'+labels.map(l=>'<th class="n">'+esc(l)+'</th>').join('')+'<th class="n">Total</th></tr>';
+ for(const t of types){const v=labels.map(l=>cells[t+'|'+l]||0);h+='<tr><td class="mono">'+esc(t)+'</td>'+v.map((x,i)=>'<td class="n">'+(x?'<a href="#/picks" data-part="'+esc(t)+'" data-label="'+esc(labels[i])+'" data-use="'+grp+'">'+x+'</a>':'·')+'</td>').join('')+'<td class="n"><b>'+v.reduce((a,b)=>a+b,0)+'</b></td></tr>'}
+ const tot=labels.map(l=>types.reduce((a,t)=>a+(cells[t+'|'+l]||0),0));
+ return h+'<tr><td><b>Total</b></td>'+tot.map(x=>'<td class="n"><b>'+x+'</b></td>').join('')+'<td class="n"><b>'+tot.reduce((a,b)=>a+b,0)+'</b></td></tr></table>'}
+
+function overview(){const s=C.summary,k=s.kinds,snap=C.snapshot;
+ let h='<p><b>'+(k.collect||0)+'</b> collect runs, <b>'+(k.sort||0)+'</b> sort runs, <b>'+(k.dry||0)+'</b> dry runs, <b>'+C.experiments.length+'</b> camera / calibration experiments. <b>'+s.attempts+'</b> pick attempts, <b>'+s.captured+'</b> captured in collect mode, <b>'+s.images+'</b> images.'+(snap?' Shared repo snapshot <span class="mono">'+esc(String(snap.commit).slice(0,8))+'</span>.':'')+'</p>';
+ h+='<div class="note">A <b>captured</b> pick = grasped, held in front of the webcam and logged. The tables leave out items in a run’s <span class="mono">exclude.json</span> and runs flagged exclude / empty. Repeated picks of one physical part are not independent samples: most cells are one specimen picked many times. Click a number to see those picks.</div>';
+ h+=matrix(s.cells.current,'Current recipe: usable','Cardboard pad, wrist 1280×720, lamp LED. Runs flagged ok / partial.','current');
+ h+=matrix(s.cells.caution,'Current recipe: review first','Runs flagged caution / probe. Look at the images before training on them.','caution');
+ h+=matrix(s.cells.legacy,'Legacy recipe','Before 17:07 EST: wrist 640×480, background not recorded. Not compatible with the current models.','legacy');
+ h+='<h3>Sort runs</h3><p>'+Object.entries(s.sort).sort((a,b)=>b[1]-a[1]).map(([o,v])=>esc(C.outcomes[o])+' <b>'+v+'</b>').join(' · ')+'. The parts carry no ground-truth label in the data; where the log recorded it, the pick shows it.</p>';
+ h+='<h3>Recorded only in the log, not in this data</h3>'+C.not_in_data.map(n=>'<div class="note"><b>'+esc(n.name)+'</b> <span class="mute">'+esc(n.when)+'</span><br>'+esc(n.what)+'. '+esc(n.note)+'</div>').join('');
+ if(C.shared_not_here.length)h+='<div class="note" style="border-left-color:var(--caution)">Shared runs missing on this machine (<span class="mono">python sync_data.py pull</span>): '+C.shared_not_here.map(esc).join(', ')+'</div>';
+ h+='<h3>Flags</h3><p>'+Object.entries(C.flags).map(([f,t])=>flag(f)+' '+esc(t)).join(' &nbsp; ')+'</p><p class="small mute">Notes and flags come from docs/run_notes.json (sourced from AGENT_LOG.md). Narrative: docs/DAY1_RECAP.md.</p>';
+ $('app').innerHTML=h;
+ $('app').querySelectorAll('a[data-part]').forEach(a=>a.onclick=()=>{P={part:a.dataset.part,label:a.dataset.label,outcome:'captured',recipe:'',use:a.dataset.use};shown=120})}
+
+function runMatches(r){if(F.kind==='data'&&r.kind==='dry')return false;if(F.kind&&F.kind!=='data'&&F.kind!=='all'&&r.kind!==F.kind)return false;
+ if(F.part&&!(F.part in r.types))return false;if(F.label&&!(F.label in r.labels))return false;if(F.host&&r.host!==F.host)return false;if(F.flag&&r.flag!==F.flag)return false;
+ if(F.q&&!(r.name+' '+(r.what||'')+' '+(r.note||'')+' '+Object.keys(r.types).join(' ')).toLowerCase().includes(F.q.toLowerCase()))return false;return true}
+const uniq=f=>[...new Set(C.runs.flatMap(f))].filter(Boolean).sort();
+function sel(id,label,opts,val){return'<select id="'+id+'" title="'+label+'"><option value="">'+label+': all</option>'+opts.map(o=>{const[v,t]=Array.isArray(o)?o:[o,o];return'<option value="'+esc(v)+'"'+(v===val?' selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select>'}
+
+function runs(name,item){
+ if(!$('list')){$('app').innerHTML='<div class="split"><div id="list"></div><div id="detail"></div></div>'}
+ const rows=C.runs.filter(runMatches);
+ $('list').innerHTML='<div class="filters"><input type="search" id="q" placeholder="Search name, part, note…" value="'+esc(F.q)+'">'+
+  '<select id="f-kind">'+[['data','Collect + sort'],['collect','Collect'],['sort','Sort'],['dry','Dry / dashboard only'],['all','Everything']].map(([v,t])=>'<option value="'+v+'"'+(F.kind===v?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
+  sel('f-flag','Flag',Object.keys(C.flags),F.flag)+sel('f-part','Part',uniq(r=>Object.keys(r.types)),F.part)+sel('f-label','Label',uniq(r=>Object.keys(r.labels)),F.label)+sel('f-host','Host',['laptop','station'],F.host)+
+  '<span class="small mute" style="align-self:center">'+rows.length+' runs · EST</span></div>'+
+  rows.map(r=>'<div class="run'+(r.name===name?' on':'')+'" data-run="'+esc(r.name)+'"><span class="t">'+r.est+'</span><span class="mono">'+esc(r.name.replace('20261113_',''))+' <span class="mute">'+r.host+'</span></span><span>'+(r.kind==='dry'?'':done(r)+'/'+r.attempts+' ')+flag(r.kind==='dry'?null:r.flag)+'</span><span></span><span class="what">'+esc(r.kind==='sort'?(r.what||'sort'):r.kind==='dry'?(r.judge_rows?'dry run':'dashboard cache only'):Object.keys(r.types).length?plain(r.types)+' · '+plain(r.labels):(r.what||'–'))+'</span></div>').join('');
+ $('q').oninput=e=>{F.q=e.target.value;const p=e.target.selectionStart;runs(name);$('q').focus();$('q').setSelectionRange(p,p)};
+ for(const k of['kind','flag','part','label','host'])$('f-'+k).onchange=e=>{F[k]=e.target.value;runs(name)};
+ $('list').querySelectorAll('.run').forEach(e=>e.onclick=()=>go('runs',e.dataset.run));
+ const r=RUN[name]||rows.find(x=>x.kind!=='dry')||rows[0];if(!r){$('detail').innerHTML='<p class="mute">No run matches.</p>';return}
+ if(!name){const on=$('list').querySelector('[data-run="'+CSS.escape(r.name)+'"]');if(on)on.classList.add('on')}
+ runDetail(r);if(item)openItem(r.name+'/'+item,r.items.map(i=>i.id))}
+
+function runDetail(r){
+ let h='<h2 style="margin-top:0"><span class="mono" style="font-size:15px">'+esc(r.name)+'</span> '+flag(r.flag)+'</h2>'+(r.what?'<div><b>'+esc(r.what)+'</b></div>':'');
+ h+='<div class="facts"><div><b>Started</b>'+r.est+' EST · '+r.mst+' MST</div><div><b>Host</b>'+r.host+'</div><div><b>Mode</b>'+r.kind+'</div><div><b>Part</b>'+counts(r.types)+'</div><div><b>Label</b>'+counts(r.labels)+'</div><div><b>Recipe</b>'+counts(r.recipes)+'</div>'+
+  '<div><b>Outcomes</b>'+(Object.entries(r.outcomes).map(([o,v])=>esc(C.outcomes[o])+' '+v).join(', ')||'–')+'</div><div><b>Images</b>'+r.images+'</div><div><b>Median cycle</b>'+num(r.cycle_s)+' s</div><div><b>Median latency</b>'+(r.latency_ms??'–')+' ms</div><div><b>Backup</b>'+esc(r.shared)+'</div><div><b>Folder</b><span class="mono">runs/'+esc(r.name)+'/</span></div></div>';
+ if(r.note)h+='<div class="note" style="border-left-color:var(--'+(r.flag||'mute')+')">'+esc(r.note)+(r.truth_source?'<br><span class="small mute">Ground truth shown on the picks comes from '+esc(r.truth_source)+', not from the data.</span>':'')+'</div>';
+ if(Object.keys(r.exclude).length)h+='<div class="note" style="border-left-color:var(--exclude)"><b>exclude.json</b> · '+Object.entries(r.exclude).map(([k,v])=>esc(k.replace('item_','#'))+' '+esc(v)).join(' · ')+'</div>';
+ const pics=r.extras.filter(x=>/\.(jpe?g|png)$/i.test(x));if(pics.length)h+='<p>Review images: '+pics.map(x=>'<a target="_blank" href="'+enc(r.name+'/'+x)+'">'+esc(x)+'</a>').join(' · ')+'</p>';
+ if(r.kind==='dry')h+='<p class="mute">No motion and no images. '+(r.judge_rows?r.judge_rows+' rows in judge.jsonl ('+counts(r.judge_results)+').':'Dashboard cache only.')+'</p>';
+ h+='<div class="grid">'+r.items.map(i=>card(i,false)).join('')+'</div>';
+ $('detail').innerHTML=h;bindCards($('detail'),r.items.map(i=>i.id))}
+
+function thumb(i){return i.images.find(x=>x.startsWith('top_'))||i.images.find(x=>x.startsWith('crop_front'))||i.images[0]}
+function card(i,withRun){const t=thumb(i),run=i.id.split('/')[0];
+ const tags=[i.excluded?'<span class="tag bad">excluded: '+esc(i.excluded)+'</span>':'',i.truth?'<span class="tag '+(verdict(i)===false?'bad':'good')+'">truth: '+esc(i.truth)+(verdict(i)===false?' ✗':verdict(i)?' ✓':'')+'</span>':'',
+  ...Object.entries(i.used_by).map(([m,s])=>'<span class="tag" title="listed in this bundle">'+esc(m)+': '+esc(s)+'</span>')].join('');
+ return'<div class="card o-'+i.outcome+(i.excluded?' x':'')+'" data-id="'+esc(i.id)+'">'+(t?'<img loading="lazy" src="'+enc(i.id+'/'+t)+'" alt="">':'<div class="noimg">no image</div>')+
+  '<div class="cap"><b>#'+String(i.n).padStart(3,'0')+'</b> '+esc(C.outcomes[i.outcome])+(withRun?' <span class="mute mono">'+esc(run.replace('20261113_',''))+'</span>':'')+'<br><span class="mute">'+esc(i.type||'?')+' · '+esc(i.label||'?')+(i.outcome==='captured'||!i.reason?'':' · '+esc(i.reason))+'</span><br>'+tags+'</div></div>'}
+function verdict(i){if(!i.truth||!['good','reject'].includes(i.outcome))return null;return(i.truth==='good')===(i.outcome==='good')}
+function bindCards(root,ids){root.querySelectorAll('.card').forEach(c=>c.onclick=()=>openItem(c.dataset.id,ids))}
+
+function allItems(){return C.runs.filter(r=>r.kind!=='dry').flatMap(r=>r.items.map(i=>Object.assign({run:r},i)))}
+function picks(){const all=allItems(),u=k=>[...new Set(all.map(i=>i[k]).filter(Boolean))].sort();
+ const rows=all.filter(i=>(!P.part||i.type===P.part)&&(!P.label||i.label===P.label)&&(!P.outcome||i.outcome===P.outcome)&&(!P.recipe||i.recipe===P.recipe)&&
+  (!P.use||(['current','caution','legacy'].includes(P.use)?group(i,i.run)===P.use:P.use==='excluded'?!!i.excluded||i.run.flag==='exclude':P.use==='unused'?!Object.keys(i.used_by).length:Object.keys(i.used_by).length>0)));
+ $('app').innerHTML='<div class="filters" style="grid-template-columns:repeat(6,minmax(120px,200px));border:0;background:none;position:static;padding:0 0 10px">'+sel('p-part','Part',u('type'),P.part)+sel('p-label','Label',u('label'),P.label)+
+  sel('p-outcome','Outcome',Object.entries(C.outcomes),P.outcome)+sel('p-recipe','Recipe',u('recipe'),P.recipe)+sel('p-use','Use',[['current','Usable, current recipe'],['caution','Review first'],['legacy','Legacy recipe'],['excluded','Excluded'],['used','In a model bundle'],['unused','In no model bundle']],P.use)+
+  '<span class="mute" style="align-self:center">'+rows.length+' picks</span></div><div class="grid">'+rows.slice(0,shown).map(i=>card(i,true)).join('')+'</div>'+(rows.length>shown?'<p><button id="more">Show '+Math.min(120,rows.length-shown)+' more</button></p>':'');
+ for(const k of['part','label','outcome','recipe','use'])$('p-'+k).onchange=e=>{P[k]=e.target.value;shown=120;picks()};
+ if($('more'))$('more').onclick=()=>{shown+=120;picks()};bindCards($('app'),rows.map(i=>i.id))}
+
+function openItem(id,ids){const[run,it]=id.split('/'),r=RUN[run],i=r&&r.items.find(x=>x.id===id);if(!i)return;cur={id,ids:ids||r.items.map(x=>x.id),img:thumb(i)};
+ $('dlgtitle').innerHTML='<span class="mono">'+esc(id)+'</span> · '+esc(C.outcomes[i.outcome])+' · '+esc(i.type||'?')+' · '+esc(i.label||'?');
+ showImage(i,cur.img);
+ let h='<div class="kv"><span>Outcome</span><span><b>'+esc(C.outcomes[i.outcome])+'</b>'+(i.reason?' · '+esc(i.reason):'')+'</span>'+
+  (i.truth?'<span>Truth (log)</span><span>'+esc(i.truth)+(verdict(i)===false?' · <b style="color:var(--exclude)">wrong box</b>':verdict(i)?' · correct box':'')+'</span>':'')+
+  '<span>Part</span><span>'+esc(i.type||'not recorded')+'</span><span>Label</span><span>'+esc(i.label||'not recorded')+(i.intended&&i.outcome!=='captured'?' <span class="mute">(intended; nothing captured)</span>':'')+'</span>'+
+  (i.relabel?'<span>Relabelled</span><span>'+esc(i.relabel)+'</span>':'')+'<span>Pose</span><span>'+esc(i.pose||'–')+'</span><span>Recipe</span><span>'+esc(i.recipe)+'</span>'+
+  '<span>Seen</span><span class="mono">'+esc(i.t_seen||'–')+'</span><span>Cycle</span><span>'+num(i.cycle_s)+' s · latency '+(i.latency_ms??'–')+' ms</span>'+
+  (i.excluded?'<span>Excluded</span><span style="color:var(--exclude)">'+esc(i.excluded)+'</span>':'')+
+  '<span>Model bundles</span><span>'+(Object.entries(i.used_by).map(([m,s])=>esc(m)+' <b>'+esc(s)+'</b>').join('<br>')||'<span class="mute">in none of the listed bundles</span>')+'</span>'+
+  '<span>Run</span><span><a href="#/runs/'+encodeURIComponent(run)+'">'+esc(run)+'</a> '+flag(r.flag)+'</span></div>';
+ const sc=Object.entries(i.scores||{}).filter(([,s])=>s.score!=null||s.tape!=null);
+ if(sc.length)h+='<h3>Scores</h3><table><tr><th>View</th><th class="n">Anomaly</th><th class="n">Threshold</th><th class="n">Ratio</th><th class="n">Tape %</th><th>Detail</th></tr>'+sc.map(([v,s])=>'<tr><td>'+esc(v)+'</td><td class="n"'+(s.anomalous?' style="color:var(--exclude);font-weight:600"':'')+'>'+num(s.score,2)+'</td><td class="n">'+num(s.threshold,2)+'</td><td class="n">'+num(s.ratio,3)+'</td><td class="n">'+(s.tape==null?'–':(s.tape*100).toFixed(2))+'</td><td class="small">'+esc(s.detail||'')+'</td></tr>').join('')+'</table>';
+ h+='<h3>meta.json</h3>'+(i.meta?'<pre>'+esc(JSON.stringify(i.meta,null,1))+'</pre>':'<p class="mute">None for this pick'+(i.has_meta?'':' (runs before 15:31 EST, and picks that stopped early, have no meta.json)')+'.</p>')+
+  '<h3>decisions.jsonl row</h3>'+(i.decision?'<pre>'+esc(JSON.stringify(i.decision,null,1))+'</pre>':'<p class="mute">No row: the pick did not reach a decision.</p>');
+ $('side').innerHTML=h;const k=cur.ids.indexOf(id);$('prev').disabled=k<=0;$('next').disabled=k<0||k>=cur.ids.length-1;if(!$('dlg').open)$('dlg').showModal()}
+function showImage(i,name){cur.img=name;$('viewer').innerHTML=(name?'<a target="_blank" href="'+enc(i.id+'/'+name)+'"><img class="big" src="'+enc(i.id+'/'+name)+'" alt=""></a><div class="small" style="text-align:center;margin-top:4px">'+esc(name)+' · click to open full size</div>':'<p>No images saved for this pick.</p>')+
+  '<div class="strip">'+i.images.map(x=>'<figure class="'+(x===name?'on':'')+'" data-img="'+esc(x)+'"><img loading="lazy" src="'+enc(i.id+'/'+x)+'" alt="">'+esc(x.replace(/\.\w+$/,''))+'</figure>').join('')+'</div>';
+ $('viewer').querySelectorAll('figure').forEach(f=>f.onclick=()=>showImage(i,f.dataset.img))}
+function step(d){if(!cur)return;const k=cur.ids.indexOf(cur.id)+d;if(k>=0&&k<cur.ids.length)openItem(cur.ids[k],cur.ids)}
+$('prev').onclick=()=>step(-1);$('next').onclick=()=>step(1);$('close').onclick=()=>$('dlg').close();
+document.addEventListener('keydown',e=>{if(!$('dlg').open)return;if(e.key==='ArrowLeft')step(-1);if(e.key==='ArrowRight')step(1)});
+
+function experiments(name){const e=C.experiments.find(x=>x.name===name);
+ let h='<table style="margin-bottom:14px"><tr><th>EST</th><th>Folder</th><th class="n">Images</th><th>Reports</th></tr>'+C.experiments.map(x=>'<tr><td>'+x.est+'</td><td><a class="mono" href="#/experiments/'+encodeURIComponent(x.name)+'">'+esc(x.name)+'</a></td><td class="n">'+x.images.length+'</td><td class="small">'+Object.keys(x.reports).map(esc).join(', ')+'</td></tr>').join('')+'</table>';
+ if(e){h+='<h2 class="mono">runs/'+esc(e.name)+'/</h2>'+Object.entries(e.reports).map(([n,t])=>'<details><summary>'+esc(n)+'</summary><pre>'+esc(t)+'</pre></details>').join('')+'<div class="gal" style="margin-top:10px">'+e.images.map(x=>'<figure><a target="_blank" href="'+enc(e.name+'/'+x)+'"><img loading="lazy" src="'+enc(e.name+'/'+x)+'" alt=""></a><figcaption>'+esc(x)+'</figcaption></figure>').join('')+'</div>'}
+ else{const pics=C.loose.filter(x=>/\.(jpe?g|png)$/i.test(x)),other=C.loose.filter(x=>!/\.(jpe?g|png)$/i.test(x));
+  h+='<h3>Loose review images in runs/</h3><div class="gal">'+pics.map(x=>'<figure><a target="_blank" href="'+enc(x)+'"><img loading="lazy" src="'+enc(x)+'" alt=""></a><figcaption>'+esc(x)+'</figcaption></figure>').join('')+'</div>'+(other.length?'<p>Other files: '+other.map(x=>'<a class="mono" target="_blank" href="'+enc(x)+'">'+esc(x)+'</a>').join(' · ')+'</p>':'')}
+ $('app').innerHTML=h}
+
+function models(){$('app').innerHTML='<div class="note">Pick lists come from each bundle’s own manifest (train / calibration / test pick ids, union over views). Open a pick to see which bundles list it. A pick in <b>calibration</b> or <b>test</b> of a bundle has influenced that bundle’s threshold or its reported numbers.</div>'+
+ '<table><tr><th>Bundle</th><th>Where</th><th>Crop policy</th><th>Banks</th><th>Part types</th><th class="n">Train</th><th class="n">Cal</th><th class="n">Test</th><th>Built from runs (picks)</th></tr>'+C.models.map(m=>'<tr><td><b class="mono">'+esc(m.name)+'</b><br><span class="small mute">'+m.files.map(esc).join('<br>')+(m.notes.length?'<br>'+m.notes.map(esc).join('<br>'):'')+'</span></td><td class="small">'+esc(m.where)+(m.shared?'':'<br><b style="color:var(--exclude)">not in the shared repo</b>')+'</td><td class="mono">'+esc(m.crop_policy)+'</td><td class="n">'+m.banks+'</td><td class="small">'+m.types.map(esc).join('<br>')+'<br><span class="mute">'+m.backgrounds.map(esc).join(', ')+'</span></td><td class="n">'+m.picks.train+'</td><td class="n">'+m.picks.calibration+'</td><td class="n">'+m.picks.test+'</td><td class="small">'+Object.entries(m.runs).map(([r,n])=>'<a class="mono" href="#/runs/'+encodeURIComponent(r)+'">'+esc(r.replace('20261113_',''))+'</a> '+n).join(' · ')+'</td></tr>').join('')+'</table>'+
+ C.not_in_data.filter(n=>n.name.startsWith('models/')).map(n=>'<div class="note" style="border-left-color:var(--caution)"><b>'+esc(n.name)+'</b> <span class="mute">'+esc(n.when)+'</span><br>'+esc(n.what)+'. '+esc(n.note)+'</div>').join('')}
+
+function render(){const r=route();nav(r.tab);if(r.tab!=='runs')$('app').innerHTML='';
+ ({overview,runs:()=>runs(r.a,r.b),picks,experiments:()=>experiments(r.a),models}[r.tab]||overview)()}
+$('gen').textContent='generated '+C.generated.replace('T',' ').slice(0,16)+' EST · python3 catalog.py';
+window.addEventListener('hashchange',()=>{if($('dlg').open)$('dlg').close();render()});render();
+</script></body></html>

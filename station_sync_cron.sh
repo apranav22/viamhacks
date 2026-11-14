@@ -1,5 +1,5 @@
 #!/bin/sh
-# Push finished runs (and, with --models '*', model bundles) to the team's private HF dataset repo.
+# Push finished runs (and, with --models '*', model bundles) to the team's HF dataset repo.
 # Skips while a sort.py loop runs so uploads never compete with a live run. Log: /opt/viam/sorter-ali/sync.log
 # Installed 2026-11-13 by claude-code/claude-opus-5-5 (op Ali). Remove: crontab -e, delete the sync_cron.sh line.
 B=/opt/viam/sorter-ali

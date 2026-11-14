@@ -73,13 +73,13 @@ Hard-won facts (each cost us an hour; don't relearn them):
 
 | Fact | Value |
 |---|---|
-| Fingers close along the gripper's **y** axis | `jaw_offset_deg` **0** (90 grips a screw end to end) |
+| Fingers close along the gripper's **y** axis | Current closing heading = part long-axis heading + `jaw_offset_deg` **90**. Offset is not the physical axis. Confirmed against deployed poses.json, 2026-11-14 recovery. |
 | Closed fingertips past the gripper TCP | **20.5 mm** (open ≈ 13 mm; tips drop up to ~25 mm as the jaws close) |
 | Table top | z **−1.3 mm**; a depth scan's median swings ±3 mm and once read +3.6 |
 | `gripper.grab()` returns before the jaws settle | read `pos` again after it stops changing; ~0–15 = closed on nothing |
 | `anomaly` vision service, anomalib 0.1.5 | `capture_all_from_camera` crashes viam-server; use separate calls |
 | `overview-cam` (the webcam) | no depth; MJPEG 1920×1080 since 14:26 (backup `config_backups/before_cam1080_142629.json` on Ali's laptop) |
-| Webcam position | **moved ~14:30** to a tripod, lens ≈ (−125, −230, ~300) mm from wrist depth; `config/checkpoint.json` lens + capture views are **stale** until re-measured |
+| Webcam position | Re-measured 2026-11-13 14:45–14:50 after tripod move; current lens (−101, −206, 347) mm and capture views in `config/checkpoint.json`. Measured values agree with the recovered station snapshot (2026-11-14 recovery). |
 | Laptop → station latency | RPC 85–230 ms, color+depth frame 0.3–1.3 s. Judged runs execute on the station |
 
 ## 7. How to work with the humans and the other agents
@@ -87,7 +87,7 @@ Hard-won facts (each cost us an hour; don't relearn them):
 - **Change one variable at a time** on the arm and say which. Don't swap in your own fork of the pick pipeline while
   someone is debugging the shared one; run theirs unchanged first.
 - Report outcomes as they are: failed runs, skipped steps, untested code ("dry run only") are stated plainly.
-- Prefer extending the existing code (`pipeline.py`, `motion_probe.py`, `vh/`, `dashboard/`) over parallel rewrites.
+- Prefer extending the existing code (`sort.py`, `vh/`, `tools/`, `dashboard/`) over parallel rewrites.
   Check `docs/AGENT_LOG.md` for who is doing what.
 
 ## 8. Handoff template (end of a session, or when passing work on)
@@ -108,8 +108,11 @@ Next:      the single most useful next step
 | `docs/DATA_PLAN.md` | part classes, data splits, holdout defects |
 | `sync_data.py` | share runs/ and models/ with the team (public HF dataset; read access needs no login): `status` · `pull` · `push` (DATA_PLAN.md, end) |
 | `docs/AGENT_LOG.md` | who is doing what, arm taken/released, config changes |
-| `pipeline.py`, `motion_probe.py`, `overview.py` (Pranav) | scan, grasp, motion primitives, present views |
-| `vh/`, `run.py` (Ali) | perception, geometry, telemetry; baseline cycle |
+| `docs/DAY1_RECAP.md` · `RUN_CATALOG.md` | day-1 recap; every run with part, label, counts, flag and note |
+| `catalog.py` | rebuilds the catalog: `python3 catalog.py` then `open runs/index.html` (all images + metadata per pick); notes in `docs/run_notes.json` |
+| `sort.py`, `vh/` | supported collect/sort loop and shared perception, motion, anomaly and telemetry code |
+| `tools/` | calibration, motion probes, diagnostics and read-only station recovery |
+| `archive/station/` | recovered station-only source, model descriptors and SHA256 provenance |
 | `dashboard/server.py` | live dashboard (UDP telemetry, idle camera preview) on :8765 |
 | `config/` | measured poses, checkpoint, Viam config tooling |
 | `site/` | visual overview (`python3 site/build.py`) |

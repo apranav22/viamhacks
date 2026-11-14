@@ -1,3 +1,7 @@
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+
+> Historical event/bring-up record. Current commands and measured configuration: [README](../README.md) and [ARCHITECTURE](ARCHITECTURE.md). Earlier camera, pose and implementation status below are dated observations.
+
 # Context: event, scoring, station, Viam pieces
 
 Sources: the event slides, the reference sheet (version 2026-11-13 08:28, the authority where they differ), module READMEs, and read-only probes of our station through the Viam SDK and app API.

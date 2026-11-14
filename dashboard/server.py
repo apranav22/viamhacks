@@ -29,10 +29,12 @@ import time
 from collections import OrderedDict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
+from dashboard.history import History, finite_json
 KEEP_FRAMES = 400                          # ~10 MB of JPEGs
 PREVIEW_BASE = 1 << 31                     # preview frame ids start here; kept apart so they never evict run frames
 KEEP_PREVIEW = 24
@@ -65,6 +67,8 @@ class Hub:
         self.run_state, self.run_last = "IDLE", 0.0
         self.latest = {}
         self.remote_run = False                       # newest idle-preview frame/detection per camera + arm state
+        self.current_run = None
+        self.is_replay = False
 
     def run_active(self):
         """A run is active while it keeps sending telemetry and hasn't said IDLE."""
@@ -121,6 +125,16 @@ class Hub:
         self.stats["frames"] += 1
 
     def event(self, ev):
+        if ev.get('k') == 'run':
+            if ev.get('run') != self.current_run:
+                # Frame counters restart in each producer. A lost new frame must never
+                # resolve to an old run's image with the same numeric ID.
+                with self.lock:
+                    self.frames.clear()
+                    self.partial.clear()
+            self.current_run = ev.get('run')
+        elif self.current_run is None and ev.get('run'):
+            self.current_run = ev['run']
         fr = ev.get("frame")
         if fr:
             got = self.get_frame(fr["id"])
@@ -389,10 +403,17 @@ def list_candidates():
     return [json.loads(l) for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
 
 
-def make_handler(hub):
+def make_handler(hub, history=None):
+    history = history or History(ROOT / 'runs', ROOT / 'docs' / 'run_notes.json')
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
+
+        def handle(self):
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError):
+                pass                          # a browser may navigate away while images/SSE are in flight
 
         def _send(self, code, body, ctype):
             self.send_response(code)
@@ -403,15 +424,59 @@ def make_handler(hub):
             self.wfile.write(body)
 
         def do_GET(self):
-            path = self.path.split("?")[0]
+            url = urlsplit(self.path)
+            path, query = url.path, parse_qs(url.query)
+            arg = lambda key: query.get(key, [''])[0]
             if path in ("/", "/index.html"):
                 return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+            if path in ('/app.js', '/state.js', '/style.css', '/viewport.css', '/models.js'):
+                mime = 'text/css' if path.endswith('.css') else 'text/javascript'
+                return self._send(200, (HERE / path[1:]).read_bytes(), mime + '; charset=utf-8')
+            if path in ('/explore', '/history'):
+                self.send_response(302)
+                self.send_header('Location', '/#history')
+                self.end_headers()
+                return
+            if path in ('/api/models/benchmarks', '/api/models/compare'):
+                from dashboard.benchmarks import Benchmarks
+                try:
+                    benchmarks = Benchmarks(history, ROOT / 'config' / 'benchmarks')
+                    data = benchmarks.index() if path.endswith('/benchmarks') else benchmarks.compare(arg('benchmark'))
+                    return self._send(200, json.dumps(finite_json(data), allow_nan=False).encode(), 'application/json')
+                except (FileNotFoundError, ValueError, OSError) as error:
+                    return self._send(404, json.dumps({'error': str(error)}).encode(), 'application/json')
+            if path.startswith('/api/history/'):
+                try:
+                    if path == '/api/history/runs':
+                        data = history.runs(refresh=arg('refresh') == '1')
+                    elif path == '/api/history/run':
+                        data = history.run(arg('run'))
+                    elif path == '/api/history/item':
+                        data = history.item(arg('run'), arg('item'))
+                    elif path == '/api/history/image':
+                        blob, mime = history.image(arg('path'))
+                        return self._send(200, blob, mime)
+                    elif path == '/api/history/crop':
+                        blob, mime = history.reconstructed_crop(arg('run'), arg('item'), arg('capture'), arg('evaluation'))
+                        return self._send(200, blob, mime)
+                    else:
+                        raise FileNotFoundError('Unknown history endpoint')
+                    return self._send(200, json.dumps(finite_json(data), allow_nan=False).encode(), 'application/json')
+                except (FileNotFoundError, ValueError, OSError, ImportError) as error:
+                    return self._send(404, json.dumps({'error': str(error)}).encode(), 'application/json')
             if path.startswith("/frame/"):
                 try:
                     fid = int(path.rsplit("/", 1)[1])
                 except ValueError:
                     return self._send(400, b"bad id", "text/plain")
-                got = hub.get_frame(fid)
+                requested_run = arg('run')
+                got = hub.get_frame(fid) if not requested_run or requested_run == hub.current_run else None
+                if not got and requested_run:
+                    try:
+                        blob, mime = history.image(f'{requested_run}/dash/frames/{fid}.bin')
+                        got = (mime, blob)
+                    except OSError:
+                        pass
                 if not got:
                     return self._send(404, b"gone", "text/plain")
                 mime, blob = got
@@ -425,7 +490,8 @@ def make_handler(hub):
                     return self._send(404, b"not found", "text/plain")
                 return self._send(200, f.read_bytes(), "image/jpeg")
             if path == "/health":
-                body = dict(hub.stats, last_packet_age=round(time.time() - hub.last_packet, 2) if hub.last_packet else None)
+                body = dict(hub.stats, last_packet_age=round(time.time() - hub.last_packet, 2) if hub.last_packet else None,
+                            run=hub.current_run, active=hub.run_active(), state=hub.run_state, replay=hub.is_replay)
                 return self._send(200, json.dumps(body).encode(), "application/json")
             if path == "/events":
                 return self.sse()
@@ -486,6 +552,7 @@ def main():
     ap.add_argument("--udp-host", default="0.0.0.0")
     ap.add_argument("--udp-port", type=int, default=8766)
     ap.add_argument("--record", default=str(ROOT / "runs"), help="'' to disable recording")
+    ap.add_argument("--runs-dir", default=str(ROOT / "runs"), help="saved captures and results for History")
     ap.add_argument("--replay", default=None, help="a runs/<run>/dash folder to replay")
     ap.add_argument("--speed", type=float, default=1.0)
     ap.add_argument("--no-preview", action="store_true", help="never connect to the robot (telemetry only)")
@@ -498,6 +565,7 @@ def main():
     ap.add_argument("--key", default=str(ROOT / "api-key.json"))
     a = ap.parse_args()
     hub = Hub(a.record or None if not a.replay else None)
+    hub.is_replay = bool(a.replay)
     if a.replay:
         threading.Thread(target=replay, args=(hub, a.replay, a.speed), daemon=True).start()
     else:
@@ -506,7 +574,7 @@ def main():
             threading.Thread(target=lambda: asyncio.run(preview_loop(hub, a.key, a.preview_cams.split(","), a.preview_fps,
                                                                          a.preview_during_run, a.run_preview_fps)),
                              daemon=True).start()
-    srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub))
+    srv = ThreadingHTTPServer((a.host, a.port), make_handler(hub, History(a.runs_dir, ROOT / 'docs' / 'run_notes.json')))
     srv.daemon_threads = True
     print(f"dashboard: http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}  "
           f"({'replaying ' + a.replay if a.replay else f'telemetry on udp :{a.udp_port}'})")

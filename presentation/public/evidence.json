@@ -1,0 +1,770 @@
+{
+  "identity": "codex/unknown; operator Ali (git: Ali, github: Armib20); host Mac.mynetworksettings.com; branch ali/judges-presentation",
+  "assets": {
+    "watch": "judges-watch.jpg",
+    "top": "judges-top.jpg",
+    "held": "judges-held.jpg",
+    "heldCrop": "judges-held-crop.jpg",
+    "detail": "judges-detail.jpg"
+  },
+  "live": {
+    "pick": "20261113_173234_sort/item_002",
+    "decision": {
+      "item": 2,
+      "t_seen": "2026-11-13T17:32:53.212-07:00",
+      "t_first_motion": "2026-11-13T17:32:55.885-07:00",
+      "latency_ms": 2672,
+      "pick_xy": [
+        270.1,
+        358.0
+      ],
+      "yaw": 86.1,
+      "decision": "reject",
+      "reason": "known: tape (top face, 12.9% of part)",
+      "decided_at_view": "top",
+      "scores": {
+        "top": {
+          "status": "ok",
+          "score": 19.219877243041992,
+          "threshold": 18.286541118621827,
+          "anomalous": true,
+          "ratio": 1.0510395114289666,
+          "infer_ms": 11.36,
+          "detail": "best type hex_bolt_partial",
+          "anomaly": 19.219877243041992,
+          "tape": 0.1290736984448952
+        },
+        "front": {
+          "tape": 0.0121,
+          "anomaly": 10.957966804504395,
+          "frame_ms": 49,
+          "status": "ok",
+          "score": 10.957966804504395,
+          "threshold": 15.676136636734011,
+          "anomalous": false,
+          "ratio": 0.6990221544016468,
+          "infer_ms": 18.34,
+          "detail": "best type socket_m16"
+        }
+      },
+      "t_decided": "2026-11-13T17:33:03.457-07:00",
+      "top_tape": 0.1290736984448952,
+      "pose": "lying",
+      "height_mm": null,
+      "t_released": "2026-11-13T17:33:04.641-07:00",
+      "cycle_s": 12.8
+    },
+    "bbox": [
+      478,
+      348,
+      901,
+      472
+    ],
+    "meta": {
+      "item": 2,
+      "label": "unlabeled",
+      "type": "auto",
+      "mode": "sort",
+      "background": "cardboard",
+      "camera": {
+        "brightness": 8,
+        "white_balance_automatic": 1,
+        "auto_exposure": 1,
+        "exposure_time_absolute": 100,
+        "width_px": 1280,
+        "height_px": 720,
+        "fx": 908.25
+      },
+      "top": {
+        "top_1": {
+          "bbox": [
+            478,
+            348,
+            901,
+            472
+          ],
+          "xy": [
+            270.1,
+            358.0
+          ],
+          "yaw_world": 86.1,
+          "pixels": 35397,
+          "cam_R": [
+            [
+              1e-05,
+              -1.0,
+              1e-05
+            ],
+            [
+              -1.0,
+              -1e-05,
+              -1e-05
+            ],
+            [
+              1e-05,
+              -1e-05,
+              -1.0
+            ]
+          ],
+          "cam_t": [
+            276.24,
+            366.39,
+            196.76
+          ]
+        }
+      },
+      "anomaly": {
+        "top": {
+          "status": "ok",
+          "score": 19.219877243041992,
+          "threshold": 18.286541118621827,
+          "anomalous": true,
+          "ratio": 1.0510395114289666,
+          "infer_ms": 11.36,
+          "detail": "best type hex_bolt_partial",
+          "model_crop": [
+            363,
+            233,
+            1016,
+            587
+          ]
+        },
+        "front": {
+          "status": "ok",
+          "score": 10.957966804504395,
+          "threshold": 15.676136636734011,
+          "anomalous": false,
+          "ratio": 0.6990221544016468,
+          "infer_ms": 18.34,
+          "detail": "best type socket_m16",
+          "model_crop": [
+            394,
+            231,
+            1243,
+            1080
+          ]
+        }
+      },
+      "views": {
+        "front": {
+          "crop_box": [
+            558,
+            427,
+            1078,
+            1080
+          ],
+          "joints_deg": [
+            -12.67,
+            -52.37,
+            -62.3,
+            -22.02,
+            -111.71,
+            -3.76
+          ],
+          "tcp": [
+            285.2,
+            -149.8,
+            260.2
+          ],
+          "tool_axis": [
+            -0.966,
+            -0.14,
+            0.216
+          ],
+          "jaw": 270.0
+        }
+      },
+      "pose": "lying",
+      "height_mm": null,
+      "decision": "reject",
+      "grasp_tcp_z": 29.0
+    }
+  },
+  "examples": {
+    "marker": {
+      "pick": "20261113_171810_collect/item_004",
+      "file": "top_1.jpg",
+      "type": "hex_bolt_partial",
+      "label": "marker",
+      "split": "test",
+      "bbox": [
+        565,
+        298,
+        909,
+        434
+      ],
+      "image_sha256": "c33fb39ec0c58bfc6f989495e80f4745155ab918f848a926963dc93493cd27a0",
+      "routed": {
+        "status": "ok",
+        "score": 22.45245933532715,
+        "threshold": 20.41701192855835,
+        "anomalous": true,
+        "ratio": 1.0996936972898426,
+        "infer_ms": 9.99,
+        "detail": "type hex_bolt_partial (by size)"
+      },
+      "oracle": {
+        "status": "ok",
+        "score": 22.45245933532715,
+        "threshold": 20.41701192855835,
+        "anomalous": true,
+        "ratio": 1.0996936972898426,
+        "infer_ms": 11.17,
+        "detail": null
+      },
+      "selected_type": "hex_bolt_partial",
+      "size": [
+        66.94340765207818,
+        19.84315992292871,
+        29.548091263628635
+      ],
+      "size_distance": 1.437396205238052,
+      "image": "judges-marker.jpg",
+      "modelImage": "judges-marker-model.jpg",
+      "original": {
+        "item": 4,
+        "t_seen": "2026-11-13T17:19:01.494-07:00",
+        "t_first_motion": "2026-11-13T17:19:02.513-07:00",
+        "latency_ms": 1019,
+        "pick_xy": [
+          319.5,
+          309.8
+        ],
+        "yaw": 79.9,
+        "decision": "collect",
+        "reason": "marker",
+        "decided_at_view": null,
+        "scores": {
+          "top": {
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded",
+            "anomaly": null,
+            "tape": 0.03966747646522927
+          },
+          "front": {
+            "tape": 0.0002,
+            "anomaly": null,
+            "frame_ms": 74,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "yaw-20": {
+            "tape": 0.0006,
+            "anomaly": null,
+            "frame_ms": 63,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "yaw+35": {
+            "tape": 0.0005,
+            "anomaly": null,
+            "frame_ms": 74,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "pitch-25": {
+            "tape": 0.0,
+            "anomaly": null,
+            "frame_ms": 74,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          }
+        },
+        "t_decided": "2026-11-13T17:19:10.726-07:00",
+        "top_tape": 0.03966747646522927,
+        "pose": "lying",
+        "height_mm": null,
+        "label": "marker",
+        "type": "hex_bolt_partial",
+        "t_released": "2026-11-13T17:19:14.248-07:00",
+        "cycle_s": 14.03
+      }
+    },
+    "miss": {
+      "pick": "20261113_173029_collect/item_001",
+      "file": "top_1.jpg",
+      "type": "button_ss_long",
+      "label": "tape",
+      "split": "test",
+      "bbox": [
+        538,
+        352,
+        834,
+        412
+      ],
+      "image_sha256": "cbb12f8787539ef77e04f2902c061ceac356def895564767cadc9c66686f5876",
+      "routed": {
+        "status": "ok",
+        "score": 18.930307388305664,
+        "threshold": 22.88876791000366,
+        "anomalous": false,
+        "ratio": 0.8270566359332985,
+        "infer_ms": 8.74,
+        "detail": "type hex_nut (by size)"
+      },
+      "oracle": {
+        "status": "ok",
+        "score": 22.677242279052734,
+        "threshold": 24.480936908721922,
+        "anomalous": false,
+        "ratio": 0.9263224836371937,
+        "infer_ms": 10.08,
+        "detail": null
+      },
+      "selected_type": "hex_nut",
+      "size": [
+        13.302130470685384,
+        10.031114781172585,
+        9.783928170312166
+      ],
+      "size_distance": 4.519031894884315,
+      "image": "judges-miss.jpg",
+      "modelImage": "judges-miss-model.jpg",
+      "original": {
+        "item": 1,
+        "t_seen": "2026-11-13T17:30:33.117-07:00",
+        "t_first_motion": "2026-11-13T17:30:33.508-07:00",
+        "latency_ms": 391,
+        "pick_xy": [
+          286.0,
+          349.6
+        ],
+        "yaw": 93.7,
+        "decision": "collect",
+        "reason": "tape",
+        "decided_at_view": null,
+        "scores": {
+          "top": {
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded",
+            "anomaly": null,
+            "tape": 0.05731421356421357
+          },
+          "front": {
+            "tape": 0.0,
+            "anomaly": null,
+            "frame_ms": 49,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "yaw-20": {
+            "tape": 0.0,
+            "anomaly": null,
+            "frame_ms": 73,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "yaw+35": {
+            "tape": 0.0,
+            "anomaly": null,
+            "frame_ms": 63,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          },
+          "pitch-25": {
+            "tape": 0.0,
+            "anomaly": null,
+            "frame_ms": 61,
+            "status": "missing",
+            "score": null,
+            "threshold": null,
+            "anomalous": null,
+            "ratio": null,
+            "infer_ms": 0.0,
+            "detail": "No anomaly bundle loaded"
+          }
+        },
+        "t_decided": "2026-11-13T17:30:42.787-07:00",
+        "top_tape": 0.05731421356421357,
+        "pose": "lying",
+        "height_mm": null,
+        "label": "tape",
+        "type": "button_ss_long",
+        "t_released": "2026-11-13T17:30:46.689-07:00",
+        "cycle_s": 14.43
+      }
+    }
+  },
+  "normalImages": [
+    "judges-normal-0.jpg",
+    "judges-normal-1.jpg",
+    "judges-normal-2.jpg",
+    "judges-normal-3.jpg",
+    "judges-normal-4.jpg",
+    "judges-normal-5.jpg"
+  ],
+  "groups": {
+    "good": {
+      "total": 34,
+      "flagged": 2,
+      "clear": 32,
+      "unknown": 0,
+      "oracleFlagged": 0
+    },
+    "tape": {
+      "total": 16,
+      "flagged": 10,
+      "clear": 5,
+      "unknown": 1,
+      "oracleFlagged": 11
+    },
+    "marker": {
+      "total": 6,
+      "flagged": 6,
+      "clear": 0,
+      "unknown": 0,
+      "oracleFlagged": 6
+    },
+    "other": {
+      "total": 6,
+      "flagged": 6,
+      "clear": 0,
+      "unknown": 0,
+      "oracleFlagged": 6
+    }
+  },
+  "timing": {
+    "n": 169,
+    "median": 10.18,
+    "p95": 13.02
+  },
+  "replay": {
+    "schema": "dashboard-replay-v1",
+    "label": "Curated candidate \u00b7 margin 1.15 \u00b7 Intel CPU",
+    "bundle": "/opt/viam/sorter-ali/models/codex_curated_20261114_003525/bundle.json",
+    "bundle_sha256": "08113d10008223d223a12f738561c3d1e385e787b2d1e3f9252bcf7a8b5e7747",
+    "sizes_sha256": "384b5dc55019a0413522070d05b309efaf942297db6df8c46322d5ee7170a4b8",
+    "runtime_sha256": "0b639397d582a6e0d8589e44ae5b735ad4d312364c6565a298f8cc4ef376dbdc",
+    "crop_policy": "part-top-v2",
+    "device": "CPU",
+    "agent": "codex/unknown",
+    "operator": "Ali (git: Ali, github: unknown)",
+    "host": "armfarm04b",
+    "branch": "ali/pipeline",
+    "limitations": [
+      "Repeated-pick development data; not independent specimens.",
+      "Size catalog includes historical captures; routing evaluation is development evidence.",
+      "Six modelled types; no thin-short bank."
+    ],
+    "errors": [],
+    "completed": 1794635215.3565571
+  },
+  "replay_sha256": "883554f2b3cfd4508c9ce87721700f2d66f7cfcd5c1bcbd0c754fb2989a90bad",
+  "manifest": [
+    {
+      "asset": "judges-watch.jpg",
+      "source": "runs/20261113_173234_sort/item_002/watch.jpg",
+      "source_sha256": "997ef993dab214ecb88a1cc14016115cdc203f8225c57258e61ebf5696ca34ed",
+      "asset_sha256": "2821a10d00a0e4da1ccce4a9e11f0e17f8eec0e9946e67d8a1e901cf1d76fccb",
+      "transform": "Full saved frame, resized only"
+    },
+    {
+      "asset": "judges-top.jpg",
+      "source": "runs/20261113_173234_sort/item_002/top_1.jpg",
+      "source_sha256": "8799e6b1c1f5d2401c3ebb0cfcca2deed903ce379b86cfc3b467188dd852ae58",
+      "asset_sha256": "12f57bb046f8eec7f22625281f847c06451481c17ba968eee0616bd012d5134f",
+      "transform": "Full saved frame, resized only"
+    },
+    {
+      "asset": "judges-held.jpg",
+      "source": "runs/20261113_173234_sort/item_002/web_front.jpg",
+      "source_sha256": "de7d8c6340c1cfdea3a5f2531a2ce7d754ce2b2639dd3c8b05bf608803cdca5f",
+      "asset_sha256": "9e2bb04642b03f8d90149148c17eee1c144f768916ea3b36ed17fade205a72fe",
+      "transform": "Full saved frame, resized only"
+    },
+    {
+      "asset": "judges-held-crop.jpg",
+      "source": "runs/20261113_173234_sort/item_002/crop_front.jpg",
+      "source_sha256": "9f96247e2db9d59b9143e051f93b9b3a73f0bf27ac708c889884cd2df13c5782",
+      "asset_sha256": "24f2a9e9e72c6a4ac54738f6d792355f8c73fb629e5688903639cf60d695ba00",
+      "transform": "Full saved frame, resized only"
+    },
+    {
+      "asset": "judges-detail.jpg",
+      "source": "runs/20261113_173234_sort/item_002/top_1.jpg",
+      "source_sha256": "8799e6b1c1f5d2401c3ebb0cfcca2deed903ce379b86cfc3b467188dd852ae58",
+      "asset_sha256": "406c1031374119a34159cfc1821f4833d7fb2145ee94fc3dc7f8b0d09a06eff9",
+      "transform": {
+        "display_crop": [
+          478,
+          348,
+          901,
+          472
+        ],
+        "note": "Display crop; not model preprocessing"
+      }
+    },
+    {
+      "asset": "judges-marker.jpg",
+      "source": "runs/20261113_171810_collect/item_004/top_1.jpg",
+      "source_sha256": "c33fb39ec0c58bfc6f989495e80f4745155ab918f848a926963dc93493cd27a0",
+      "asset_sha256": "891ebd8bf3d4b2c68af312693e7c26543cde71245c5eaa8c299663dcfe81fcec",
+      "transform": {
+        "display_crop": [
+          565,
+          298,
+          909,
+          434
+        ],
+        "note": "Display crop; not model preprocessing"
+      }
+    },
+    {
+      "asset": "judges-marker-model.jpg",
+      "source": "runs/20261113_171810_collect/item_004/top_1.jpg",
+      "source_sha256": "c33fb39ec0c58bfc6f989495e80f4745155ab918f848a926963dc93493cd27a0",
+      "asset_sha256": "ac66271692371b0e2cf99f65910cfb7e19cbf51eda087d17927167aacd5d3268",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          565,
+          298,
+          909,
+          434
+        ],
+        "crop": [
+          469,
+          202,
+          1005,
+          530
+        ]
+      }
+    },
+    {
+      "asset": "judges-miss.jpg",
+      "source": "runs/20261113_173029_collect/item_001/top_1.jpg",
+      "source_sha256": "cbb12f8787539ef77e04f2902c061ceac356def895564767cadc9c66686f5876",
+      "asset_sha256": "90287bbd865064da347fc4b5d6cee01886a1f9b85187d6a2e637be67fe1ab43e",
+      "transform": {
+        "display_crop": [
+          538,
+          352,
+          834,
+          412
+        ],
+        "note": "Display crop; not model preprocessing"
+      }
+    },
+    {
+      "asset": "judges-miss-model.jpg",
+      "source": "runs/20261113_173029_collect/item_001/top_1.jpg",
+      "source_sha256": "cbb12f8787539ef77e04f2902c061ceac356def895564767cadc9c66686f5876",
+      "asset_sha256": "bda8d91330dd26449f5c13cf2122d8241ed098abac3676e15891feef73d648cc",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          538,
+          352,
+          834,
+          412
+        ],
+        "crop": [
+          454,
+          268,
+          918,
+          496
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-0.jpg",
+      "source": "runs/20261113_173414_collect/item_001/top_1.jpg",
+      "source_sha256": "35430c035e1f17a634d3c3185c7a3fd4584deb61b34dc167730d3010bf2e94ec",
+      "asset_sha256": "9d81df9957fde13cc8b6750f729aa21f896eb707f8d090e86f3472948fc43e38",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          522,
+          377,
+          871,
+          485
+        ],
+        "crop": [
+          425,
+          280,
+          968,
+          582
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-1.jpg",
+      "source": "runs/20261113_173414_collect/item_003/top_1.jpg",
+      "source_sha256": "16ae1fabb7d352167f9b524ed83bb41c8e85ed71d4f1d3c631869d154c658d55",
+      "asset_sha256": "ab7e6642c92fceb71c6ea6d5d1cbb1d8cf7c6559bc448be603a087c4adff53dd",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          670,
+          295,
+          936,
+          460
+        ],
+        "crop": [
+          594,
+          219,
+          1012,
+          536
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-2.jpg",
+      "source": "runs/20261113_173414_collect/item_004/top_1.jpg",
+      "source_sha256": "ab0f9a9cf4dfcaf215fce7b12485019ad58d11646612341fb4bc5416693da8b6",
+      "asset_sha256": "ceb65971fb570e608b300a8ab8e354f0883209a04f2f9c18bf533aea7109c86a",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          567,
+          358,
+          885,
+          467
+        ],
+        "crop": [
+          478,
+          269,
+          974,
+          556
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-3.jpg",
+      "source": "runs/20261113_173900_collect/item_001/top_1.jpg",
+      "source_sha256": "1b3a1bac63fc58aee1ce0cb4b8e1212b949062a8d5791527b2e0f9385524a571",
+      "asset_sha256": "3c6d04df2eb27f0613db024b9584cc43fd5142f9cc6c22039d1d4eb562555fa9",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          575,
+          294,
+          818,
+          538
+        ],
+        "crop": [
+          504,
+          223,
+          889,
+          609
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-4.jpg",
+      "source": "runs/20261113_173900_collect/item_002/top_1.jpg",
+      "source_sha256": "6dd3b5fde67054e6dff7329c683fdab20ebf6d6e85c451d7560050e1a2580f0d",
+      "asset_sha256": "6726bb02eba0839660b015bba66ef0af35035047884cce02c528013991c0243e",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          534,
+          252,
+          856,
+          547
+        ],
+        "crop": [
+          444,
+          162,
+          946,
+          637
+        ]
+      }
+    },
+    {
+      "asset": "judges-normal-5.jpg",
+      "source": "runs/20261113_173900_collect/item_006/top_1.jpg",
+      "source_sha256": "744cdb72a57e57389f18ffdd8b77d5c30cd3bc82bf72c563213a3cc802d9d91b",
+      "asset_sha256": "eb04ff12bda8f965cc18cdcfe230fc0b2a0cdd9f7a7dfd37edcc8dbb9a85744e",
+      "transform": {
+        "policy": "part-top-v2",
+        "bbox": [
+          510,
+          337,
+          867,
+          474
+        ],
+        "crop": [
+          411,
+          238,
+          966,
+          573
+        ]
+      }
+    }
+  ],
+  "sources": [
+    {
+      "name": "Viam Overview",
+      "path": "[Edge of Intelligence] Viam Overview.pdf",
+      "page": 6,
+      "sha256": "7a6e48dbb150c64263dfffa0cbe4110d79b1c4f52dfb94cea426e4f3f6b84b8f"
+    },
+    {
+      "name": "Edge of Intelligence reference sheet",
+      "path": "Edge of Intelligence - reference sheet.pdf",
+      "pages": [
+        9,
+        10
+      ],
+      "sha256": "4fda2a324ce7d104cb7c04321da08111a2a87f9503977ddebb89e5a0ea02de85"
+    },
+    {
+      "path": "docs/TRAINING_RUN_20261114.md",
+      "sha256": "b89d7c69b4c4549230dcd4617e054608d9a4a9f978106d5eba1e661efef9b182"
+    },
+    {
+      "path": "docs/THRESHOLD_FINDINGS.md",
+      "sha256": "e286708f06baedf29be17e3d2395bebefe60ae21a1ad7b77fd12195eaa900872"
+    },
+    {
+      "path": "docs/DAY1_RECAP.md",
+      "sha256": "944bb25b0f4c2465ca4203f2d33fb63d130a76b8f337f10f425d5c9834f4a293"
+    }
+  ]
+}

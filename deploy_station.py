@@ -21,6 +21,7 @@ import hashlib
 import io
 import json
 import shlex
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -34,11 +35,12 @@ from station_shell import execute, upload         # noqa: E402
 
 BASE = "/opt/viam/sorter-ali"
 CHUNK = 1_500_000
-CODE = ["sort.py", "pipeline.py", "screws.py", "tracking.py", "overview.py", "station.py", "station_shell.py", "train_anomaly.py",
+CODE = ["sort.py", "station.py", "station_shell.py", "train_anomaly.py",
         "replay_anomaly.py", "benchmark_anomaly.py", "part_sizes.py", "eval_bundle.py", "train_dashboard.py", "sync_data.py",
         "data_explorer.py", "data_explorer.html", "monitor_quality.py", "quality_supervision.html",
         "requirements.txt", "requirements-anomaly.txt"]
-DIRS = ["vh", "config", "dashboard"]
+DIRS = ["vh", "dashboard", "tools", "config/benchmarks"]
+CONFIG = ["poses.json", "checkpoint.json", "obstacles.json", "part_sizes.json", "overview_calib.json", "data_repo.json"]
 SKIP = ("__pycache__", ".pyc", "backup-")
 
 
@@ -56,6 +58,8 @@ def build_archive(runs):
         for f in CODE:
             if (ROOT / f).exists():
                 add(ROOT / f, f)
+        for name in CONFIG:
+            add(ROOT / "config" / name, "config/" + name)
         for d in DIRS:
             for p in sorted((ROOT / d).rglob("*")):
                 if p.is_file():
@@ -64,7 +68,10 @@ def build_archive(runs):
             for p in sorted((ROOT / "runs" / r).rglob("*")):
                 if p.is_file() and "/dash/" not in str(p):
                     add(p, "shared_runs/" + str(p.relative_to(ROOT / "runs")))
-        manifest = json.dumps({"files": files, "built": time.strftime("%Y-%m-%d %H:%M:%S")}).encode()
+        revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        manifest = json.dumps({"files": files, "source_commit": revision, "dirty": bool(dirty),
+                               "built": time.strftime("%Y-%m-%d %H:%M:%S")}).encode()
         ti = tarfile.TarInfo("DEPLOYMENT_MANIFEST.json"); ti.size = len(manifest)
         tar.addfile(ti, io.BytesIO(manifest))
     return buf.getvalue(), files
@@ -120,7 +127,11 @@ print(json.dumps({{"release": str(rel), "files": len(files), "runs_added": moved
 async def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--runs", nargs="*", default=[], help="laptop runs/<name> folders to copy into the shared runs/")
+    ap.add_argument("--allow-dirty", action="store_true", help="explicitly package uncommitted work; source hashes are recorded")
     a = ap.parse_args()
+    dirty = subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    if dirty and not a.allow_dirty:
+        raise SystemExit("Working tree has uncommitted changes. Use a reviewed clean checkout, or explicitly pass --allow-dirty.")
     blob, files = build_archive(a.runs)
     stamp = time.strftime("%Y%m%d_%H%M%S")
     chunks = [blob[i:i + CHUNK] for i in range(0, len(blob), CHUNK)]

@@ -1,55 +1,94 @@
 {
- "hex_bolt_partial": {
-  "median": [
-   61.98,
-   17.8,
-   25.93
-  ],
-  "spread": [
-   8.87,
-   2.83,
-   3.26
-  ],
-  "n": 30
- },
- "socket_m16": {
-  "median": [
-   69.45,
-   24.19,
-   34.33
-  ],
-  "spread": [
-   7.45,
-   2.98,
-   3.63
-  ],
-  "n": 40
- },
- "button_ss_long": {
-  "median": [
-   59.9,
-   9.01,
-   13.8
-  ],
-  "spread": [
-   5.78,
-   2.98,
-   2.04
-  ],
-  "n": 21
- },
- "hex_bolt_short": {
-  "median": [
-   21.68,
-   13.19,
-   13.07
-  ],
-  "spread": [
-   1.74,
-   1.9,
-   1.85
-  ],
-  "n": 10
- },
- "_comment": "Top-view size per type (mm: length, width, sqrt area) from part_crop at the 190 mm look; median and 1.4826*MAD+0.5. part_sizes.py 2026-11-13 19:41 over 6 runs."
+  "hex_bolt_partial": {
+    "median": [
+      61.98,
+      17.8,
+      25.93
+    ],
+    "spread": [
+      8.87,
+      2.83,
+      3.26
+    ],
+    "n": 30
+  },
+  "socket_thin_long": {
+    "median": [
+      67.12,
+      8.69,
+      17.98
+    ],
+    "spread": [
+      9.5,
+      1.43,
+      3.03
+    ],
+    "n": 20
+  },
+  "socket_m16": {
+    "median": [
+      69.45,
+      24.19,
+      34.33
+    ],
+    "spread": [
+      7.45,
+      2.98,
+      3.63
+    ],
+    "n": 40
+  },
+  "socket_thin_short": {
+    "median": [
+      50.68,
+      7.54,
+      14.94
+    ],
+    "spread": [
+      5.14,
+      2.36,
+      1.81
+    ],
+    "n": 7
+  },
+  "hex_nut": {
+    "median": [
+      19.9,
+      19.06,
+      16.34
+    ],
+    "spread": [
+      3.3,
+      3.27,
+      2.21
+    ],
+    "n": 21
+  },
+  "button_ss_long": {
+    "median": [
+      59.9,
+      9.01,
+      13.8
+    ],
+    "spread": [
+      5.78,
+      2.98,
+      2.04
+    ],
+    "n": 21
+  },
+  "hex_bolt_short": {
+    "median": [
+      21.68,
+      13.19,
+      13.07
+    ],
+    "spread": [
+      1.74,
+      1.9,
+      1.85
+    ],
+    "n": 10
+  },
+  "_comment": "Top-view size per type (mm: length, width, sqrt area) from part_crop at the 190 mm look; median and 1.4826*MAD+0.5. part_sizes.py 2026-11-13 18:54 over 15 runs. Recovered byte-verified station measurement 2026-11-14; no re-fit or tuning. [codex/unknown \u00b7 op Ali (git Ali, github Armib20) \u00b7 Mac.mynetworksettings.com \u00b7 ali/pipeline]"
 }

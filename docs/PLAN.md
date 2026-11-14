@@ -1,3 +1,7 @@
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+
+> Historical event/bring-up record. Current commands and measured configuration: [README](../README.md) and [ARCHITECTURE](ARCHITECTURE.md). Earlier camera, pose and implementation status below are dated observations.
+
 # Plan
 
 ## Decisions so far

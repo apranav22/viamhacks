@@ -10,3 +10,13 @@ models/
 config/backup-*.json
 # huggingface_hub download metadata (sync_data.py pull)
 .cache/
+
+# Local telemetry and agent scratch state
+logs/
+.pi/
+work/
+.codegraph/
+
+# Local artifact directory symlinks in isolated worktrees
+/runs
+/models

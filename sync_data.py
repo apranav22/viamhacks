@@ -1,4 +1,4 @@
-"""Share collected runs (and trained model bundles) with the team through one private Hugging Face dataset repo.
+"""Share collected runs (and trained model bundles) with the team through the configured Hugging Face dataset repo.
 
     python sync_data.py init <org-or-user>/<name>   # once: create the private repo, write config/data_repo.json
     python sync_data.py status                     # local vs shared, per run

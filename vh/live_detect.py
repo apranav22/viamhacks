@@ -13,7 +13,6 @@ from PIL import Image
 from scipy import ndimage
 
 from . import config as C
-from . import perception as P
 
 try:
     import cv2
@@ -26,8 +25,8 @@ def wrist(jpeg, T=None, intr=None):
     # saturation mask (which merged cardboard with the part and called it a hand).
     # Preview overlays are not a hand/safety detector. The running loop owns its hand check.
     import math
-    from screws import detect
-    rgb = P.decode_color(jpeg, 1)
+    from .detection import detect
+    rgb = np.asarray(Image.open(io.BytesIO(jpeg)).convert("RGB"))
     out = []
     for u, v, area, yaw, bbox in detect(rgb, None, None):
         angle = math.radians(yaw)
@@ -39,7 +38,7 @@ def wrist(jpeg, T=None, intr=None):
             if T.t[2] > p[2]:
                 ov["xy"] = [round(float(p[0]), 1), round(float(p[1]), 1)]
         out.append(ov)
-    return {"items": out, "hand": None, "hand_status": "not_evaluated", "detector": "screws.detect"}
+    return {"items": out, "hand": None, "hand_status": "not_evaluated", "detector": "vh.detection.detect"}
 
 
 def _sharpness(gray):

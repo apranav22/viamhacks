@@ -1,0 +1,396 @@
+{
+  "identity": "codex/unknown; operator Ali (git Ali, github Armib20); Mac.mynetworksettings.com; ali/clean-base",
+  "release": "/opt/viam/sorter-ali/releases/20261113_194153",
+  "verified_files": 55,
+  "bytes": 2764479,
+  "conflicting_bundles": [],
+  "files": [
+    {
+      "category": "experiments",
+      "relative": "eval_bundle.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/eval_bundle.py",
+      "sha256": "917296a1b5f936ad7d2a94f13967ede10a6dea60b2cfc261c83618cbdb4b83c6",
+      "size": 3337
+    },
+    {
+      "category": "experiments",
+      "relative": "exp_topcrop.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/exp_topcrop.py",
+      "sha256": "962af8e20e6648bf14ca88ccfeb23ebe520fb709fd52a236015073f5a1788f92",
+      "size": 6492
+    },
+    {
+      "category": "experiments",
+      "relative": "head_target_preview.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/head_target_preview.py",
+      "sha256": "b9f15dfb450146dbf4ad15a6b51a428ba2b3c9eb20bd59805db6823f681c0f78",
+      "size": 3186
+    },
+    {
+      "category": "experiments",
+      "relative": "nut_center.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/nut_center.py",
+      "sha256": "b88795615e2ef546ce65de5dccc5c3826f856d4db83ffdb386722fee3853d466",
+      "size": 1728
+    },
+    {
+      "category": "experiments",
+      "relative": "nut_overlay.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/nut_overlay.py",
+      "sha256": "de08383ecafb3407a7401ebbea7a29fa6bdb652c735d27e506ba9212721bd719",
+      "size": 1324
+    },
+    {
+      "category": "experiments",
+      "relative": "nut_retries.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/nut_retries.py",
+      "sha256": "530cefbdaec7d841218c33959116af1367ea9d80ea261dc8c31dc5de875dea10",
+      "size": 2653
+    },
+    {
+      "category": "experiments",
+      "relative": "one_grasp_head.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/one_grasp_head.py",
+      "sha256": "a8bcb76f87dd273305b9571e69fe0eef852f781e17002e23d79f729cd1f4b996",
+      "size": 4156
+    },
+    {
+      "category": "experiments",
+      "relative": "one_grasp_probe.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/one_grasp_probe.py",
+      "sha256": "afac72ec260b0014d3809afdea1852796e3d382168cc8ca812d1995075237ed0",
+      "size": 866
+    },
+    {
+      "category": "experiments",
+      "relative": "one_grasp_retention.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/one_grasp_retention.py",
+      "sha256": "92c637c5b49209e16a52b10b5362fb19fd26159752c6ec666539fdc4fca31828",
+      "size": 1731
+    },
+    {
+      "category": "experiments",
+      "relative": "sheet_remote.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/sheet_remote.py",
+      "sha256": "f71eacf1d2a92f028938b313ea77732a5bd1d7b0364be65689463f06b5e54a09",
+      "size": 830
+    },
+    {
+      "category": "experiments",
+      "relative": "watch_stability_probe.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/watch_stability_probe.py",
+      "sha256": "4c78fe4cd6beaf4a2f1943f89fc4f38d725fd85b4d4fc463dc140353c35ce07f",
+      "size": 1347
+    },
+    {
+      "category": "experiments",
+      "relative": "watch_threshold_probe.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/watch_threshold_probe.py",
+      "sha256": "f6f77cb3160831c35b0b14d014c167261cac9b4bd176640c4dae5ac8696425cf",
+      "size": 932
+    },
+    {
+      "category": "experiments",
+      "relative": "nut_relaunch.sh",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/nut_relaunch.sh",
+      "sha256": "4657162a57ecafea5c4deb3140d71274b996c9a67d2fa10e75a6484fbd7a6289",
+      "size": 278
+    },
+    {
+      "category": "experiments",
+      "relative": "run.sh",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:experiments/run.sh",
+      "sha256": "5af2d5b9488bd821860f5c1724eed529db9bf309717e472e5f79e143eb6bb5ef",
+      "size": 333
+    },
+    {
+      "category": "release",
+      "relative": "benchmark_anomaly.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/benchmark_anomaly.py",
+      "sha256": "db6c1d4b60a3e863ac00943b164d58563d4af8565a8be8d097386a92a68455bf",
+      "size": 4332
+    },
+    {
+      "category": "release",
+      "relative": "eval_bundle.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/eval_bundle.py",
+      "sha256": "917296a1b5f936ad7d2a94f13967ede10a6dea60b2cfc261c83618cbdb4b83c6",
+      "size": 3337
+    },
+    {
+      "category": "release",
+      "relative": "overview.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/overview.py",
+      "sha256": "407f7b8ccadf416a43db60165fe1c08fe6af5453e1d3effcbd50b8e513f430c3",
+      "size": 26055
+    },
+    {
+      "category": "release",
+      "relative": "part_sizes.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/part_sizes.py",
+      "sha256": "af4097f0f1999470df69d0724682fb6ed5e7b0102ebc467d4fcac6b21199782b",
+      "size": 3723
+    },
+    {
+      "category": "release",
+      "relative": "pipeline.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/pipeline.py",
+      "sha256": "624e4a83ed6ac2ff2f741a5e2f1afeb7ecf0345b89fbed83077cd11307be8a2a",
+      "size": 21734
+    },
+    {
+      "category": "release",
+      "relative": "replay_anomaly.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/replay_anomaly.py",
+      "sha256": "b556ad78e393f519488932e1093e403c26899a890b57ac5f5f29a413399f50c3",
+      "size": 6321
+    },
+    {
+      "category": "release",
+      "relative": "screws.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/screws.py",
+      "sha256": "b9d1cb857cb5647c082d41985a40fa2a3ba6f8716f20043aa1057b3ad2f35080",
+      "size": 9226
+    },
+    {
+      "category": "release",
+      "relative": "sort.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/sort.py",
+      "sha256": "da0ca5bd6165e3f55b85108084727d1072015fa6ccfc5b0daec32da178a729b4",
+      "size": 48335
+    },
+    {
+      "category": "release",
+      "relative": "station.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/station.py",
+      "sha256": "1c75a76dc8ab5676042ae2c2a1805f941cf3be057fc07b4472e18e0127edf23b",
+      "size": 841
+    },
+    {
+      "category": "release",
+      "relative": "station_shell.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/station_shell.py",
+      "sha256": "78eb86306aeed099e72af4e52410a13c87a8a0a41814fbbbb41cd923ba205cef",
+      "size": 5270
+    },
+    {
+      "category": "release",
+      "relative": "sync_data.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/sync_data.py",
+      "sha256": "4c24f81630016ec0fca8d5ca7b2036e1edde356869b3c969bca99b68299f0032",
+      "size": 14876
+    },
+    {
+      "category": "release",
+      "relative": "tracking.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/tracking.py",
+      "sha256": "a3fd229b23e821315c4b6c533ab2a8eb84f4405dd5cb25a84c7b1066b81da4b4",
+      "size": 4227
+    },
+    {
+      "category": "release",
+      "relative": "train_anomaly.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/train_anomaly.py",
+      "sha256": "b866c27d2822d5be988de0357669bb959ecb40a17e9760dc5a0b05e85e1fec5d",
+      "size": 8428
+    },
+    {
+      "category": "release",
+      "relative": "train_dashboard.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/train_dashboard.py",
+      "sha256": "f64871f99bc4aba38f3bbf887294731ca8051eaad2bf323cdca025bf7ea50f1b",
+      "size": 21087
+    },
+    {
+      "category": "station",
+      "relative": "extract_release.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:station/extract_release.py",
+      "sha256": "f102e5429a7cf7735e7e2119d55772e2f9ba93922c6c2a33263c4c8d0492b577",
+      "size": 1149
+    },
+    {
+      "category": "station",
+      "relative": "get-pip.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:station/get-pip.py",
+      "sha256": "356e0d0de21cdc348c3394084d90939b85e4246c4d14c76aee6ca4f46646ea98",
+      "size": 2397294
+    },
+    {
+      "category": "station",
+      "relative": "setup.sh",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:station/setup.sh",
+      "sha256": "42b77a4eba71976d45e089d3160c0ab1a5c40bf7efc35de33e817cc03338a119",
+      "size": 1878
+    },
+    {
+      "category": "station",
+      "relative": "train.sh",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:station/train.sh",
+      "sha256": "050c601e38a006d257f18e6f28c3593bdd84de16e7fa6d23530e88c3849a94d7",
+      "size": 355
+    },
+    {
+      "category": "station",
+      "relative": "train_v2.sh",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:station/train_v2.sh",
+      "sha256": "baa0b6375812a17c17d15251e40d10e223ba80d0d3e9b08ea9dbcf607eaf246f",
+      "size": 358
+    },
+    {
+      "category": "release",
+      "relative": "vh/__init__.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "category": "release",
+      "relative": "vh/anomaly.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/anomaly.py",
+      "sha256": "0b639397d582a6e0d8589e44ae5b735ad4d312364c6565a298f8cc4ef376dbdc",
+      "size": 16128
+    },
+    {
+      "category": "release",
+      "relative": "vh/anomaly_data.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/anomaly_data.py",
+      "sha256": "1c40beef49f01cc727c0094f91278abc9c68c35f2545a20d3e57c74b9d67a281",
+      "size": 6884
+    },
+    {
+      "category": "release",
+      "relative": "vh/config.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/config.py",
+      "sha256": "c104b60f91c535e6fb7aef8a846864ef76e6e587d9e34d0be8eb807a40301c33",
+      "size": 4170
+    },
+    {
+      "category": "release",
+      "relative": "vh/fake.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/fake.py",
+      "sha256": "6ebfb972a87b859eb657858df6f2a8a8fd591f0411edcf249a010e55610ed6fb",
+      "size": 3431
+    },
+    {
+      "category": "release",
+      "relative": "vh/geometry.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/geometry.py",
+      "sha256": "2ea5373038c222d1d1215c3e0aebec8ab7e24ccc37465257d674d0c53c682e8e",
+      "size": 3926
+    },
+    {
+      "category": "release",
+      "relative": "vh/kinematics.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/kinematics.py",
+      "sha256": "f472673f52b8b2203ef6170919c5e6b4a345b4783cb04b39786a88fe36de3c07",
+      "size": 7344
+    },
+    {
+      "category": "release",
+      "relative": "vh/live_detect.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/live_detect.py",
+      "sha256": "caa46943554feb84932a7fb04c450977050d03713660e42c951ffe1492d957c2",
+      "size": 4593
+    },
+    {
+      "category": "release",
+      "relative": "vh/perception.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/perception.py",
+      "sha256": "5a7d51e42e0bbe1bc697ecafd1c51de5dafafae0c79a8bf5b9d3e38d017b607b",
+      "size": 11178
+    },
+    {
+      "category": "release",
+      "relative": "vh/probe_tel.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/probe_tel.py",
+      "sha256": "1b0a4140922a510c5da9b5067d9772c2e6173ce6d3410ddac0587713fa99080a",
+      "size": 7597
+    },
+    {
+      "category": "release",
+      "relative": "vh/station.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/station.py",
+      "sha256": "2088fbd4001e346bdd50b2a3151090c2019bf66b7bcea101857ff6ec47cda1cf",
+      "size": 8018
+    },
+    {
+      "category": "release",
+      "relative": "vh/telemetry.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/vh/telemetry.py",
+      "sha256": "93e4b15a75f08c5a1409172e01e69dc64e5be4c30bd7fd048733eb114c21d6bc",
+      "size": 3989
+    },
+    {
+      "category": "release",
+      "relative": "dashboard/index.html",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/dashboard/index.html",
+      "sha256": "fdcc0db16ca9f2ce4c3ec6b16daba8849c0aa58cfeed3ca555ef5fe03fff0a50",
+      "size": 41063
+    },
+    {
+      "category": "release",
+      "relative": "dashboard/relay.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/dashboard/relay.py",
+      "sha256": "013fe6f9f22791764e612658d38c309fa326de17ef59bf1d57b1225c953f6bea",
+      "size": 1720
+    },
+    {
+      "category": "release",
+      "relative": "dashboard/server.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/dashboard/server.py",
+      "sha256": "2d726f7dde15389716fced3706dd2c507ea696eaf8a40b87c96350a027f046e1",
+      "size": 24352
+    },
+    {
+      "category": "release",
+      "relative": "config/apply_config.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/config/apply_config.py",
+      "sha256": "3ab3aec5cc77fc8c21c8785bc8fedb1888374cdf7c32bf0a0df4302e2b8e5caa",
+      "size": 2190
+    },
+    {
+      "category": "release",
+      "relative": "config/fetch_config.py",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:release/config/fetch_config.py",
+      "sha256": "6b4c55e457a82f7ec39ebb93b0c9f1923111a24d6f147abe98126dc52a486d57",
+      "size": 1224
+    },
+    {
+      "category": "config",
+      "relative": "poses.json",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:config/poses.json",
+      "sha256": "72cf165ac82d1184dd5567012abc0bb54084e3c9bf53efa6f4e4207ca0f36e7a",
+      "size": 2194
+    },
+    {
+      "category": "config",
+      "relative": "checkpoint.json",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:config/checkpoint.json",
+      "sha256": "46006d7570a0675d0133b192d7e28319d314678e46b99dcded0da0bf8bb8e819",
+      "size": 3514
+    },
+    {
+      "category": "config",
+      "relative": "part_sizes.json",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:config/part_sizes.json",
+      "sha256": "384b5dc55019a0413522070d05b309efaf942297db6df8c46322d5ee7170a4b8",
+      "size": 1060
+    },
+    {
+      "category": "config",
+      "relative": "obstacles.json",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:config/obstacles.json",
+      "sha256": "e09015d6b981bf0b1726671770f30134422c4ce5ccf4cb6fb506681fd14f4cc9",
+      "size": 534
+    },
+    {
+      "category": "config",
+      "relative": "overview_calib.json",
+      "local": "archive/station/20261114T062337Z/evidence.tar.gz:config/overview_calib.json",
+      "sha256": "8f47e1c3f25d5ad50f7e9b8a8c73eb6591d45cc31766e181189f6f5a26c86aa8",
+      "size": 1351
+    }
+  ],
+  "evidence_archive": "evidence.tar.gz",
+  "evidence_sha256": "826211dda855841e50d348fdf5adac2b47b4e3553ba48202049fd39953c33f2b"
+}

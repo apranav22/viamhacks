@@ -421,3 +421,123 @@ ARM: taken for 8 supervised socket_thin_short head-targeted collect picks after 
 
 [pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:10:17]
 8-pick head-target capture aborted at item 2 before descend: computed target (145,476) outside pad zone, after 1 logged collect. Arm.stop on exception; no loop. Arm stationary at camera look TCP (121.3,438.2,64.3), gripper open 839, NOT at watch. Item 1 pos 33 before and after lift; item 2 watch image places screw near pad boundary rather than expected set coordinate (329,324). Possible slip during transfer, NOT verified; do not count without manual image review. Operator observation requested before recovery. ARM: stopped at look pose; not released/home.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:12:11]
+ARM: taken for one operator-approved socket_thin_short grasp after repositioning; 4% from head tip (measured target width 19–22 px vs shaft 9–11), temporary 1 mm clearance, E-stop attended per operator. From stationary look pose via planned watch return; no persistent config changes.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:16:41]
+ARM: taken for up to 8 monitored thin-short head-centred captures; user re-centred part, E-stop confirmed, read-only watch probe saw stable in-zone screw at (289,368). Temporary 1 mm clearance; stop on grasp miss/unsafe target.
+
+[pi/unknown · op Ali · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:19:52]
+Run 20261113_181642_collect: 5/5 completed held-part front images; item 6 rejected before descend solely on head ratio 1.41 <1.45. Arm.stop verified after first stop context cancellation; arm stationary at look pose, gripper open, no loop. Frame shows visible head, lowering ephemeral ratio guard to 1.35 while retaining target-width and XY guard. ARM: taken to resume 8 supervised picks; operator go-ahead and E-stop previously confirmed.
+
+[pi/gpt-6.1-sol · op Ali (git: Ali, github: Armib20) · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:21]
+BrightCastle: read-only readiness check for operator-requested full-speed experiment. NOT taking the arm: station PID 381015 still runs /opt/viam/sorter-ali/exp/one_grasp_head.py and the preceding thread has not released ownership. Teleop running=false; joints identical across 1.1 s, which does not establish exclusive control while that process remains alive. No motion, gripper actuation, process termination, or settings changes. Other thread: please follow AGENTS.md, finish/stop and verify your controller is gone, then explicitly hand off arm state before this experiment. E-stop attendance must be reconfirmed for this session; speed/acceleration and safety settings remain unchanged.
+
+[pi/gpt-6.1-sol · op Ali (git: Ali, github: Armib20) · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:25]
+ARM: taken by BrightCastle for operator-requested full sorting loop, bounded to 6 items, existing configured speed only. Operator confirmed physically at E-stop and everyone clear, and selected full sorting loop. Read-only recheck: previous one_grasp_head.py controller gone; teleop running=false; joints identical over 1.1 s. Existing station sort.py matches local SHA256 da0ca5bd6165e3f55b85108084727d1072015fa6ccfc5b0daec32da178a729b4. Reuse prior live-sort contract: cardboard, type auto, each_cardboard_v3/bundle_m103.json, decide top, CPU; upright disabled, measured poses and safety settings unchanged. Webcam anomaly scores remain evidence-only under decide top; tape in any captured view may reject. No accuracy claim. Monitor motion errors and stop without blind retry. Other agents: follow AGENTS.md; do not drive until explicit handoff.
+
+[pi/gpt-6.1-sol · op Ali (git: Ali, github: Armib20) · Alis-MacBook-Air.local · ali/pipeline · 2026-11-13T20:27]
+Run 20261113_182455_sort stopped via station_run.py stop (verified stopped) after operator reported visible bolt but no progress. No pick/inspection/sort completed. Saved dash/events.jsonl: 2181 WATCH samples, one part detected in 2045; hand=true in 2180 and placed=false throughout. Thus detector failure is ruled out as the persistent blocker; hand/reference gate prevented eligibility. Read-only watch_stability_probe.py with a newly sampled stationary reference: part detected, hand fraction 0.000, same=true and still duration >1 s. Initial reference corruption/staleness or subsequent scene change remain hypotheses, not proven causes; no gate/threshold/code changes or blind restart. Joints stable over 1.1 s after stop; last commanded pose WATCH, not home. Gripper state not re-read. ARM: controller stopped; no motion planned pending reference-gate investigation.
+
+[claude-code/claude-opus-5-5 · op Ali · Alis-MacBook-Air.local · ali/pipeline · 20:28]
+ARM: taken (Ali: capture nut data now). Collect hex_nut good x20 on station, --assume-lying.
+ARM: taken (Ali: nut collect with retries, any orientation). exp/nut_retries.py, in-memory retries=2.
+[claude-code/claude-opus-5-5 · op Ali · 20:33] nut run 20261113_183052_collect: 3 ok, #4 3 misses (target off-centre: detector bbox includes shadow). ARM: taken, rerun with zinc-mask centre (exp/nut_center.py) + retries.
+[claude-code/claude-opus-5-5 · op Ali · 20:37] nut: WATCH hung again; nut stuck to gripper after place. Rerun with hand gate off + close/open shake after place. ARM: taken.
+[claude-code/claude-opus-5-5 · op Ali · 20:45] ARM: taken (Ali: go). Final nut collect x20: metal-mask centre, jaws across flats, retries +30 deg, shake-off, hand gate off.
+[claude-code/claude-opus-5-5 · op Ali · 20:49] nut: station relauncher queues further 20-rep nut runs after nut5 exits (one loop at a time). Stop: pkill -f nut_relaunch then stop nut_retries.
+[claude-code/claude-opus-5-5 · op Ali · 20:52] Training models/each_cardboard_v4 on station XPU: per-type banks over all good cardboard runs since 173414 incl. socket_thin_long/short + hex_nut (~21+). Nut collection continues on the station.
+[claude-code/claude-opus-5-5 · op Ali · 20:56] ARM: taken (Ali: run anomaly detection now). Live SORT each_cardboard_v4/bundle_m103.json, type auto, decide top.
+[claude-code/claude-opus-5-5 · op Ali · 21:00] End of day: all station loops stopped, verified. ARM: released (watch pose).
+
+[claude-code/claude-fable-5-2 · op Ali (git: Ali) · Alis-MacBook-Air · ali/pipeline · 22:58]
+Day-1 recap and run catalog. No arm, no Viam config, no station access; read-only on the HF repo (public).
+Done:      `python sync_data.py pull` brought the 26 station runs to the laptop (all 45 shared runs now local, snapshot
+           265220ba). New `catalog.py` + `catalog.html` -> `runs/index.html` (static browser: every run in real time
+           order, every pick with images, scores, meta.json, decision row, exclude reason, model-bundle membership),
+           `runs/catalog.json`, `docs/RUN_CATALOG.md`. Per-run notes and flags in `docs/run_notes.json`, each sourced
+           from this log. `docs/DAY1_RECAP.md`: timeline, data, models, live results, open problems, repo/robot state.
+           `tests/test_catalog.py` passes; page rendered and checked in headless Chrome. Pointers added to README.md
+           and the AGENTS.md map. Full suite on the working tree at 22:50: 57 unit tests OK (1 skipped), 6 pipeline tests ok.
+Not done:  nothing committed or pushed (the working tree also holds the uncommitted sort.py hand-gate change and the
+           20:12-21:00 log entries from other sessions). Stale statements in README / AGENTS / THRESHOLD_FINDINGS /
+           PLAN / CONTEXT are listed in the recap, not edited. Sort-run ground truth exists only for the two runs the
+           log describes. each_cardboard_v4 and station exp/*.py are still station-only.
+Robot:     untouched. Per the 21:00 entry: released at the watch pose, loops stopped.
+Next:      read docs/DAY1_RECAP.md "Problems to think through" with the team before touching the arm.
+
+
+[codex/unknown · op Ali (git: Ali; github: unknown) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: completed isolated station XPU PatchCore training `codex_curated_20261114_003525`: 143 good picks split 75 train / 34 calibration / 34 test, 375 training crops, six types / 30 banks, no skipped banks. Added docs/TRAINING_RUN_20261114.md with exact job/source hashes and results. Restored missing completed run 20261113_185456_collect from laptop. Correct-type top evaluation: 0/34 good rejected; 23/28 defects flagged (five tape misses), fixed default margin 1.15. Existing v4 verified to cover seven types / 149 good picks.
+Not done: size-routing evaluation, independent specimen audit, activation, physical sorting.
+Robot: no motion or config changes; physical arm state not queried. Existing active model unchanged.
+Next: review missed tape picks and evaluate frozen size routing before promotion.
+
+
+[codex/unknown · op Ali (git: Ali; github: unknown) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: reviewed current dashboard consolidation sources; imported new candidate CPU top replay through existing dashboard-replay-v1 contract (171 captures, zero scoring errors, all source hashes verified). API on existing localhost:8875 server exposes candidate and V4 replays separately. No dashboard source edits.
+Not done: model-wide comparison UI and browser visual verification. Automatic routing gives 2/34 test good flags, 22/28 defect flags, 5 misses, 1 unknown-type.
+Robot: no motion/config/activation.
+Next: consolidate model metrics and clickable failures in Astra's History UI; see docs/TRAINING_RUN_20261114.md.
+
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: consolidated the existing dashboard into Live and History, with every saved capture/inspection attempt, separate Anomalib and tape evidence, decision-trigger attribution, and original results separated from hash-verified offline replays. Added read-only archive endpoints, optional labeled crop reconstruction, responsive frontend assets, and focused history/telemetry tests. Checked all 91 local runs (341 items/groups, 1,679 saved captures) without archive failures. Full Python suite passed 65 tests with one skipped before the final frame-isolation regression; final dashboard subset passed 13 tests and JavaScript reducer suite passed seven. Desktop/mobile Chrome checks passed against real history plus synthetic UDP images/events. Local preview is localhost:8875 with robot preview and recording disabled; synthetic run state was cleared afterward. No commit or push.
+Not done: station deployment and real-robot live validation. Missing legacy capture timestamps, model identities, thresholds and ambiguous retry-to-score associations remain explicit. Candidate training/import in the preceding entries belongs to the separate session; this work only displays available replay records.
+Robot: untouched; no robot RPC, motion, gripper, machine config, measured constants or model activation. Physical arm state not queried.
+Next: review Live and History locally, especially per-capture evidence and the distinction between recorded decisions and later replays.
+
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: applied Ali's approved minimal History mockup: run picker, previous/next item controls, camera image with saved box beside its crop, one plain-language capture result, numbered capture buttons, and Details for technical fields. Latest available replay opens by default with a visible recheck label; original results remain selectable. Added pixel-aligned detection overlays and a clipped camera-region fallback clearly labeled Detection crop. Missing/uncertain scores never become passes; labeled misses and good-part false flags are explicit. Updated dashboard docs and nine passing JavaScript contracts. Chrome checks passed on real captures in light/dark themes, desktop without page scrolling at 1365×768, mobile without horizontal overflow, and browser-only simulated Live events. No commit or push.
+Not done: station deployment or physical run validation. No new inference or training; displayed scores are existing saved results.
+Robot: untouched; no robot RPC, motion, gripper, config, measured-constant or model activation changes. Existing localhost:8875 preview remains running.
+Next: review the simplified History view with Ali.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Concurrent-edit handoff: after the preceding checks passed, another thread replaced index.html and extended app.js with Models, viewport.css and dialog/capture-picker controls. Those changes supersede the tested layout; the preceding browser pass is not validation of that new version. Asked Ali which thread should own layout edits and paused layout work. Restored only the missing region-bound clip element required by the shared crop renderer to prevent a null-reference error; preserved the other thread's interface. Approved-layout screenshots remain in /tmp/viamhacks-review/history-simple-{dark,light,mobile}.png. Please follow AGENTS.md and coordinate dashboard ownership before further layout edits.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Cleanup in progress, operator authorized now: retiring baseline entrypoints, extracting shared motion/detection into vh/, moving hardware utilities to tools/. Preserve the concurrent dashboard/training edits; follow AGENTS.md. Station reads only: source/experiment/config/model recovery via existing Viam shell/file API; no motion/config/activation/deployment. Station poses/checkpoint/obstacles/overview calibration match local; latest seven-type part sizes recovered from the deployed release. Recovered historical station scripts have unverified original authorship; their agents should adopt the AGENTS.md identity template. They remain archival evidence, not promoted runtime code.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Dashboard consolidation: Ali explicitly authorized merging the other thread's Models tab while retaining this thread's approved simple History. Retained Models comparison/API/benchmark logic; restored numbered capture buttons and moved History's Results selector into Details. Scoped added styles so Models cannot shrink History text, hide its captures or stack its images. Fixed tab selection and exact model-example → History navigation. Other dashboard agents: follow AGENTS.md and keep further Models styles scoped; avoid replacing the approved History layout. Local server restarted with --no-preview and recording disabled to expose the Models endpoints. No robot/station changes.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: consolidated Live / History / Models on localhost:8875. Nine JavaScript contracts and five benchmark tests passed. Chrome verified simple History, all capture buttons, detection-box alignment, saved/reconstructed crops, Details-only model selection, Models comparison/example navigation, exact capture/model links back to History, and simulated Live camera/inspection. Desktop History fits at 1365×768; mobile History keeps both images visible side by side without horizontal overflow. Source hashes stayed unchanged throughout the final browser check; git diff --check clean.
+Not done: station deployment, physical robot validation, or new model scoring. Other threads' code cleanup and training changes were preserved.
+Robot: no RPC, motion, gripper, config or activation. Local preview uses --no-preview and --record ''.
+Next: reload the dashboard to review the consolidated tabs.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
+Done: cleanup isolated at /Users/alirizwan/Projects/Misc/viamhacks-cleanup after the shared checkout switched to ali/judges-presentation. Removed prototype loops/scaffold/unused helpers and 31 tracked logs (retained locally); extracted active primitives into vh/, moved seven hardware tools, consolidated measured config/obstacles, restored latest seven-type size measurements, updated entrypoint/docs/deployment packaging. Recovered and SHA256-verified 299 station files (1,574,233,076 bytes); source and JSON evidence in archive/station/20261114T060306Z/evidence.tar.gz; OpenVINO artifacts retained in ignored shared models/. V4 and the curated candidate are complete locally. Preserved two different same-name bundles under models/_station/20261114T060306Z/. No ACTIVE pointer changed.
+Verified: 80 Python unit tests passed (one optional training integration skipped), three geometry/UDP checks, nine JS reducer tests, maintained-module imports, supported CLI help, overview selftest, deployment compilation/allowlist, archive and per-file hashes. Extracted motion/grasp AST bodies match the previous implementation except annotations. Shared checkout cleanup-owned edits were restored to their pre-cleanup state without replacing ongoing dashboard/training/presentation edits. Follow AGENTS.md when integrating this work.
+Not done: no commit/push, deployment or physical rehearsal. This worktree includes a snapshot of background dashboard/catalog/training files; later edits in the shared checkout still need integration. Existing WATCH patch is retained and physically unvalidated; station grasp probes remain archived evidence, not activated fixes.
+Robot: remote reads only, no motion/gripper/config/activation/deployment/service changes. Physical arm state not queried.
+Next: integrate the background work into this cleaned ali/pipeline checkout, review the release, then rehearse under the documented arm ownership procedure.
+
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/judges-presentation · 2026-11-14]
+Cleanup isolated after the shared checkout switched branches: complete cleaned snapshot now in /Users/alirizwan/Projects/Misc/viamhacks-cleanup on ali/pipeline. Restored this checkout's cleanup-owned edits to their pre-cleanup contents, retaining the earlier WATCH patch and catalog/docs/dashboard changes. Continued background dashboard, benchmark and presentation files were not replaced. Station artifacts remain local in shared ignored models/; recovery provenance is in the cleanup worktree. Follow AGENTS.md; no commits/deployments/motion/config/activation from this session.
+
+
+[codex/unknown · op Ali (git: Ali; github: unknown) · Mac.mynetworksettings.com · ali/judges-presentation · 2026-11-14]
+Done: Models comparison view with frozen config/benchmarks/development-v1.json (62 picks), dashboard/benchmarks.py eligibility/identity checks, dashboard/models.js image-based failure review, existing server read-only model endpoints. Candidate: 5 misses / 2 good rejects / 1 unknown; v4 comparison blocked by train/calibration overlap. Failure diagnosis contrasts routed and known-type scores. Shared viewport/dialog CSS fits Live, History and Models; preserved Astra's numbered History captures and model selector in Details, added six-capture pagination. Portrait images stack. Long technical details are paged; full record download retained. Benchmark evidence remains development-only and uses collection labels.
+Verified: 5 benchmark tests, 13 dashboard Python tests, 9 JS state tests; headless browser checked 1365x768, 1024x600, 390x844, 375x667, 320x568, 844x390, every failure's details, version eligibility, capture navigation, History drill-through and no JS errors. No page or dialog scrolling in these checks. Local server localhost:8877, preview/recording disabled.
+Not done: station deployment, independent physical-specimen audit, on-demand evaluation/training job launch in the new UI. Intel training dashboard left running; this UI consumes saved evaluation artifacts. No commit or push. Shared checkout changed from ali/pipeline to ali/judges-presentation during another authorized session; no branch switches or history edits performed by this implementation.
+Robot: no RPC, motion, config, measured-constant changes or model activation in this implementation.
+Next: review http://localhost:8877/#models and define an independent benchmark before comparing new model versions for promotion.
+
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/judges-presentation · 2026-11-14]
+Done: built `presentation/`, a 14-step React judges presentation using an extracted Amphibian deck engine from platform-v2 trunk commit 0a55bb06d4e05c0c5cd3e627d44cd29e88b36b3a. Main subject is saved sort 20261113_173234_sort/item_002; later candidate marker detection and taped-screw miss are explicitly offline replays. Curated 15 images under site/img/judges-*.jpg; source hashes, transforms, original records, candidate identity and supplied event PDFs are pinned in evidence.json. Added five-minute notes, synchronized presenter mode, source panel and a portable offline ZIP. TypeScript and production build pass; 14-frame browser checks show no image failures, runtime errors, clipping or text overflow, and keyboard/dialog controls, same-context presenter synchronization and mobile controls pass. README includes setup and offline instructions. No commit/push.
+Not done: human rehearsal/content approval, destination-placement verification, calibrated confidence field in the live log, matched device diagnostics, independent-specimen/unseen-defect evaluation or moved-item recovery validation. These are stated in the talk track; the presentation does not claim completion. Candidate remains inactive.
+Robot: untouched; no robot RPC, motion, gripper, Viam configuration, measured constants or model activation. Physical state not queried. Existing dashboard and concurrent working-tree edits preserved.
+Next: review http://127.0.0.1:5199 and rehearse using Presenter; package is presentation/judges-presentation.zip. Other agents: follow AGENTS.md and keep deck edits isolated from live robot work.
+
+[codex/unknown · op Ali (git: Ali, github: Armib20) · Mac.mynetworksettings.com · ali/clean-base · 2026-11-14]
+Done: prepared the operator-requested new publication branch ali/clean-base from ali/pipeline. Integrated latest monitored Live/History/Models, benchmarks, catalog, training evidence, and judges presentation/curated figures from the shared checkout without overwriting the cleanup. Final shared-source hashes stayed stable. Supplemental station snapshot 20261114T062337Z verifies 55 source/config files including deployed vh/dashboard/config utility source; both snapshots are packed and hash-verified.
+Verified: 80 Python tests passed (one optional training integration skipped), nine JS tests, three geometry/UDP checks, runtime/tool imports, supported CLI help, overview selftest, presentation TypeScript and Vite production build under Node 22.23.1, offline ZIP packaging, and local dashboard app/health/History/Models HTTP checks with preview and recording disabled. No live inference or physical reliability claim. Credentials/artifacts/build outputs excluded from Git.
+Robot: no motion, gripper actuation, Viam config, model activation, deployment or service changes. Physical arm state not queried.
+Next: review the published cleanup branch and rehearse a reviewed station release under AGENTS.md; continued shared-checkout work remains independent.
