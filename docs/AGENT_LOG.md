@@ -663,3 +663,14 @@ Station: train_anomaly --threshold cv-p95 started 12:03 on the Arc GPU (arm idle
 it includes today's coverage runs, so hex_bolt_partial gets under/end_a/end_b models (61 good picks). Obliques are not
 in the dataset builder (meta["oblique"], not meta["views"]).
 DINOv3-S OpenVINO on the station at 224 px: CPU 23.7 / GPU 3.4 / NPU 4.8 ms.
+
+[claude-code/claude-fable-5-2 · op aayus (git: aayus@sticker) · sticker · aayush/integration · 2026-11-14 12:25]
+Dashboard Models tab (station :8775, benchmark development-v1, 62 held-out top captures): added two versions as data
+files only (runs/_analysis/aayush-effad-*-top-replay.json, written by tools/dashboard_replay.py; no server change):
+  EfficientAD-S + type classifier: 26/28 defects detected, 2/34 good rejected, 1 unknown type
+  EfficientAD-S, size routing:     26/28, 5/34
+  (existing) Latest training run codex_curated: 22/28, 2/34
+EfficientAD bundle: train_efficientad.py -> models/effad_top_v1 (top view, 7 types, same schema/outputs as PatchCore
+bundles, loads in vh.anomaly unchanged; trained on Fri runs + Sat runs synced by 12:10). CPU ~145 ms/crop on a desktop
+CPU via OpenVINO; station device timings pending (uploading models now). Today's capture runs: 0 "part not seen" in 82
+attempts (Fri: 34/282).
