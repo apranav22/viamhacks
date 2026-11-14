@@ -643,3 +643,23 @@ exception to AGENTS.md section 2 ("on any error during motion: arm.stop(), repor
 descent only. Controller collision detection is off, so a contact may also just tip the part over without a fault.
 Offline tests cover: no hit, hit -> retry high, second hit -> stop, knocked over, no retry when low was safe. NOT run
 on the arm.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 11:57]
+ARM: taken (Pranav: "can you run both tests?"; operator confirmed the other driver, planner pick moves until 11:53:54
+from a machine that is neither this laptop nor the station, has stopped, and a person is at the E-stop). Checks: teleop
+off, joints unchanged over 3 s, at the watch pose, gripper open (839), no sort.py on the station. Two C22 (self
+collision) errors were logged by that other driver at 11:29 and 11:35. Plan: test 1 = sort.py --mode collect --reps 3
+--background cardboard --assume-lying (screw lying flat on the pad), commit e7968f1; then test 2 (upright) after the
+operator stands the part up.
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/fast-carry · 12:01]
+Test 1 (runs/20261114_115648_collect, hex bolt lying on the pad, 3 picks): 3/3 grasped and placed back, cycles 13.0 /
+15.3 / 16.1 s (11:02 run: 11.6-12.2), latency 447 / 1225 / 4098 ms. Straight-move chains ran: descend 317-365 ms at
+180 deg/s (4 waypoints), lift 544-579 ms at 87-121 deg/s (9 waypoints), line deviation <= 0.29 mm. No controller
+error, no ArmFault. Still-frame gate: 10/15 captures never passed, 2.2 s/item of waiting (most of the slowdown).
+Test 2 (runs/20261114_115832_collect, 1 pick, depth look on): 12.9 s, OK; the bolt lay flat (long blob), so the depth
+look / upright guard did NOT run; the upright path is still untested on the arm.
+Camera noise with the arm still at the watch pose (read-only, 12:00): webcam frame_change 0.0000-0.0002 (so the 0.004-
+0.03 seen at the views was the held part / gripper still moving); wrist 0.002-0.019, above REF_STEADY_FRAC, and it serves
+the same frame for 100-200 ms (duplicate grabs), so the wrist gate could never pass.
+--background now defaults to cardboard (Pranav: always the pad).
+ARM: released (watch pose, gripper open 839, bolt lying on the pad).

@@ -1039,7 +1039,8 @@ async def main():
     p.add_argument("--dash-host", default="127.0.0.1")
     p.add_argument("--anomaly-bundle", type=Path, help="Per-type/view bundle.json, or 'active' (models/ACTIVE, set from the training dashboard); without a model, sort mode rejects as uncertain")
     p.add_argument("--anomaly-device", choices=["CPU", "GPU", "NPU"], default="CPU")
-    p.add_argument("--background", choices=["white", "cardboard"], default="white", help="Must match the model's training background")
+    p.add_argument("--background", choices=["white", "cardboard"], default="cardboard",
+                   help="pick surface (always the cardboard pad, Pranav 2026-11-14); must match the model's training background")
     p.add_argument("--drops", action="store_true", help="collect: half the time let go 20-35 mm up (random face); "
                    "only for parts that don't roll (hex nuts, hex bolts)")
     p.add_argument("--assume-lying", action="store_true", help="collect: skip the depth upright check (operator lays parts flat)")
