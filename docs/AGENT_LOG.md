@@ -554,3 +554,89 @@ Done: dashboard run control (operator request): Live tab "Start a run" panel for
 Verified: 89 Python tests OK (9 new, fake sort.py; 1 optional skip), 9 JS tests. Not clicked in a browser, no live run started from it yet.
 Robot: untouched.
 Next: first real use = a 2-pick capture from the panel with the operator watching.
+[op Aayush (git: Aayush Poudel, github: apoudel20) · cloud workspace · aayush/dinov2-eval · 2026-11-14 09:30 EST]
+Added `exp_backbone_eval.py`: offline comparison of the anomaly backbone, ResNet-18 PatchCore features (current) vs
+DINOv2 ViT-S/14 patch features, same `model_crop` crops and groups. Good picks are scored leave-one-RUN-out (a collect
+run repeats one physical part), thresholds from good only, per-group FR/misses at margins 1.0/1.03/1.15, whole-pick
+anomaly-only fusion, development-v1 top-view counts, and a frozen-feature known-defect probe (tape, LORO, plus transfer
+to other families). Smoke-tested on synthetic runs with random weights only: no real-data result yet (the cloud
+workspace cannot download HF dataset files or model weights). No robot, station, config, threshold or model changes.
+Run on the station or a laptop with the runs pulled:
+  pip install timm scikit-learn
+  python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --views top --out exp/backbone_top
+  python exp_backbone_eval.py --runs 'runs/*_collect' --background cardboard --out exp/backbone_all   # all views, slower
+Add --device xpu on the station GPU; --no-augment to cut time 4x. Send back exp/*/summary.md and report.json.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker, github: unknown) · Sticker · snapshot (no git) · 2026-11-14 09:55]
+Done:      Backbone eval (run.ps1): ResNet-18 PatchCore 12/28 defects vs DINOv2-S 6/28 at margin 1.0, 14.8 vs 88.8 ms/crop CPU
+           torch, leave-one-run-out, top/cardboard -> exp/backbone_top/summary.md. Keep ResNet-18.
+           Judge log confidence: new vh/confidence.py (threshold margin, not a calibrated probability), written by
+           sort.py finish() for good/reject lines as `confidence` + `confidence_basis`. tests/test_confidence.py 5/5.
+           Replayed on all saved sort logs: tape rejects ~1.0, near-threshold anomaly rejects 0.57-0.70.
+           Latency cause from saved logs: ~385 ms floor = STILL_S 0.3 s + one frame; hand-placed items ~1 s because of
+           HAND_HOLDOFF_S 0.8 s after the hand leaves. Constants NOT changed (safety call for the team).
+           Size routing recheck on 7 types: leave-one-out 128/153 (was 95/101 on 4). Confusions mostly button_ss_long <->
+           socket_thin_short/long (15) and hex_bolt_short -> hex_nut (3). config/part_sizes.json NOT changed.
+           Deck: new "How the pieces connect" step (deploy/system), receipt note updated for confidence, device and
+           recovery talk track carry the two measurements above. tsc + vite build pass; judges-presentation.zip built.
+Not done:  None of this is on the station or tested on the arm. sort.py change is dry-run only (syntax + unit test).
+Robot:     not touched.
+Next:      Port sort.py + vh/confidence.py to the real repo branch, deploy, and check one live line carries confidence.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker, github: unknown) · Sticker · snapshot (no git) · 2026-11-14 11:30]
+Done:      Type classifier for `--type auto`: vh/type_clf.py (OpenVINO ResNet-18 avgpool features + linear head),
+           train_type_clf.py (exports IR, trains through the same OpenVINO path), models/type_clf_v1/ (IR 44.7 MB + head).
+           Eval on 153 good cardboard top crops: leave-one-pick-out 151/153, leave-one-run-out 103/112 (size rule 78/112),
+           type right on 26/28 defective picks never trained on. button_ss_long and socket_thin_long have one run each,
+           so they are untested on a new specimen.
+           vh/anomaly.py: classifier picks the type among loaded banks; the size gate (UNKNOWN_SIZE_DIST 6) still runs first;
+           classifier failure falls back to the size type and says so in `detail`. sort.py: --type-clf (default
+           models/type_clf_v1/type_clf.json, 'none' = size rule; missing file = size rule with a printed note).
+           tests: test_type_clf 3, test_confidence 5, test_anomaly pass (18 total).
+Not done:  Not run with a real anomaly bundle (models/ not in this snapshot). Not on the station. models/type_clf_v1 must be
+           copied to the station (sync_data.py push --models type_clf_v1, or station_shell upload in <=2 MiB chunks).
+Robot:     not touched.
+Next:      Copy models/type_clf_v1 + code to the station, dry-run sort with --type auto, check `detail` says "by classifier".
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 11:05]
+For Ali (motion), read-only check of ali/clean-base ce6f73b poses with vh.kinematics (numeric 6x6 Jacobian, mm + 100 mm*rad):
+- No wrist singularity anywhere: |J5| >= 35 deg on every recorded pose, coverage webcam view and all 240 oblique targets
+  (pick zone x 240..445, y 285..387, yaw step 30, phi +-45); smallest Jacobian singular value 0.55 (watch pose 0.75).
+- 15/240 oblique targets have no clear pose (skipped by design).
+- Oblique candidates from the watch seed swing a joint 92 deg median, up to 332 deg: jmove sends IK joints as solved,
+  with no wrap to the nearest equivalent (J1/J4/J6 have +-360 range). Choosing the nearest equivalent / flip() branch
+  relative to self.q would cut those swings. Not changed; suggestion only.
+- --views coverage with --decide all rejects every part as "uncertain": no anomaly bank exists for under/end_a/end_b or
+  the obliques (station bundles cover top/front/yaw-20/yaw+35/pitch-25 only). Use --decide top until banks exist.
+- Type features, held-out runs (112 picks, 5 multi-run types): size rule 78, size+colour 93, ResNet-18 103, DINOv2-S 95,
+  DINOv2-S + ResNet-18 concatenated 107. The shipped classifier is ResNet-18 only; the combination is +4 picks.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 11:40]
+Backbone bake-off, top view, cardboard, leave-one-run-out (exp_backbone_eval.py, now with dinov3_s / dinov3_splus):
+defects caught with 0 good rejected (margin 1.03): ResNet-18 PatchCore 10/28, DINOv2-S 3/28, DINOv3-S 11/28, DINOv3-S+ 12/28.
+At margin 1.0 all ResNet-18/DINOv3 variants catch 12/28 with 7 good rejected. CPU torch: 14.8 / 88.8 / 145 / 185 ms per crop.
+DINOv3 recovers DINOv2's gap but adds ~2 defects at 10-12x the cost; keeping ResNet-18 for deployment. Next: EfficientAD.
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 12:15]
+CORRECTION to my 11:40 entry: the "FR 0" whole-pick numbers in exp_backbone_eval summaries are in-sample (threshold from
+all good picks incl. the one tested). Held-out, the real issue was lopsided run splits (socket_m16 3 vs 37 picks,
+hex_bolt_short 1 vs 10) testing against tiny banks. tools/threshold_replay.py rescores saved per-pick scores with the
+threshold from OTHER runs only, folds whose model saw >= 10 good picks (deployment-like): 28 defects, 59 good.
+  rule                  ResNet-18            DINOv3-S             DINOv3-S+
+  max good x1.03 (now)  10/28 caught, 3/59   11/28, 3/59          12/28, 3/59
+  p95 of good scores    25/28, 6/59          28/28, 4/59          28/28, 5/59
+=> The threshold rule is the big lever (recall x2.5 for a few % good rejects); DINOv3-S is best at p95.
+Position-aware matching (--local-radius 2): no gain for either backbone (ResNet 9/28, DINOv3 10/28 at the old rule).
+Station device bench (tools/device_bench.py): type classifier CPU 12.8 / GPU 1.0 / NPU 1.1 ms; each_cardboard_v4
+hex_bolt_partial top model CPU 12.2 / GPU f32 23.5 / NPU 10.3 ms (NPU compiles here; score agreement NOT checked yet).
+
+[claude-code/claude-opus-5-5 · op aayus (git: aayus@sticker) · sticker · aayush/dinov2-eval · 2026-11-14 12:30]
+Device placement, measured on the station (Core Ultra X7 358H / Arc B390 iGPU / AI Boost NPU), no sort.py running:
+- tools/device_bench.py, p50 single inference: type classifier CPU 12.8 / GPU 1.0 / NPU 1.1 ms;
+  each_cardboard_v4 hex_bolt_partial top PatchCore CPU 12.2 / GPU f32 23.5 / NPU 10.3 ms; button_ss_long CPU 10.1 / GPU 11.9 ms.
+- tools/device_agreement.py on 53 real hex_bolt_partial top crops: GPU = CPU (max diff 0.0001); NPU max |diff| 0.066,
+  median 0.012 vs threshold 20.42, 0 decision flips (10 rejects on each device). Our PatchCore export DOES compile and
+  agree on the NPU (the organizer sheet's NPU failure was for their export).
+=> Placement story: anomaly banks on NPU (10 ms, frees CPU), type classifier on GPU (1 ms), CPU for capture/decode/loop.
+Pulled HF: only 4 runs from today (11 collect picks, hex_bolt_partial); new end/under collection not synced yet.
+Candidate bundle models/cand_cvp95_v1 (train_anomaly --threshold cv-p95) training on this PC; not activated.

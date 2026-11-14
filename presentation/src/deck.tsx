@@ -32,9 +32,10 @@ export const chapters = [
     results: '[3:00–3:25] Automatic-routing replay, top view only: 34 good test picks yield 32 clear and 2 false flags. Of 28 labeled defects, 22 are flagged, 5 are clear misses, and 1 is unknown type. Unknown means uncertain, not a successful anomaly detection. Supplying the labeled type instead gives 23/28 defects flagged and 0/34 good false flags; that is an oracle diagnostic, not automatic performance. Development repeated picks, not an independent specimen test or judge score.',
   }},
   { id: 'deploy', title: 'What the system has to earn', steps: {
-    device: '[3:25–3:45] We explicitly choose the inference device. On the saved candidate CPU replay, median inference is 10.18 ms and p95 is 13.02 ms over 169 successful top calls; two unknown-type rows do not run inference. These are saved single-call timings, not an interleaved device benchmark or end-to-end latency. Organizer reference p10 reports GPU 23 ms vs CPU 75 ms for their different baseline, says PatchCore NPU compilation fails, and requires GPU f32 for nonzero anomaly maps. Do not apply those baseline numbers to our candidate. Next: matched CPU/GPU diagnostics on the final deployed bundle.',
-    recovery: '[3:45–4:10] Three failures shaped the system. A stale reference blocked the watch gate; revalidate the reference and measure moved-item recovery before judging. A best-fitting wrong-type bank hid defects; the candidate instead routes by size but still has mistakes. Thin parts slipped and caused grasp failures; audit retention and bounded failure handling. These are documented findings and next work, not claims that all recovery is fixed.',
-    proof: '[4:10–5:00] End on the evidence: the real taped part, the recorded reject reason, and an attributable decision row. The implementation connects Viam camera/arm/gripper resources to a local station loop, OpenVINO inference, and a saved audit trail. The remaining work is concrete: verify destination execution, fill the judged confidence contract honestly, run matched device diagnostics, and test recovery and unseen physical specimens. Let the judges inspect the image and log. This presentation does not activate models or control the arm.',
+    system: '[3:25–3:40] The whole loop runs on the station. sort.py owns five stages: watch, pick, inspect, decide, release. Each stage talks to one Viam resource: the wrist camera with depth, the arm and gripper, the fixed webcam, and the OpenVINO model service with an explicit device. Every item ends as one line in decisions.jsonl; the dashboard listens over fire-and-forget UDP, so nothing on the screen sits in the robot critical path.',
+    device: '[3:40–3:55] We explicitly choose the inference device. On the saved candidate CPU replay, median inference is 10.18 ms and p95 is 13.02 ms over 169 successful top calls; two unknown-type rows do not run inference. These are saved single-call timings, not an interleaved device benchmark or end-to-end latency. Organizer reference p10 reports GPU 23 ms vs CPU 75 ms for their different baseline, says PatchCore NPU compilation fails, and requires GPU f32 for nonzero anomaly maps. Do not apply those baseline numbers to our candidate. We also measured the model choice itself: on the same top-view cardboard data, a larger DINOv2-S backbone caught 6 of 28 defects against ResNet-18 PatchCore\'s 12, at 88.8 vs 14.8 ms per crop on CPU (torch, leave-one-run-out). The small model is both better and six times faster, so it stays on the CPU. Next: matched CPU/GPU diagnostics on the final deployed bundle.',
+    recovery: '[3:55–4:15] Three failures shaped the system. A stale reference blocked the watch gate; revalidate the reference and measure moved-item recovery before judging. A best-fitting wrong-type bank hid defects; the candidate instead routes by size but still has mistakes. Thin parts slipped and caused grasp failures; audit retention and bounded failure handling. These are documented findings and next work, not claims that all recovery is fixed. Latency is a choice, too: with no hand in view, first motion comes about 385 ms after the part appears (0.3 s stillness check plus one frame). When a hand places the part, we wait 0.8 s after the hand leaves before moving toward it, which puts placed items near 1 s. We kept that clearance on purpose.',
+    proof: '[4:15–5:00] End on the evidence: the real taped part, the recorded reject reason, and an attributable decision row. The implementation connects Viam camera/arm/gripper resources to a local station loop, OpenVINO inference, and a saved audit trail. The remaining work is concrete: verify destination execution, fill the judged confidence contract honestly, run matched device diagnostics, and test recovery and unseen physical specimens. Let the judges inspect the image and log. This presentation does not activate models or control the arm.',
   }},
 ] as const;
 
@@ -84,7 +85,7 @@ const inspection = slide(chapters[0], step => {
         {key:'decision',value:live.decision.toUpperCase(),highlight:true},
         {key:'reason',value:live.reason}, {key:'t_released',value:live.t_released},
       ]} delay={0}/>
-      <Text id="confidence-gap" text="Original row has no calibrated confidence field" size={21} width={920} color={grey} at={{x:720,y:640}} delay={0.24}/>
+      <Text id="confidence-gap" text="This row predates the confidence field · new rows log a threshold-margin confidence, not a probability" size={21} width={920} color={grey} at={{x:720,y:640}} delay={0.24}/>
     </>);
   }
 });
@@ -114,6 +115,15 @@ const learning = slide(chapters[1], step => {
 });
 
 const deployment = slide(chapters[2], step => {
+  if(step.id==='system') return frame('How the pieces connect','Runs on the station · sort.py stages over Viam resources · dashboard off the critical path',<>
+    {([['watch','Watch','Settled scene'],['pick','Pick','Look, grasp, lift'],['inspect','Inspect','Webcam views'],['decide','Decide','Tape + PatchCore'],['release','Release','Good or reject']] as const)
+      .map(([id,label,sub],i)=><Node key={id} id={id} label={label} sub={sub} width={210} active={id==='decide'} at={{x:200+i*260,y:290}} delay={0.06*i}/>)}
+    {([['wrist','Wrist cam','Color + depth',200],['arm','Arm','Gripper · motion',460],['webcam','Webcam','Fixed · 1920×1080',720],['ov','OpenVINO','Explicit CPU device',980],['log','decisions.jsonl','One line per item',1240]] as const)
+      .map(([id,label,sub,x])=><Node key={id} id={id} label={label} sub={sub} width={210} at={{x,y:520}} delay={0.36}/>)}
+    <Wire from="watch" to="pick"/><Wire from="pick" to="inspect"/><Wire from="inspect" to="decide"/><Wire from="decide" to="release"/>
+    <Wire from="wrist" to="watch"/><Wire from="arm" to="pick"/><Wire from="webcam" to="inspect"/><Wire from="ov" to="decide"/><Wire from="release" to="log"/>
+    <Text id="system-note" text="Dashboard listens over UDP · never blocks the loop" size={22} width={1152} at={{x:720,y:650}} color={grey} align="center" delay={0.48}/>
+  </>);
   if(step.id==='device') return frame('Separate inference from response time','Candidate CPU replay · 169 successful top calls · saved timings, not a device comparison',<>
     <Text id="median" text={`${evidence.timing.median.toFixed(2)} ms`} size={88} width={565} height={120} at={{x:430,y:330}} color={teal} delay={0}/>
     <Text id="median-label" text="Median model inference" size={28} width={565} at={{x:430,y:424}} delay={0.12}/>
