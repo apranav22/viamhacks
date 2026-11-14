@@ -377,3 +377,17 @@ socket_thin_long good x20 done: station runs/20261113_173920_collect (20/20). AR
 
 [pi/unknown · op Ali · Alis-MacBook-Air.local · ali/live-dashboard · 19:50]
 Operator requested all current viamhacks changes pushed. Snapshotting current code/site/dashboard and chronological agent log; 41 unittest tests pass (1 skipped); pipeline script tests pass separately. New docs/THRESHOLD_FINDINGS.md consolidates experiments, threshold leakage caveats, collection defects, live misses, false rejects and safety incidents. Latest station backup c20ea540 adds 3 runs (34 picks). No motion/config changes during this handoff.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/stuck-release · 20:56]
+ARM: taken (Pranav: "quit the prior run, and then do 180"; operator confirmed E-stop attended, arm free; station run
+20261113_185447_collect already IDLE at 20:54:55). Speed test: arm.do_command set_speed 180 deg/s (was 60, module default;
+acceleration unchanged), then sort.py --mode collect --reps 2 --background cardboard --assume-lying on the hex bolt on the
+pad (label unlabeled, type speedtest: not training data). speed_experiment.py restores set_speed 60 in a finally block.
+Revert by hand if needed: arm DoCommand {"set_speed": 60}.
+
+[claude-code/claude-opus-5-5 · op Pranav · Pranavs-MacBook-Air · pranav/stuck-release · 20:58]
+Speed test done (runs/20261113_205655_collect, logs/speed-experiment-205652.json): at 180 deg/s (acceleration default)
+pick 1 cycle 15.4 s (moves 8.4, gripper 3.0, other 4.0), latency 529 ms, held at 112. Pick 2 missed (fingers -2):
+after the set-down the bolt was seen end-on (hex head, 2645 px vs 4845) 48 mm from where it was put down, likely
+standing on its threads; with --assume-lying its head was projected to the table plane and the grasp aimed off.
+Collect stopped on the miss as designed. set_speed restored to 60 deg/s. ARM: released (watch pose, gripper open).
