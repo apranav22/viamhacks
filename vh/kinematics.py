@@ -101,6 +101,28 @@ def clearance(pt, r, box):
     return outside + inside - r          # < 0: the sphere touches the box
 
 
+ELBOW_FOLD_MAX_DEG = -12.0  # j3 above this folds the forearm onto the upper arm. 2026-11-14 09:35 "xArm: Self Collision
+#   Error" moving to j3 -0.3 (wrist 233 mm from the shoulder); j3 -16 / -20 ran fine (wrist ~308 mm).
+SELF_MARGIN_MM = 40.0     # tool/camera vs the arm's own base and upper arm: the xArm firmware stops on self collision
+_CAM_IN_FLANGE = np.array([67.5, -23.1, 17.5])   # wrist camera (vh/coverage.CAM_IN_FLANGE), r ~35 mm
+
+
+def self_clearance(joints_deg):
+    """Smallest gap (mm) between the gripper/camera and the base column or upper arm (capsules). 2026-11-14 09:25: an
+    oblique look route hit "xArm: Self Collision Error"; check_path only knew the workcell. Forearm not modelled (the
+    tool is attached next to it)."""
+    F = frames(joints_deg)
+    fl, R = F[5][:3, 3], F[5][:3, :3]
+    tool = [(fl + R[:, 2] * d, 50.0) for d in (0, 40, 80, 110)] + [(fl + R @ _CAM_IN_FLANGE, 35.0), (fl + R[:, 2] * 170, 15.0)]
+    links = [(np.array([0.0, 0, 0]), np.array([0.0, 0, 364]), 90.0), (F[1][:3, 3], F[2][:3, 3], 70.0)]
+    worst = 1e9
+    for p, r in tool:
+        for a, b, rl in links:
+            ab = b - a; t = np.clip((p - a) @ ab / (ab @ ab), 0, 1)
+            worst = min(worst, float(np.linalg.norm(p - (a + t * ab))) - r - rl)
+    return worst
+
+
 def check_path(j_from, j_to, obstacles, holding=True, steps=60, margin=10, ignore=()):
     """Sample the joint-space line; return (ok, worst clearance mm, where) over all body points and obstacles.
     ~10 ms for 60 steps."""
@@ -108,6 +130,15 @@ def check_path(j_from, j_to, obstacles, holding=True, steps=60, margin=10, ignor
     obs = [(n, np.array(c, float), np.array(d, float) / 2) for n, (c, d) in obstacles if n not in ignore]
     worst = (1e9, None)
     for i in range(steps + 1):
+        qi = a + (b - a) * i / steps
+        lim = max(ELBOW_FOLD_MAX_DEG, a[2] + 0.5)   # a move starting folded (fault recovery) may unfold, never fold more
+        if qi[2] > lim:                      # elbow folded onto the upper arm: firmware self collision (09:35, j3 -0.3)
+            fold = float(lim - qi[2])
+            if fold < worst[0]:
+                worst = (fold, f"self (elbow folded, j3 {qi[2]:.1f} > {ELBOW_FOLD_MAX_DEG}) at step {i}/{steps}")
+        sc = self_clearance(qi) - SELF_MARGIN_MM
+        if sc < worst[0]:
+            worst = (sc, f"self (tool vs base/upper arm) at step {i}/{steps}")
         bp = body_points(a + (b - a) * i / steps, holding)
         P = np.array([p for p, _ in bp]); R = np.array([r for _, r in bp], float)
         for name, c, h in obs:
@@ -152,3 +183,40 @@ def ik(pos, axis=(0, 0, -1), seed=None, jaw_heading_deg=None, reg=0.02):
             raise ValueError(f"IK solution outside joint limits: {np.round(q, 1).tolist()}")
     p, z = tcp(q)
     return [round(float(v), 2) for v in q], float(np.linalg.norm(p - pos)), float(np.degrees(np.arccos(np.clip(z @ axis, -1, 1))))
+
+
+def tcp_speed_profile(j_from, j_to, n=60):
+    """(d, mm_per_deg): the leading joint's travel d (deg) and, per segment of the joint-space line, how many mm the
+    TCP moves per degree of the leading joint. Geometry only; multiply by the leading joint's speed for mm/s."""
+    a, b = np.array(j_from, float), np.array(j_to, float)
+    d = float(np.abs(b - a).max())
+    if d < 1e-6:
+        return 0.0, np.zeros(n - 1)
+    P = np.array([tcp(a + (b - a) * s)[0] for s in np.linspace(0, 1, n)])
+    return d, np.linalg.norm(np.diff(P, axis=0), axis=1) / (d / (n - 1))
+
+
+def peak_tcp_speed(d, mm_per_deg, v, acc):
+    """Peak TCP speed (mm/s) of a joint move whose leading joint follows a trapezoid profile (cruise v deg/s,
+    acceleration acc deg/s^2; a triangle when the move is too short to reach v), as the xArm module runs joint moves."""
+    if d <= 0:
+        return 0.0
+    n = len(mm_per_deg) + 1
+    vp = min(v, math.sqrt(acc * d))
+    pos = np.linspace(0, 1, n)[1:] * d
+    vel = np.minimum(vp, np.sqrt(2 * acc * np.minimum(pos, d - pos + d / (n - 1))))
+    return float((mm_per_deg * vel).max())
+
+
+def safe_joint_speed(j_from, j_to, tcp_limit, acc, v_max=180.0, v_min=10.0):
+    """Fastest leading-joint speed (deg/s, whole degrees, <= v_max) whose peak TCP speed stays <= tcp_limit mm/s.
+    The xArm firmware limits the TCP to 1000 mm/s (UFACTORY: TCP 1000 mm/s, joints 180 deg/s, 1146 deg/s^2); one
+    joint speed for every move drove the tool tip to 2.4-2.9 m/s on the long swings at 180 deg/s."""
+    d, k = tcp_speed_profile(j_from, j_to)
+    if d <= 0 or peak_tcp_speed(d, k, v_max, acc) <= tcp_limit:
+        return float(v_max)
+    lo, hi = v_min, v_max
+    for _ in range(20):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if peak_tcp_speed(d, k, mid, acc) <= tcp_limit else (lo, mid)
+    return float(max(v_min, math.floor(lo)))

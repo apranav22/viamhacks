@@ -16,7 +16,7 @@ Viam × Intel "Edge of Intelligence" hackathon, Nov 13–14 2026. A judge places
 pip install -r requirements.txt                 # numpy, scipy, pillow, viam-sdk (+ optional opencv-python-headless)
 # api-key.json: {"address": ..., "api_key": ..., "api_key_id": ...}   (gitignored)
 
-python dashboard/server.py                      # http://localhost:8765 (add --host 0.0.0.0 on the station)
+python dashboard/server.py --no-preview         # http://localhost:8765 — Live telemetry + History; no robot connection
 python tests/test_pipeline.py                   # offline, ~3 s
 python run.py pick --fake site/img/home_color.jpg --cycles 3   # whole cycle offline, no robot
 python run.py watch                             # live cameras, never moves
@@ -36,3 +36,9 @@ required specimen IDs/splits, rejection-budget selection, limitations, and Huggi
 ## Day-1 evening handoff
 
 See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.
+
+## Day-1 recap and run catalog
+
+Start with `docs/DAY1_RECAP.md`. To browse every capture run with its images and metadata:
+`python sync_data.py pull && python3 catalog.py && open runs/index.html`. The same catalog as a table is
+`docs/RUN_CATALOG.md`.

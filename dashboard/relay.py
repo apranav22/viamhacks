@@ -1,6 +1,7 @@
 """Laptop redirect + UDP relay for the station dashboard. No camera or robot connection.
 
 python -I dashboard/relay.py --station 172.16.0.182
+Optional compatibility only; station-local controllers now use UDP 8776 directly.
 HTTP stays loopback-only; run telemetry received on UDP 8766 forwards unchanged to station UDP 8776.
 """
 import argparse
@@ -12,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--station', required=True)
-    ap.add_argument('--station-port', type=int, default=8775)
+    ap.add_argument('--station-port', type=int, default=8765)
     ap.add_argument('--station-udp-port', type=int, default=8776)
     ap.add_argument('--port', type=int, default=8765)
     ap.add_argument('--udp-port', type=int, default=8766)

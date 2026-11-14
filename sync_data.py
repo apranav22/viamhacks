@@ -7,6 +7,10 @@
     python sync_data.py pull                       # every shared run you don't have
     python sync_data.py pull '20261113_18*' --models any_cardboard_v2 --revision <commit>
 
+sort.py calls spawn_push() when a run ends (clean exit, error or stop): that one run is pushed by a detached,
+niced process within about a minute (log runs/_sync.log). The station cron stays as the fallback for runs whose
+post-run push failed or that were edited later (e.g. a new exclude.json).
+
 Layout in the repo: runs/<run>/... exactly as on disk (item_NNN/meta.json + images, decisions.jsonl, exclude.json),
 models/<name>/..., and index.json (per run: host, item/label/type counts, content fingerprint).
 
@@ -17,17 +21,22 @@ Safety:
 - pull never overwrites a local run whose content differs from the shared copy (push it first, or --force).
 - Uploads only add/replace files; nothing is ever deleted in the repo.
 - dash/ (laptop dashboard cache) is not uploaded unless --with-dash.
+- Pushes on one host are serialized (runs/.sync_push.lock): each push reads index.json and rewrites it, so two
+  overlapping pushes (cron + post-run) would drop each other's index entries.
 
 Auth: standard Hugging Face token (`hf auth login`, or HF_TOKEN). Every push prints the commit: train from a pinned
 snapshot with `pull --revision <commit>` to know exactly which data a model saw. Moves nothing on the robot.
 """
 
 import argparse
+import contextlib
+import fcntl
 import fnmatch
 import hashlib
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -35,6 +44,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+LOCK_NAME = ".sync_push.lock"   # in runs/ (gitignored; resolved, so the station's current/runs symlink shares it)
+POST_RUN_LOG = "_sync.log"      # in runs/: a file, never mistaken for a run dir
 CONFIG = ROOT / "config" / "data_repo.json"
 RUN_KINDS = ("_collect", "_sort")
 SKIP_PARTS = {"__pycache__", ".DS_Store"}
@@ -214,9 +225,44 @@ def repo_id_from_config():
     return rid
 
 
+@contextlib.contextmanager
+def push_lock(root: Path):
+    """Exclusive per-host lock around read index -> commit. Blocks: the post-run push waits for a running cron push."""
+    d = (root / "runs").resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / LOCK_NAME, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def spawn_push(run_dir: Path, popen=subprocess.Popen):
+    """Push one just-finished run in a detached, low-priority process; returns the process, or None for a run with no
+    picks. Detached (own session) so station_run.py stop / the run's exit never kills an upload half way."""
+    run_dir = Path(run_dir)
+    if not is_data_run(run_dir):
+        return None
+    root = run_dir.parent.parent
+    cmd = ["nice", "-n", "10", sys.executable, str(Path(__file__).resolve()), "--root", str(root),
+           "push", run_dir.name, "--min-age", "0"]
+    log = run_dir.parent / POST_RUN_LOG
+    with open(log, "a") as f:
+        f.write(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} post-run push {run_dir.name}\n")
+        f.flush()
+        return popen(cmd, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
+                     env={**os.environ, "HF_HUB_DISABLE_PROGRESS_BARS": "1"})
+
+
 # ---------- commands ----------
 
 def cmd_push(args, hub, root=ROOT):
+    with push_lock(root):
+        return _push(args, hub, root)
+
+
+def _push(args, hub, root):
     index = hub.read_index()
     index.setdefault("runs", {}); index.setdefault("models", {})
     plan, skipped = plan_push(local_runs(root / "runs", args.runs), index["runs"], time.time(),

@@ -10,3 +10,4 @@ models/
 config/backup-*.json
 # huggingface_hub download metadata (sync_data.py pull)
 .cache/
+.pi/

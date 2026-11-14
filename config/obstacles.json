@@ -26,15 +26,15 @@
  },
  "cardboard-box": {
   "center": [
-   397,
-   -125,
+   327,
+   -147,
    72
   ],
   "dims": [
    335,
-   276,
+   290,
    145
   ],
-  "note": "x 235-560, y -258..+8, walls 100, divider flap 140; reject = near half"
+  "note": "x 160-495, y -292..-2 (walls x~170/485, y~-285/-10, divider x~315; walls 110-120 tall, height kept 145 for the flap). Reject = near half (x 170-315), good = far half (x 315-485). Re-measured 2026-11-14 10:25 after the operator moved the bins: wrist depth from TCP (380,-120,480), runs/bins_20261114_102438 [claude-code/claude-opus-5-5 \u00b7 op Ali]. Before: center [397,-125,72] dims [335,276,145]."
  }
 }

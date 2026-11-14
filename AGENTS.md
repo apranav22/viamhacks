@@ -108,6 +108,8 @@ Next:      the single most useful next step
 | `docs/DATA_PLAN.md` | part classes, data splits, holdout defects |
 | `sync_data.py` | share runs/ and models/ with the team (public HF dataset; read access needs no login): `status` · `pull` · `push` (DATA_PLAN.md, end) |
 | `docs/AGENT_LOG.md` | who is doing what, arm taken/released, config changes |
+| `docs/DAY1_RECAP.md` · `RUN_CATALOG.md` | day-1 recap; every run with part, label, counts, flag and note |
+| `catalog.py` | rebuilds the catalog: `python3 catalog.py` then `open runs/index.html` (all images + metadata per pick); notes in `docs/run_notes.json` |
 | `pipeline.py`, `motion_probe.py`, `overview.py` (Pranav) | scan, grasp, motion primitives, present views |
 | `vh/`, `run.py` (Ali) | perception, geometry, telemetry; baseline cycle |
 | `dashboard/server.py` | live dashboard (UDP telemetry, idle camera preview) on :8765 |

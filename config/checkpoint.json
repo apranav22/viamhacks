@@ -59,7 +59,7 @@
    -150,
    260
   ],
-  "over": "REJECT = near compartment (x 245-370, y -258..+8): opening the fingers here drops the part into reject",
+  "over": "REJECT = near compartment (x 170-315, y -285..-10 since the 2026-11-14 10:25 re-measure; held part at x ~260-273): opening the fingers here drops the part into reject",
   "tool_axis": "points from the TCP at the lens",
   "distance_to_lens_mm": 400
  },
@@ -152,9 +152,9 @@
  },
  "good_drop": {
   "tcp_world": [
-   480,
-   -125,
-   230
+   400,
+   -147,
+   260
   ],
   "pointing": "down, theta 0",
   "joints_deg": [
@@ -166,7 +166,7 @@
    165.39
   ],
   "planner_ms_from_checkpoint": 7323,
-  "note": "the planner picked joint1 345 / joint4 -180: 7.3 s. Record this leg as joint waypoints."
+  "note": "2026-11-14 10:25: bins moved; far (good) compartment x 315-485, y -285..-10 (runs/bins_20261114_102438). sort.py GOOD_TCP follows. Old: (480,-125,230) / sort.py (470,-120,260). [claude-code/claude-opus-5-5 \u00b7 op Ali]"
  },
  "pick_pad": {
   "world_mm": {

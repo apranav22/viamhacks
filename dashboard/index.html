@@ -1,380 +1,49 @@
 <!doctype html>
+<!-- [codex/unknown · op Ali · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14] -->
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spot it, sort it · live</title>
-<style>
-:root{--bg:#0a0f1e;--pan:#111a30;--pan2:#0d1528;--line:#1f2b48;--ink:#e6ecff;--mute:#8090b8;--cy:#22d3ee;--gr:#22c55e;--am:#f59e0b;--rd:#ef4444;--vi:#a78bfa;--bl:#60a5fa}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
-header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:linear-gradient(90deg,#0d1730,#131f40);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-header h1{font-size:16px;margin:0;letter-spacing:.02em}header .sp{flex:1}
-.badge{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.04em;background:#1e293b;color:var(--mute)}
-.badge.live{background:#7f1d1d;color:#fecaca}.badge.dry{background:#1e3a5f;color:#bfdbfe}
-.pill{padding:5px 14px;border-radius:10px;font-weight:800;font-size:15px;letter-spacing:.06em;background:#1e293b}
-.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--rd)}.dot.ok{background:var(--gr)}
-.kv{color:var(--mute);font-size:12px}.kv b{color:var(--ink);font-weight:600}
-main{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:12px 18px 30px}
-.p{background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
-.p h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);display:flex;align-items:center;gap:8px}
-.c7{grid-column:span 7}.c5{grid-column:span 5}.c4{grid-column:span 4}.c8{grid-column:span 8}.c6{grid-column:span 6}.c12{grid-column:span 12}.c3{grid-column:span 3}
-.stack{display:grid;gap:12px;align-content:start}
-.view{position:relative;background:#000;border-radius:8px;overflow:hidden;height:min(44vh,500px)}
-.view img,.view svg,.view canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-.strip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-.tile{background:var(--pan2);border:2px solid var(--line);border-radius:8px;padding:6px;min-width:0}
-.tile canvas{width:100%;aspect-ratio:4/5;background:#000;border-radius:5px;display:block}
-.tile .nm{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--mute);text-transform:uppercase;display:flex;justify-content:space-between}
-.tile .sc{font-size:12px;margin-top:4px;font-variant-numeric:tabular-nums}.tile.bad{border-color:var(--rd)}.tile.okk{border-color:#1e4d3a}.tile.now{border-color:var(--cy)}.tile.skip{opacity:.35}
-.verdict{font-size:46px;font-weight:900;letter-spacing:.04em;line-height:1.05}.verdict.good{color:var(--gr)}.verdict.reject{color:var(--rd)}.verdict.collect{color:var(--bl)}.verdict.pending{color:var(--mute)}
-.banner.good{background:#15803ddd;display:block;font-size:20px}.banner.reject{background:#b91c1cdd;display:block;font-size:20px}
-.view canvas{image-rendering:pixelated;display:none}
-.banner{position:absolute;left:10px;top:10px;padding:4px 10px;border-radius:6px;font-weight:800;font-size:12px;display:none}
-.banner.hand{background:#b91c1cdd;display:block}.banner.placed{background:#15803ddd;display:block}.banner.wait{background:#b45309dd;display:block}
-.tabs{display:flex;gap:4px;margin-left:auto}.tabs button{background:#1a2442;border:1px solid var(--line);color:var(--mute);border-radius:6px;padding:2px 10px;font-size:12px;cursor:pointer}
-.tabs button.on{background:#1e3a5f;color:#fff;border-color:#2b5c99}
-.chain{display:flex;gap:4px}.st{flex:1;background:var(--pan2);border:1px solid var(--line);border-radius:8px;padding:7px 6px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--mute)}
-.st .d{display:block;font-weight:500;font-size:12px;color:var(--ink);margin-top:2px;font-variant-numeric:tabular-nums}
-.st.done{border-color:#1e4d3a;color:#86efac}.st.now{background:#0e3b4a;border-color:var(--cy);color:#fff;box-shadow:0 0 0 1px var(--cy) inset}
-.big{font-size:42px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}.big small{font-size:16px;color:var(--mute);font-weight:600}
-.stackbar{display:flex;height:14px;border-radius:5px;overflow:hidden;margin:10px 0 6px;background:#1a2442}.stackbar div{height:100%}
-.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
-.hist{display:flex;align-items:flex-end;gap:3px;height:46px;margin-top:8px}.hist div{flex:1;background:#2b5c99;border-radius:2px 2px 0 0;min-width:4px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}.m{font-size:12px;color:var(--mute)}.m b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
-.shape{display:inline-block;padding:3px 10px;border-radius:6px;background:#3b2a6b;color:#ddd6fe;font-weight:700;font-size:13px}
-.gauge{position:relative;height:16px;background:#1a2442;border-radius:8px;margin:8px 0}.gauge .f{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#155e75,var(--cy));border-radius:8px}
-.gauge .x{position:absolute;top:-4px;bottom:-4px;width:3px;background:var(--am);border-radius:2px}
-table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-.log{height:250px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,monospace}.log div{padding:1px 0;border-bottom:1px solid #16203a}.log .t{color:var(--mute);margin-right:8px}
-.k-recovery{color:#fbbf24}.k-error,.k-stopped{color:#f87171}.k-move{color:#93c5fd}.k-cycle{color:#86efac}.k-gripper_cmd,.k-grasp_result{color:#c4b5fd}
-svg text{font-family:inherit}.ok{color:var(--gr)}.bad{color:var(--rd)}.warn{color:var(--am)}
-.empty{color:var(--mute);font-size:13px;padding:10px 0}
-</style></head><body>
-<header>
-  <h1>Spot it, sort it · live</h1>
-  <span id="mode" class="badge">NO RUN</span>
-  <span class="pill" id="state">IDLE</span>
-  <span class="kv">item <b id="item">–</b></span>
-  <span class="kv">in state <b id="elapsed">–</b></span>
-  <span class="sp"></span>
-  <span class="kv">feeds <b id="pv">–</b></span>
-  <span class="kv">run <b id="run">–</b></span>
-  <span class="kv"><span id="link" class="dot"></span><b id="linktxt">no telemetry</b></span>
-</header>
+<title>Spot it, sort it</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/viewport.css"><script defer src="/state.js"></script><script defer src="/app.js"></script><script defer src="/models.js"></script></head>
+<body>
+<header class="app-header"><h1>Spot it, sort it</h1><nav aria-label="Dashboard views"><button id="nav-live" type="button" aria-controls="live" aria-pressed="false">Live</button><button id="nav-history" type="button" aria-controls="history" aria-pressed="true">History</button><button id="nav-models" type="button" aria-controls="models" aria-pressed="false">Models</button></nav><span id="connection" class="subtle" role="status">Connecting…</span></header>
 <main>
-  <section class="p c6">
-    <h2>Wrist camera <span class="kv" id="camsub"></span>
-      <span class="tabs"><button data-t="live" class="on">Preview</button><button data-t="look">Hover look</button><button data-t="ref">Reference</button><button data-t="height">Height</button></span></h2>
-    <div class="view"><img id="cam" alt=""><canvas id="hm" width="80" height="60"></canvas>
-      <svg id="ov" viewBox="0 0 640 480" preserveAspectRatio="xMidYMid meet"></svg><div id="banner" class="banner"></div></div>
-  </section>
-  <section class="p c6"><h2>Webcam (checkpoint over reject) <span class="kv" id="ovsub"></span></h2>
-    <div class="view"><img id="ovimg" alt=""><svg id="ovov" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet"></svg><div id="ovbanner" class="banner"></div></div>
-  </section>
-  <section class="p c8"><h2>Cycle <span class="kv" id="cyclesub"></span></h2><div class="chain" id="chain"></div><div id="progress" style="margin-top:12px"></div>
-    <h2 style="margin-top:12px">Inspection · item <b id="insn" style="color:var(--ink)">–</b> <span class="kv">scores vs thresholds · <label><input id="showmaps" type="checkbox" checked> heatmaps (red ≥ threshold)</label></span></h2><div class="strip" id="strip"></div></section>
-  <section class="c4 stack">
-    <div class="p"><h2>Decision</h2><div id="dec"><div class="verdict pending">–</div><div class="kv">waiting for the first item</div></div></div>
-    <div class="p"><h2>Latency: item seen → arm moving</h2>
-      <div class="big" id="lat">–<small> ms</small></div>
-      <div class="stackbar" id="latbar"></div>
-      <div class="legend"><span><i style="background:#64748b"></i>seen → still (2 frames)</span><span><i style="background:var(--cy)"></i>IK + path check + command</span><span><i style="background:var(--vi)"></i>controller start</span></div>
-      <div class="hist" id="lathist"></div></div>
-  </section>
-  <section class="p c3"><h2>Item &amp; grasp</h2><div id="meas" class="empty">No hover look yet.</div></section>
-  <section class="p c3"><h2>Gripper</h2><div id="grip" class="empty">No gripper reading yet.</div></section>
-  <section class="p c3"><h2>Table map (top view, world mm)</h2><svg id="map" viewBox="0 0 400 400"></svg></section>
-  <section class="p c3"><h2>Loop performance</h2><svg id="perf" viewBox="0 0 400 110"></svg><div class="grid2" id="perfkv" style="margin-top:8px"></div></section>
-  <section class="p c12"><h2>Timeline <span class="kv">spans and moves, current and previous item</span></h2><svg id="tl" viewBox="0 0 900 230" style="max-height:260px"></svg></section>
-  <section class="p c12"><h2>Items (judge log)</h2><table><thead><tr><th>#</th><th>decision</th><th>reason</th><th>type</th><th>latency</th><th>cycle</th><th>first motion</th><th>max tape</th></tr></thead><tbody id="items"><tr><td colspan="8" class="empty">No items yet.</td></tr></tbody></table></section>
-  <section class="p c12"><h2>Events</h2><div class="log" id="log"></div></section>
+<section id="live" hidden aria-label="Live monitoring">
+  <div class="live-tools"><label>View<select id="live-view"><option value="camera">Camera</option><option value="inspection">Inspection</option></select></label><label class="check"><input id="follow" type="checkbox" checked> Follow item</label><span id="live-status" class="status">No telemetry</span></div>
+  <div class="section-bar"><div><h2 id="live-title">Waiting for a run</h2><p id="live-subtitle"></p></div></div>
+  <details class="feed" open><summary>Camera feed <span id="feed-age" class="subtle"></span></summary><div class="feed-tools"><label for="camera">Camera<select id="camera" aria-label="Camera"><option value="cam">Wrist</option><option value="overview-cam">Webcam</option></select></label></div><div class="feed-image"><img id="feed-image" alt="Latest camera frame" hidden><p id="feed-empty" class="subtle">No camera frames received</p></div><span id="feed-age-visible" class="subtle"></span></details>
+</section>
+<section id="history" aria-label="Historical captures"><label class="run-picker" for="history-run">Run<select id="history-run" aria-label="Run"><option value="">Loading…</option></select></label></section>
+<section id="models" hidden aria-label="Model comparison">
+  <div class="model-toolbar"><label>Benchmark<select id="model-benchmark" aria-label="Benchmark"><option>Loading…</option></select></label><span id="model-benchmark-count" class="subtle"></span></div>
+  <div class="model-summary-wrap"><table class="model-table" aria-label="Version comparison"><thead><tr><th>Version</th><th>Missed</th><th>Good rejected</th><th>Uncertain</th></tr></thead><tbody id="model-summary"></tbody></table></div>
+  <div class="model-review">
+    <div class="model-navigation"><label>Review<select id="model-filter"><option value="failures">Failures</option><option value="all">All examples</option></select></label><div><button id="model-previous" aria-label="Previous example">‹</button><span id="model-position">No examples</span><button id="model-next" aria-label="Next example">›</button></div></div>
+    <div class="model-verdict" aria-live="polite"><strong id="model-verdict"></strong><span id="model-diagnosis" class="subtle"></span></div>
+    <p id="model-empty" class="subtle">Loading benchmark…</p>
+    <div id="model-images" class="images" hidden><figure><figcaption>Camera image</figcaption><div class="image-stage"><img id="model-original" alt="Benchmark camera capture" hidden></div></figure><figure><figcaption>Inspected crop</figcaption><div class="image-stage"><img id="model-crop" alt="Verified reconstructed model crop" hidden><p id="model-crop-note" class="subtle"></p></div></figure></div>
+  </div>
+  <div class="model-footer"><label>Results<select id="model-version" aria-label="Model version"></select></label><button id="model-details-open">Details</button></div>
+</section>
+<p id="error" class="error" role="alert" hidden></p>
+<div class="workbench" id="capture-workbench"><section class="inspection" aria-label="Capture and detection results">
+  <div id="empty" class="empty"><h3>No item selected</h3><p class="subtle">Choose a run to inspect saved captures.</p></div>
+  <div id="item-content" hidden>
+    <div class="item-heading"><div class="item-navigation"><button id="previous-item" type="button" aria-label="Previous item">‹</button><select id="item-picker" aria-label="Item"></select><button id="next-item" type="button" aria-label="Next item">›</button></div><div class="capture-verdict" aria-live="polite"><strong id="verdict"></strong><span id="verdict-source" class="subtle"></span></div></div>
+    <div id="capture-content" hidden><div id="images" class="images"><figure><figcaption id="image-caption">Camera image</figcaption><div class="image-stage"><img id="original" alt="Selected capture" hidden><svg id="detection-overlay" aria-label="Saved detection box" hidden><rect id="detection-box" fill="none" vector-effect="non-scaling-stroke"></rect></svg><p id="image-error" class="subtle" hidden>Image unavailable</p></div></figure><figure id="crop-figure"><figcaption id="crop-caption">Inspected crop</figcaption><div class="image-stage"><img id="crop" alt="Crop corresponding to selected capture" hidden><svg id="region-crop" role="img" aria-label="Crop from the saved bounding box" hidden><defs><clipPath id="region-clip"><rect id="region-bound"></rect></clipPath></defs><image id="region-image" clip-path="url(#region-clip)"></image></svg><p id="crop-error" class="subtle">No crop saved</p></div></figure></div></div>
+    <div class="capture-navigation"><h3>Captures</h3><button id="capture-page-prev" aria-label="Earlier captures" hidden>‹</button><div id="captures" class="capture-strip" aria-label="Select a capture"></div><button id="capture-page-next" aria-label="Later captures" hidden>›</button></div><p id="no-captures" class="subtle" hidden>No captures saved for this attempt.</p>
+  </div>
+</section></div>
+<footer class="view-footer"><button id="open-details">Details ›</button></footer>
 </main>
-<script>
-const DEFAULT_STATES=["WATCH","HOVER","LOOK","PICK","LIFT","HOME","RELEASE"]; let STATES=DEFAULT_STATES;
-const $=id=>document.getElementById(id);
-let S;
-let PV={cams:{},arm:null,status:"–"};   // idle preview: survives run resets
-function reset(){const tab=S?.tab||"live"; S={progress:{},state:"IDLE",stateT:Date.now()/1e3,item:null,times:{},tab,watch:null,look:null,refId:null,depth:null,
-  cycles:[],spans:[],moves:[],lat:[],perf:[],tele:null,lastPkt:0,map:{},grip:{},masks:[],live:false,snap:{},
-  ins:{},insItem:null,dec:null,lastView:null,viewOrder:["front","yaw-20","yaw+35","pitch-25"],mode:null};}
-const TAPE=0.02;
-reset();
-const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-const f1=v=>v==null?"–":(+v).toFixed(1), f0=v=>v==null?"–":Math.round(+v);
-const tstr=t=>new Date(t*1000).toLocaleTimeString([], {hour12:false})+"."+String(Math.floor((t%1)*1000)).padStart(3,"0");
-
-/* ---- frames: newest-wins loader, so a slow browser never queues frames ---- */
-function loader(el){ let busy=false,pend=null,cur=null; const go=id=>{ if(!id||id===cur) return; if(busy){pend=id;return;} busy=true; cur=id; el.src="/frame/"+id; };
-  el.onload=el.onerror=()=>{busy=false; if(pend){const p=pend;pend=null;go(p);}}; return go; }
-const showFrame=loader($("cam")), showOv=loader($("ovimg"));
-const runActive=()=>S.state!=="IDLE"&&S.lastPkt&&Date.now()/1e3-S.lastPkt<3;
-async function showHeight(d){
-  const r=await fetch("/frame/"+d.id); if(!r.ok) return; const b=new Uint8Array(await r.arrayBuffer());
-  const [h,w]=d.shape, c=$("hm"); c.width=w; c.height=h; const ctx=c.getContext("2d"), im=ctx.createImageData(w,h);
-  for(let i=0;i<w*h;i++){const v=b[i]/255, j=i*4; im.data[j]=Math.min(255,600*v); im.data[j+1]=Math.min(255,90+420*v*(1-v)); im.data[j+2]=Math.max(0,200-260*v); im.data[j+3]=b[i]?255:60;}
-  ctx.putImageData(im,0,0);
-}
-function setTab(t){S.tab=t; document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
-  $("hm").style.display=t==="height"?"block":"none"; $("cam").style.display=t==="height"?"none":"block"; render();}
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>setTab(b.dataset.t));
-
-/* ---- camera overlay ---- */
-function ovMasks(){return (S.masks||[]).map(([x0,y0,x1,y1])=>`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" fill="url(#hatch)" stroke="#64748b" stroke-dasharray="4 3"/>`).join("");}
-function ovBlob(it,col,label){ if(!it) return ""; const [x0,y0,x1,y1]=it.bbox, a=it.axis;
-  return `<rect x="${x0-4}" y="${y0-4}" width="${x1-x0+8}" height="${y1-y0+8}" fill="none" stroke="${col}" stroke-width="2.5" rx="4"/>
-  <line x1="${a[0]}" y1="${a[1]}" x2="${a[2]}" y2="${a[3]}" stroke="${col}" stroke-width="1.5" stroke-dasharray="5 3"/>
-  <circle cx="${it.c[0]}" cy="${it.c[1]}" r="4" fill="${col}"/>
-  <text x="${x0-4}" y="${Math.max(y0-10,14)}" fill="${col}" font-size="15" font-weight="700" paint-order="stroke" stroke="#000" stroke-width="3">${esc(label)}</text>`;}
-function ovJaws(L){ if(!L||!L.jaw_px) return ""; const [[ax,ay],[bx,by]]=L.jaw_px, dx=bx-ax, dy=by-ay, n=Math.hypot(dx,dy)||1, px=-dy/n*12, py=dx/n*12;
-  const pad=(x,y)=>`<line x1="${x-px}" y1="${y-py}" x2="${x+px}" y2="${y+py}" stroke="#f472b6" stroke-width="7" stroke-linecap="round"/>`;
-  const c=L.center_px||[(ax+bx)/2,(ay+by)/2];
-  return `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#f472b6" stroke-width="2"/>${pad(ax,ay)}${pad(bx,by)}
-  <path d="M${c[0]-9},${c[1]} h18 M${c[0]},${c[1]-9} v18" stroke="#fff" stroke-width="2"/>`;}
-function render(){
-  let svg=`<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#64748b88" stroke-width="3"/></pattern></defs>`+ovMasks();
-  const B=$("banner"); B.className="banner"; let sub="";
-  if(S.tab==="live"){
-    const c=newestFrame(PV.cams.cam,S.watch,S.snap.cam,S.look);
-    svg=""; sub=frameLabel(c);
-    if(c) showFrame(c.frame.id); else $("cam").removeAttribute("src");
-  }
-  else if(S.tab==="look"&&S.look){const L=S.look; showFrame(L.frame&&L.frame.id);
-    (L.others||[]).forEach(o=>{const [x0,y0,x1,y1]=o.bbox; svg+=`<rect x="${x0-3}" y="${y0-3}" width="${x1-x0+6}" height="${y1-y0+6}" fill="none" stroke="#94a3b8" stroke-dasharray="4 3" rx="3"/>`;});
-    if(L.item) svg+=ovBlob(L.item,"#22d3ee",L.item.xy?`(${f0(L.item.xy[0])}, ${f0(L.item.xy[1])})`:(L.shape||""))+ovJaws(L); else {B.className="banner hand";B.textContent="ITEM NOT SEEN";}
-    sub=`${L.label||"hover look"} · item ${L.n}`;}
-  else if(S.tab==="ref"&&S.refId){showFrame(S.refId); sub="empty-table reference (ignored as background)";}
-  else if(S.tab==="height"&&S.depth){showHeight(S.depth); svg=""; sub="height above the table from depth (hover look)";}
-  if(S.tab!=="live"){
-    const c=S.tab==="look"?S.look:null;
-    sub=(sub||"No evidence available")+" · "+(c?frameLabel({...c,k:"snap"}):"SNAPSHOT / reference");
-    if((S.tab==="look"&&!S.look)||(S.tab==="ref"&&!S.refId)) $("cam").removeAttribute("src");
-  }
-  $("ov").innerHTML=svg; $("camsub").textContent=sub;
-}
-
-/* ---- webcam: the run's inspection frames while a run is on, else the idle preview ---- */
-function newestFrame(...frames){
-  return frames.filter(c=>c?.frame?.id&&c.frame.ok!==false).sort((a,b)=>(b.t||0)-(a.t||0))[0];
-}
-function frameLabel(c){
-  if(!c) return "No frame available";
-  const age=Number.isFinite(c.t)?Math.max(0,Date.now()/1000-c.t):null;
-  const continuous=c.k==="preview"||c.k==="watch";
-  return (continuous?(age!==null&&age<3?"LIVE PREVIEW":"STALE PREVIEW"):"SNAPSHOT")+
-    " · "+(age===null?"timestamp unknown":tstr(c.t)+" · "+age.toFixed(1)+" s old")+
-    (c.step?" · "+c.step:"");
-}
-function renderOv(){
-  const c=newestFrame(PV.cams["overview-cam"],S.snap["overview-cam"],S.lastView);
-  $("ovbanner").className="banner"; $("ovov").innerHTML="";
-  $("ovsub").textContent=frameLabel(c);
-  if(c) showOv(c.frame.id); else $("ovimg").removeAttribute("src");
-}
-
-/* ---- inspection strip: crops drawn in the browser from frames the loop already sent ---- */
-const drawn={};
-function drawCrop(cv,fid,crop,map){ const show=$("showmaps").checked, key=fid+":"+crop.join(",")+":"+(show&&map?map.id:""); if(drawn[cv.id]===key) return; drawn[cv.id]=key;
-  const im=new Image(); im.onload=async()=>{ if(drawn[cv.id]!==key) return;
-    const ctx=cv.getContext("2d"), [x0,y0,x1,y1]=crop, w=x1-x0, h=y1-y0, s=Math.min(cv.width/w,cv.height/h), dx=(cv.width-w*s)/2, dy=(cv.height-h*s)/2;
-    ctx.fillStyle="#000"; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(im,x0,y0,w,h,dx,dy,w*s,h*s);
-    if(!show||!map) return;
-    try{const response=await fetch("/frame/"+map.id); if(!response.ok) return; const bytes=new Uint8Array(await response.arrayBuffer());
-      if(bytes.length!==4096||drawn[cv.id]!==key) return;
-      const layer=document.createElement("canvas"); layer.width=layer.height=64; const lc=layer.getContext("2d"), pixels=lc.createImageData(64,64);
-      for(let i=0;i<4096;i++){const v=bytes[i], j=i*4; pixels.data[j]=255; pixels.data[j+1]=v>=128?35:190; pixels.data[j+2]=0; pixels.data[j+3]=Math.max(0,(v-64)/191)*155;}
-      lc.putImageData(pixels,0,0); ctx.drawImage(layer,dx,dy,w*s,h*s);
-    }catch(e){console.warn("heatmap unavailable",e);}
-  }; im.src="/frame/"+fid; }
-$("showmaps").onchange=()=>{for(const k in drawn) delete drawn[k]; renderStrip();};
-function renderStrip(){ $("insn").textContent=(S.insItem??"–")+(S.pose?" · "+S.pose:""); const keys=["top",...S.viewOrder], D=S.dec&&S.dec.n===S.insItem?S.dec:null;
-  const host=$("strip"); if(host.children.length!==keys.length||host.dataset.k!==keys.join()){ host.dataset.k=keys.join();
-    host.innerHTML=keys.map(k=>`<div class="tile" id="tile-${k}"><div class="nm"><span>${k==="top"?"top · wrist":esc(k)}</span><span id="tv-${k}"></span></div><canvas id="tc-${k}" width="200" height="250"></canvas><div class="sc" id="ts-${k}">–</div></div>`).join(""); for(const k in drawn) delete drawn[k]; }
-  keys.forEach((k,i)=>{ const I=S.ins[k], t=$("tile-"+k), cv=$("tc-"+k);
-    if(!I){ t.className="tile"+(D?" skip":(S.state==="INSPECT"&&keys.findIndex(x=>!S.ins[x])===i?" now":"")); $("ts-"+k).textContent=D?"not captured / not reported":"–"; $("tv-"+k).textContent="";
-      const ctx=cv.getContext("2d"); ctx.fillStyle="#0d1528"; ctx.fillRect(0,0,cv.width,cv.height); drawn[cv.id]=null; return; }
-    if(I.frame) drawCrop(cv,I.frame,I.crop,I.heatmap);
-    const tapeBad=I.tape!=null&&I.tape>TAPE, bad=tapeBad||I.anomalous, here=D&&D.at===k;
-    t.className="tile "+(bad?"bad":I.status==="ok"?"okk":""); $("tv-"+k).innerHTML=here?`<b class="${D.decision==="good"?"ok":"bad"}">decided</b>`:"";
-    $("ts-"+k).innerHTML=`tape <b class="${tapeBad?"bad":""}">${I.tape==null?"–":(100*I.tape).toFixed(1)+"%"}</b><br>`+
-      (I.status==="ok"?`anomaly <b class="${I.anomalous?"bad":"ok"}">${f1(I.anomaly)} / ${f1(I.threshold)}</b> · ${f0(I.infer_ms)} ms`:`<span class="warn">${esc(I.status||"not scored")}</span>`); }); }
-function renderDec(){ const D=S.dec; if(!D) {$("dec").innerHTML='<div class="verdict pending">–</div><div class="kv">No decision reported</div>'; return;} const cls=D.decision==="good"?"good":D.decision==="reject"?"reject":D.decision==="collect"?"collect":"pending";
-  $("dec").innerHTML=`<div class="verdict ${cls}">${D.decision==="collect"?"SAVED":esc(D.decision.toUpperCase())}</div>
-  <div style="margin:6px 0 4px">${esc(D.reason||"")}</div>
-  <div class="kv">item <b>${D.n}</b>${D.n!==S.item?" (previous)":""} · decided at <b>${esc(D.at||"–")}</b> · <b>${f0(D.ms_from_seen)} ms</b> after the part was seen</div>`; }
-
-/* Semantic milestones record evidence, never infer success from state order. */
-function recordProgress(ev){
-  if(!["state","move","look","anomaly_result","gripper_cmd","grasp_result","view","decision","span","cycle","recovery","error","stopped"].includes(ev.k)) return;
-  const n=ev.n??(typeof ev.item==="number"?ev.item:S.item); if(n==null||n===0) return;
-  const p=S.progress[n]||(S.progress[n]={});
-  const put=(key,text)=>{p[key]=text;};
-  if(ev.k==="move"&&/^look\b/.test(ev.label)) put("Hover capture","moving to capture");
-  if(ev.k==="look") {put("Hover capture",ev.frame?"captured":"no image reported"); put("Hover check",ev.item?"item detected":"item not seen"); if(ev.grasp) put("Grasp calculation",`jaws ${f0(ev.grasp.jaw_heading)}° · θ ${f0(ev.grasp.theta)}°`);}
-  if(ev.k==="move"&&/^descend\b/i.test(ev.label)) put("Grasp descend",ev.dry_run?"dry-run command":"commanded");
-  if(ev.k==="span"&&/^descend\b/i.test(ev.name)) put("Grasp descend",ev.error?"failed: "+ev.error:"motion completed");
-  if(ev.k==="gripper_cmd"&&ev.cmd==="grab") put("Grip verification",ev.dry_run?"dry-run grab":"grab commanded; awaiting verification");
-  if(ev.k==="grasp_result") put("Grip verification",(ev.ok?"held (reported)":"MISSED")+(ev.attempt?" · attempt "+ev.attempt:""));
-  if(ev.k==="state"&&ev.state==="INSPECT") put("Additional inspection","in progress");
-  if(ev.k==="view") put("Additional inspection",ev.view+" captured");
-  if(ev.k==="anomaly_result") put(ev.view==="top"?"Hover check":"Additional inspection",ev.view+": "+ev.status+(ev.status==="ok"?(ev.anomalous?" · anomalous":" · below threshold"):" · not validated"));
-  if(ev.k==="decision") {put("Decision",ev.decision+" · "+ev.reason); if(!p.Placement) put("Placement","not confirmed");}
-  if(ev.k==="state"&&["DROP","PLACE"].includes(ev.state)) put("Placement","command sequence in progress; not confirmed");
-  // sort.py release() may time out and return normally; a clean span is NOT release confirmation.
-  if(ev.k==="span"&&/^release \(/.test(ev.name)&&["drop","place"].includes(ev.phase)) put("Placement",ev.error?"release failed: "+ev.error:S.live?"release sequence completed; physical placement not confirmed":"dry run; physical placement not confirmed");
-  if(ev.k==="cycle") put("Cycle",ev.result+" · finished (not placement evidence)");
-  if(["recovery","error","stopped"].includes(ev.k)) put("Attention",ev.what||ev.msg||"ARM STOPPED");
-}
-function renderProgress(){
-  const stages=["Hover capture","Hover check","Grasp calculation","Grasp descend","Grip verification","Additional inspection","Decision","Placement"];
-  $("progress").innerHTML=Object.entries(S.progress).reverse().map(([n,p])=>`<details ${Number(n)===S.item?"open":""}><summary>Item ${esc(n)} · ${esc(p.Decision||p.Cycle||"in progress")}</summary><div class="grid2">${stages.map(k=>`<div class="m">${k}<b style="font-size:13px">${esc(p[k]||"not reported")}</b></div>`).join("")}</div>${p.Attention?`<div class="warn">${esc(p.Attention)}</div>`:""}</details>`).join("");
-}
-
-/* ---- cycle chain ---- */
-function renderChain(){
-  const cur=S.times[S.item]||{}, idx=STATES.indexOf(S.state);
-  $("chain").innerHTML=STATES.map((s,i)=>{const t=cur[s]; let d="";
-    if(t){const nxt=STATES.slice(i+1).map(x=>cur[x]).find(Boolean); d=nxt?((nxt-t)).toFixed(1)+" s":(s===S.state?((Date.now()/1e3-t)).toFixed(1)+" s":"");}
-    const cls=s===S.state?"now":(idx>i&&t?"done":""); return `<div class="st ${cls}">${s}<span class="d">${d||"&nbsp;"}</span></div>`;}).join("");
-}
-
-/* ---- latency ---- */
-function renderLat(){ const L=S.lat[S.lat.length-1]; if(!L) return;
-  const a=L.ms_to_stable, b=L.ms_to_cmd-L.ms_to_stable, c=L.ms_to_motion-L.ms_to_cmd;
-  $("lat").innerHTML=`${f0(L.ms_to_motion)}<small> ms · item ${L.n}</small>`;
-  $("lat").style.color=L.ms_to_motion<500?"var(--gr)":L.ms_to_motion<1500?"var(--am)":"var(--rd)";
-  $("latbar").innerHTML=[[a,"#64748b"],[b,"var(--cy)"],[c,"var(--vi)"]].map(([v,col])=>`<div style="flex:${Math.max(v,0)};background:${col}" title="${f0(v)} ms"></div>`).join("");
-  $("latbar").title=`placing ${f0(a)} ms · perceive+command ${f0(b)} ms · plan+start ${f0(c)} ms`;
-  const mx=Math.max(...S.lat.map(x=>x.ms_to_motion),1);
-  $("lathist").innerHTML=S.lat.slice(-24).map(x=>`<div style="height:${100*x.ms_to_motion/mx}%" title="item ${x.n}: ${f0(x.ms_to_motion)} ms"></div>`).join("");
-}
-
-/* ---- measurement / grasp ---- */
-function renderMeas(){ const L=S.look; if(!L||!L.m){return;} const m=L.m, g=L.grasp||{};
-  $("meas").className=""; $("meas").innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><span class="shape">${esc(L.shape)}</span><span class="kv">${esc(L.shape_note||"")}</span></div>
-  <div class="grid2"><div class="m">center (world)<b>${f0(m.x)}, ${f0(m.y)} mm</b></div><div class="m">height above table<b>${f1(m.height)} mm</b></div>
-  ${m.length!=null?`<div class="m">length × width<b>${f1(m.length)} × ${f1(m.width)} mm</b></div>`:`<div class="m">top z (world)<b>${f1(m.top_z)} mm</b></div>`}<div class="m">long-axis yaw<b>${f0(m.yaw_long)}°</b></div>
-  <div class="m">grasp: fingertips at<b>z ${f1(g.tip_z)} mm</b></div><div class="m">jaws close along<b>${f0(g.jaw_heading)}°${g.expected_width!=null?" · "+f1(g.expected_width)+" mm":""}${g.intended!=null?` <span class="kv">(intended ${f0(g.intended)}°)</span>`:""}</b></div>
-  ${g.theta!=null?`<div class="m">gripper theta<b>${f0(g.theta)}°</b></div>`:`<div class="m">depth coverage<b>${m.depth_frac!=null?f0(100*m.depth_frac)+" %":"–"}</b></div>`}<div class="m">graspable<b class="${g.ok?"ok":"bad"}">${g.ok?"yes":"no · "+esc(g.reason||"")}</b></div></div>`;}
-function renderGrip(){ const G=S.grip, A=PV.arm; if(!runActive()&&A){G.pos=A.pos; G.holding=A.holding;}
-  if(G.pos==null&&!G.cmd) return; const pos=G.pos??null;
-  $("grip").className=""; $("grip").innerHTML=`<div style="display:flex;justify-content:space-between"><span class="kv">jaw position <b>${pos==null?"–":f0(pos)}</b> / 850 ${G.expected?`· expected ≈ <b>${f0(G.expected)}</b>`:""}</span>
-  <span class="kv">${G.holding==null?"":G.holding?'<b class="ok">HOLDING</b>':'<b class="warn">EMPTY</b>'}</span></div>
-  <div class="gauge"><div class="f" style="width:${pos==null?0:Math.min(100,pos/8.5)}%"></div>${G.expected?`<div class="x" style="left:${Math.min(100,G.expected/8.5)}%"></div>`:""}</div>
-  <span class="kv">last command <b>${esc(G.cmd||"–")}</b>${G.result?` · grasp <b class="${G.result.ok?"ok":"bad"}">${G.result.ok?"ok":"missed"}</b>`:""}</span>
-  ${A?`<div class="grid2" style="margin-top:8px"><div class="m">gripper TCP (world)<b>${f0(A.tcp[0])}, ${f0(A.tcp[1])}, ${f0(A.tcp[2])} mm · θ ${f0(A.tcp[6])}°</b></div>
-  <div class="m">joints (deg)<b style="font-size:13px">${A.joints.map(f0).join(", ")}</b></div></div>`:""}`;}
-
-/* ---- map ---- */
-const MX=(x)=>330-x*0.45, MY=(y)=>200-y*0.45;   // world x up, y left; 0.45 px/mm
-const R=(x0,x1,y0,y1,attrs)=>`<rect x="${MY(y1)}" y="${MX(x1)}" width="${(y1-y0)*0.45}" height="${(x1-x0)*0.45}" ${attrs}/>`;
-function renderMap(){ const M=S.map; let s=`<rect x="0" y="0" width="400" height="400" fill="#0d1528"/>`;
-  for(let x=-100;x<=700;x+=100){s+=`<line x1="0" y1="${MX(x)}" x2="400" y2="${MX(x)}" stroke="#16213d"/><text x="4" y="${MX(x)-3}" fill="#475569" font-size="10">x ${x}</text>`;}
-  for(let y=-400;y<=400;y+=100){s+=`<line x1="${MY(y)}" y1="0" x2="${MY(y)}" y2="400" stroke="#16213d"/>`;}
-  s+=R(225,457,271,400,`fill="#7c5a2a55" stroke="#a16207"`)+`<text x="${MY(392)}" y="${MX(457)+12}" fill="#fbbf24" font-size="10">pick pad</text>`;
-  s+=R(235,390,-258,8,`fill="#7f1d1d55" stroke="#ef4444"`)+`<text x="${MY(0)+4}" y="${MX(250)-4}" fill="#fca5a5" font-size="10">REJECT</text>`;
-  s+=R(390,560,-258,8,`fill="#14532d55" stroke="#22c55e"`)+`<text x="${MY(0)+4}" y="${MX(545)+12}" fill="#86efac" font-size="10">GOOD</text>`;
-  s+=`<circle cx="${MY(-150)}" cy="${MX(285)}" r="5" fill="#f59e0b"/><text x="${MY(-150)+8}" y="${MX(285)+4}" fill="#fcd34d" font-size="10">checkpoint</text>`;
-  s+=`<path d="M${MY(-206)},${MX(-101)} L${MY(-206+60)},${MX(-101+240)} L${MY(-206-60)},${MX(-101+240)} Z" fill="#22d3ee18" stroke="#22d3ee55"/><circle cx="${MY(-206)}" cy="${MX(-101)}" r="6" fill="#22d3ee"/><text x="${MY(-206)-50}" y="${MX(-101)+16}" fill="#67e8f9" font-size="10">webcam</text>`;
-  s+=R(-400,-50,-470,-360,`fill="#33415555" stroke="#475569"`)+`<text x="${MY(-370)}" y="${MX(-60)+12}" fill="#94a3b8" font-size="9">lamp</text>`;
-  s+=`<circle cx="${MY(0)}" cy="${MX(0)}" r="20" fill="#1e293b" stroke="#475569"/><text x="${MY(0)}" y="${MX(0)+4}" fill="#94a3b8" font-size="10" text-anchor="middle">base</text>`;
-  const A=runActive()?null:PV.arm; if(A){const a=A.tcp; s+=`<circle cx="${MY(a[1])}" cy="${MX(a[0])}" r="6" fill="#e2e8f0" opacity=".8"/><text x="${MY(a[1])+9}" y="${MX(a[0])+4}" fill="#cbd5e1" font-size="10">gripper z ${f0(a[2])}</text>`;}
-  if(M.target){const t=M.target; s+=`<circle cx="${MY(t.y)}" cy="${MX(t.x)}" r="7" fill="none" stroke="#e2e8f0" stroke-width="2"/><text x="${MY(t.y)+9}" y="${MX(t.x)+4}" fill="#e2e8f0" font-size="10">${esc(M.targetLabel||"")} z ${f0(t.z)}</text>`;}
-  if(M.watch){s+=`<circle cx="${MY(M.watch[1])}" cy="${MX(M.watch[0])}" r="9" fill="none" stroke="#f59e0b" stroke-width="2"/>`;}
-  if(M.m){const m=M.m, r=Math.PI/180*m.yaw_long, L2=(m.length||40)/2, hx=Math.cos(r)*L2, hy=Math.sin(r)*L2;
-    s+=`<line x1="${MY(m.y-hy)}" y1="${MX(m.x-hx)}" x2="${MY(m.y+hy)}" y2="${MX(m.x+hx)}" stroke="#22d3ee" stroke-width="5" stroke-linecap="round" opacity=".85"/>`;}
-  if(M.g&&M.m){const g=M.g, r=Math.PI/180*g.jaw_heading, d=25, ax=Math.cos(r)*d, ay=Math.sin(r)*d, m=M.m;
-    s+=`<line x1="${MY(m.y-ay)}" y1="${MX(m.x-ax)}" x2="${MY(m.y+ay)}" y2="${MX(m.x+ax)}" stroke="#f472b6" stroke-width="2"/>
-    <circle cx="${MY(m.y-ay)}" cy="${MX(m.x-ax)}" r="3.5" fill="#f472b6"/><circle cx="${MY(m.y+ay)}" cy="${MX(m.x+ax)}" r="3.5" fill="#f472b6"/>`;}
-  $("map").innerHTML=s;}
-
-/* ---- timeline ---- */
-const SPCOL={watch:"#64748b",aim:"#38bdf8",descend:"#a78bfa",grab:"#f472b6",lift:"#c084fc",view:"#f59e0b",to:"#22c55e",return:"#64748b",release:"#22c55e",open:"#94a3b8",over:"#22c55e",lower:"#a78bfa",retreat:"#c084fc",drop:"#ef4444",place:"#22c55e",look:"#22d3ee",hover:"#60a5fa",pick:"#a78bfa",home:"#64748b",SURVEY:"#64748b",SCAN:"#22d3ee",HOVER:"#60a5fa",RELOOK:"#38bdf8",DESCEND:"#a78bfa",GRAB:"#f472b6",LIFT:"#c084fc",PRESENT:"#f59e0b",PLACE:"#22c55e",HOME:"#64748b"};
-function renderTL(){ const items=[...new Set(S.spans.map(s=>s.item))].filter(x=>x!=null).slice(-2);
-  if(!items.length){$("tl").innerHTML=`<text x="12" y="30" fill="#64748b" font-size="13">No spans yet.</text>`;return;}
-  const sp=S.spans.filter(s=>items.includes(s.item));
-  const t0=Math.min(...sp.map(s=>s.t0)), t1=Math.max(...sp.map(s=>s.t0+s.ms/1e3),t0+1);
-  const rows={}; let row=0; for(const x of sp){const k=x.item+"|"+x.name; if(rows[k]==null) rows[k]=row++;}
-  const rh=Math.min(26,Math.max(12,600/Math.max(row,1))), H=20+row*rh+16; $("tl").setAttribute("viewBox",`0 0 900 ${H}`); $("tl").style.maxHeight=Math.min(H*1.6,640)+"px";
-  const X=t=>190+(t-t0)/(t1-t0)*690; let s="";
-  for(const [k,r] of Object.entries(rows)){const y=10+r*rh; const [it,name]=k.split("|"); s+=`<text x="6" y="${y+rh*0.62}" fill="#8090b8" font-size="${Math.min(11,rh*0.7)}">#${it} ${esc(name.slice(0,30))}</text><line x1="190" y1="${y+rh-2}" x2="880" y2="${y+rh-2}" stroke="#16213d"/>`;}
-  for(const x of sp){const r=rows[x.item+"|"+x.name], y=10+r*rh, w=Math.max(2,X(x.t0+x.ms/1e3)-X(x.t0));
-    s+=`<rect x="${X(x.t0)}" y="${y}" width="${w}" height="${rh-4}" rx="3" fill="${x.error?"#ef4444":SPCOL[x.phase]||SPCOL[x.name]||"#94a3b8"}"><title>${esc(x.name)} ${f0(x.ms)} ms ${esc(x.error||"")}</title></rect>`;
-    s+=`<text x="${X(x.t0)+w+4}" y="${y+rh*0.62}" fill="#cbd5e1" font-size="${Math.min(10,rh*0.65)}">${f0(x.ms)} ms${x.error?" ✗":""}</text>`;}
-  const tot=(t1-t0); s+=`<text x="880" y="${H-4}" fill="#64748b" font-size="10" text-anchor="end">${tot.toFixed(1)} s total</text>`;
-  $("tl").innerHTML=s;}
-
-/* ---- perf ---- */
-function renderPerf(){ const P=S.perf.slice(-120); let s=`<rect width="400" height="110" fill="#0d1528"/>`;
-  if(P.length>1){const mx=Math.max(...P.map(p=>p.rpc+p.proc),20); const pts=k=>P.map((p,i)=>`${i/(P.length-1)*396+2},${104-(k(p))/mx*96}`).join(" ");
-    s+=`<polyline points="${pts(p=>p.rpc+p.proc)}" fill="none" stroke="#60a5fa" stroke-width="1.5"/><polyline points="${pts(p=>p.proc)}" fill="none" stroke="#22c55e" stroke-width="1.5"/>
-    <text x="6" y="14" fill="#60a5fa" font-size="10">frame + perception (max ${f0(mx)} ms)</text><text x="6" y="26" fill="#22c55e" font-size="10">perception only</text>`;}
-  $("perf").innerHTML=s; const last=P[P.length-1]||{}, fps=P.length>2?(P.length-1)/((P[P.length-1].t-P[0].t)||1):null, T=S.tele||{};
-  $("perfkv").innerHTML=`<div class="m">watch rate<b>${fps?fps.toFixed(1)+" fps":"–"}</b></div><div class="m">perception<b>${f1(last.proc)} ms</b></div>
-  <div class="m">telemetry cost / emit<b>${T.mean_us!=null?f1(T.mean_us)+" µs":"–"}</b></div><div class="m">telemetry max · dropped<b>${T.max_us!=null?f0(T.max_us)+" µs · "+T.dropped:"–"}</b></div>`;}
-
-function renderItems(){ if(!S.cycles.length) return; $("items").innerHTML=S.cycles.slice().reverse().map(c=>{const sc=c.scores||{}, tapes=Object.values(sc).map(v=>v.tape).filter(v=>v!=null&&Number.isFinite(v)), mt=tapes.length?Math.max(...tapes):null, d=c.result||"";
-  return `<tr><td>${c.item}</td><td class="${d==="good"?"ok":d==="reject"?"bad":""}"><b>${esc(d)}</b></td><td>${esc((c.decision||"").replace(/^[^:]*: /,""))}</td><td>${esc(c.shape||"–")}</td>
-  <td>${c.latency_ms==null?"–":c.latency_ms+" ms"}</td><td>${c.cycle_s!=null?c.cycle_s+" s":"–"}</td><td>${esc((c.t_first_motion||"").slice(11,23))}</td><td>${mt==null?"–":(100*mt).toFixed(1)+"%"}</td></tr>`;}).join("");}
-
-function log(ev,txt){ const d=document.createElement("div"); d.className="k-"+ev.k; d.innerHTML=`<span class="t">${tstr(ev.t)}</span>${esc(txt)}`;
-  const L=$("log"); L.prepend(d); while(L.children.length>200) L.lastChild.remove();}
-
-/* ---- event handling ---- */
-function onEvent(ev){
-  if(ev.k==="ping"){ return; } if(ev.k==="backlog_done"){ renderAll(); return; }
-  if(ev.k==="preview"){ if(!PV.cams[ev.cam]||ev.t>=PV.cams[ev.cam].t) PV.cams[ev.cam]=ev; if(!backlog){ if(ev.cam==="cam"&&S.tab==="live") render(); if(ev.cam==="overview-cam") renderOv(); } return; }
-  if(ev.k==="arm_state"){ PV.arm=ev; if(!backlog){ renderGrip(); renderMap(); } return; }
-  if(ev.k==="preview_status"){ PV.status=ev.state+(ev.error?": "+ev.error:""); const streaming=["live","run_preview"].includes(ev.state); $("pv").textContent=streaming?`${ev.state==="run_preview"?"run preview":"live"} ${ev.fps} fps`:ev.state; $("pv").className=ev.state==="error"?"bad":streaming?"ok":"warn"; $("pv").title=ev.error||ev.reason||""; return; }
-  S.lastPkt=Date.now()/1e3;
-  switch(ev.k){
-    case "run": reset(); STATES=ev.states||DEFAULT_STATES; if(ev.views) S.viewOrder=ev.views; S.mode=ev.release; $("cyclesub").textContent=ev.cmd+(ev.type&&ev.type!=="unknown"?` · ${ev.label} ${ev.type}`:""); S.live=ev.live; S.masks=(ev.config||{}).MASK_RECTS||[]; $("run").textContent=ev.run; $("mode").textContent=ev.live?"LIVE MOTION":"DRY RUN"; $("mode").className="badge "+(ev.live?"live":"dry");
-      $("log").innerHTML=""; log(ev,`run started: ${ev.cmd}${ev.live?" LIVE":" (dry run)"}${ev.step?" step":""} release=${ev.release}`); break;
-    case "connected": log(ev,`connected in ${ev.ms} ms · home ${JSON.stringify(ev.home_deg)}`); break;
-    case "state": if(ev.state==="PICK"&&ev.item!==S.insItem){S.ins={}; S.insItem=ev.item; S.map.m=null; S.map.g=null;} if(ev.views) S.viewOrder=ev.views; if(ev.pose) S.pose=ev.pose; S.state=ev.state; S.stateT=ev.t; if(ev.item!=null){S.item=ev.item; (S.times[ev.item]=S.times[ev.item]||{})[ev.state]=ev.t;}
-      log(ev,`→ ${ev.state}${ev.item!=null?" (item "+ev.item+(ev.attempt>1?", attempt "+ev.attempt:"")+")":""}`); break;
-    case "watch": S.watch=ev; if(ev.item&&ev.item.xy) S.map.watch=ev.item.xy; S.perf.push({t:ev.t,rpc:ev.rpc_ms,proc:ev.proc_ms}); if(S.perf.length>300) S.perf.shift(); break;
-    case "reference": S.refId=ev.frame&&ev.frame.id; log(ev,`empty-table reference captured${ev.blobs&&ev.blobs.length?` (${ev.blobs.length} fixed object(s) ignored)`:""}`); break;
-    case "placed": log(ev,`placed at (${f0(ev.x)}, ${f0(ev.y)}) mm`); break;
-    case "look": S.look=ev; if(ev.m){S.map.m=ev.m; S.map.g=ev.grasp;} if(ev.item&&ev.frame){const [x0,y0,x1,y1]=ev.item.bbox, p=40; S.ins.top={frame:ev.frame.id,crop:[Math.max(0,x0-p),Math.max(0,y0-p),Math.min(640,x1+p),Math.min(480,y1+p)],tape:ev.tape}; S.insItem=ev.n;} log(ev,ev.item?`${ev.label||"look"}: (${f0(ev.m.x)}, ${f0(ev.m.y)}) h ${f1(ev.m.height)} mm, yaw ${f0(ev.m.yaw_long)}°${ev.grasp?`, jaws ${f0(ev.grasp.jaw_heading)}° θ ${f0(ev.grasp.theta)}°`:""}`:`${ev.label||"look"}: item not seen`); break;
-    case "depth": S.depth={id:ev.frame&&ev.frame.id, shape:(ev.frame.mime.match(/h=(\d+);w=(\d+)/)||[0,60,80]).slice(1).map(Number)}; break;
-    case "move": S.moves.push({t:ev.t,label:ev.label,item:S.item}); if(ev.target){S.map.target=ev.target; S.map.targetLabel=ev.label;} if(ev.label==="hover"&&ev.target) S.map.hover=[ev.target.x,ev.target.y];
-      log(ev,`move ${ev.label}${ev.dry_run?" (dry)":""}: ${ev.component} ${ev.target?`(${f0(ev.target.x)}, ${f0(ev.target.y)}, ${f0(ev.target.z)}) θ ${f0(ev.target.theta)}°`:"joints "+JSON.stringify(ev.joints)}${ev.linear?" linear":""}`); break;
-    case "snap": S.snap[ev.cam]=ev; if(ev.cam==="overview-cam") renderOv(); else if(S.tab==="live") render(); break;
-    case "view": S.ins[ev.view]={frame:ev.frame&&ev.frame.id,crop:ev.crop,tape:ev.tape,anomaly:ev.anomaly,ms:ev.frame_ms}; S.lastView=ev; S.insItem=ev.n;
-      log(ev,`view ${ev.view}: tape ${(100*ev.tape).toFixed(2)}%${ev.anomaly!=null?" anomaly "+f1(ev.anomaly):""} · frame ${ev.frame_ms} ms · jaw ${f0(ev.jaw)}`); break;
-    case "anomaly_result": {const I=S.ins[ev.view]||(S.ins[ev.view]={}); Object.assign(I,{anomaly:ev.score,threshold:ev.threshold,status:ev.status,anomalous:ev.anomalous,infer_ms:ev.infer_ms});
-      if(ev.model_crop) I.crop=ev.model_crop; if(ev.frame) I.heatmap=ev.frame;
-      if(S.lastView&&S.lastView.view===ev.view) Object.assign(S.lastView,{anomaly:ev.score,threshold:ev.threshold,anomalous:ev.anomalous});
-      log(ev,`anomaly ${ev.view}: ${ev.status}${ev.status==="ok"?` score ${f1(ev.score)} / threshold ${f1(ev.threshold)} · ${f0(ev.infer_ms)} ms`:" · "+(ev.detail||"")}`); break;}
-    case "decision": S.dec=ev; log(ev,`DECISION item ${ev.n}: ${ev.decision.toUpperCase()} (${ev.reason}) at ${ev.at||"–"}, ${ev.ms_from_seen} ms after seen`); break;
-    case "candidate": log(ev,`present candidate ${ev.id} saved at (${ev.tcp.slice(0,3).map(f0).join(", ")})`); break;
-    case "note": log(ev,`note: ${ev.step||""} ${JSON.stringify(Object.fromEntries(Object.entries(ev).filter(([k])=>!["k","t","s","run","_q"].includes(k))))}`); break;
-    case "error": log(ev,"error: "+ev.msg); break;
-    case "span": S.spans.push(ev); if(S.spans.length>200) S.spans.shift(); if(ev.error) log(ev,`${ev.name} failed: ${ev.error}`); break;
-    case "latency": S.lat.push(ev); log(ev,`latency item ${ev.n}: ${ev.ms_to_motion} ms to first motion (placing ${ev.ms_to_stable} ms)`); break;
-    case "first_motion": log(ev,"arm started moving"); break;
-    case "gripper": S.grip.pos=ev.pos; S.grip.holding=ev.holding; break;
-    case "gripper_cmd": S.grip.cmd=ev.cmd+(ev.dry_run?" (dry)":""); log(ev,`gripper ${ev.cmd}${ev.dry_run?" (dry)":""}`); break;
-    case "grasp_result": S.grip.result=ev; S.grip.pos=ev.pos; S.grip.holding=ev.holding; S.grip.expected=ev.expected_pos; log(ev,`grasp ${ev.ok?"ok":"MISSED"} · jaw ${f0(ev.pos)} (expected ≈ ${ev.expected_pos})`); break;
-    case "recovery": log(ev,`RECOVERY ${ev.level}: ${ev.what}`); break;
-    case "cycle": S.cycles.push(ev); log(ev,`item ${ev.item}: ${ev.result} · ${ev.latency_ms} ms · ${ev.recoveries} recoveries`); break;
-    case "telemetry": S.tele=ev; break;
-    case "stopped": log(ev,"ARM STOPPED"); break;
-    default: if(ev.k==="error") log(ev,"error: "+ev.msg);
-  }
-  recordProgress(ev);
-  if(!backlog) renderAll(ev.k);
-}
-let backlog=true;
-function renderAll(k){ if(k==="backlog_done"||!k) backlog=false;
-  if(!k||k==="watch"||k==="look"||k==="reference"||k==="depth"||k==="run") render();
-  renderChain(); renderProgress(); if(!k||k==="latency"||k==="run") renderLat(); if(!k||k==="look") {renderMeas(); renderMap();} if(k==="watch"||k==="move") renderMap();
-  if(!k||["gripper","gripper_cmd","grasp_result","run"].includes(k)) renderGrip(); if(!k||k==="span"||k==="move"||k==="run") renderTL();
-  if(!k||k==="watch"||k==="telemetry") renderPerf(); if(!k||k==="cycle") renderItems(); if(!k||k==="view"||k==="anomaly_result"||k==="decision"||k==="run") renderOv();
-  if(!k||["view","anomaly_result","decision","look","state","run"].includes(k)) {renderStrip(); renderDec();} }
-function connect(){ backlog=true; const es=new EventSource("/events");
-  es.onmessage=m=>{ try{ const ev=JSON.parse(m.data); if(ev.k==="ping"){S.lastPing=ev.age;} onEvent(ev); if(ev.k==="backlog_done") backlog=false; }catch(e){console.error(e);} };
-  es.onerror=()=>{ $("linktxt").textContent="dashboard server down"; }; }
-setInterval(()=>{ const now=Date.now()/1e3, age=S.lastPkt?now-S.lastPkt:null, ok=age!=null&&age<2;
-  $("link").className="dot"+(ok?" ok":""); $("linktxt").textContent=age==null?"no telemetry yet":ok?"telemetry live":`last packet ${age.toFixed(0)} s ago`;
-  $("state").textContent=S.state; $("item").textContent=S.item??"–"; $("elapsed").textContent=S.state==="IDLE"?"–":(now-S.stateT).toFixed(1)+" s";
-  if(S.state!=="IDLE") renderChain(); if(S.tab!=="height") render(); renderOv(); },200);
-renderAll(); connect();
-</script></body></html>
+<dialog id="details-dialog" class="dashboard-dialog" aria-label="Capture details"><div class="dialog-heading"><h2>Details</h2><button id="close-details" aria-label="Close details">Close</button></div><div class="dialog-tabs"><button data-detail-page="capture" aria-pressed="true">Scores</button><button data-detail-page="record" aria-pressed="false">Record</button><button data-detail-page="metadata" aria-pressed="false">Data</button><button data-detail-page="run" aria-pressed="false">Find a run</button></div>
+  <section id="detail-capture" class="dialog-page"><label id="evaluation-wrap" for="evaluation" hidden>Results<select id="evaluation" aria-label="Results"><option value="recorded">Recorded run</option></select></label><div id="capture-details"><aside class="evidence" aria-label="Detection evidence"><h3 id="evidence-source">Recorded evidence</h3><div class="detector"><div><span>Anomaly model</span><strong id="anomaly-status"></strong></div><p id="anomaly-value" class="subtle"></p></div><div class="detector"><div><span>Blue-tape rule</span><strong id="tape-status"></strong></div><p id="tape-value" class="subtle"></p></div><dl><dt>Selected type</dt><dd id="selected-model"></dd><dt>Decision trigger</dt><dd id="trigger"></dd></dl><p id="known-type" class="subtle" hidden></p><p id="source-note" class="subtle"></p></aside></div></section>
+  <section id="detail-record" class="dialog-page" hidden><div id="inspection-details" hidden><div class="item-heading"><div><h2 id="item-title"></h2><p id="item-subtitle" class="subtle"></p></div></div><div class="decision-line"><strong id="decision"></strong><span id="reason"></span></div><div class="timings"><span>First motion <b id="latency">—</b></span><span>Cycle <b id="cycle">—</b></span><span id="delivery"></span></div><p id="item-notice" class="notice" hidden></p><div class="capture-label"><h3 id="capture-title"></h3><span id="capture-time" class="subtle"></span><span id="capture-count" class="subtle"></span></div></div></section>
+  <section id="detail-metadata" class="dialog-page" hidden><dl id="record-fields"></dl><button id="download-record">Save full record</button><pre id="raw-record" hidden></pre></section>
+  <section id="detail-run" class="dialog-page" hidden><div class="history-extra"><div class="history-tools"><label for="run-search">Find a run<input id="run-search" type="search" placeholder="Run or part type"></label><label for="run-kind">Kind<select id="run-kind" aria-label="Kind"><option value="">All runs</option><option value="collect">Collection</option><option value="sort">Sorting</option><option value="dry">Dry run</option><option value="experiment">Experiment</option><option value="replay">Replay</option></select></label><button id="refresh">Refresh</button></div><p id="history-count" class="subtle">Reading saved captures…</p><details id="run-notes"><summary>Run notes</summary><p id="run-note" class="subtle"></p></details><p class="subtle">Filters update the Run picker. Close Details to select a run.</p></div></section>
+</dialog>
+<dialog id="model-dialog" class="dashboard-dialog" aria-label="Model details"><div class="dialog-heading"><h2>Details</h2><button id="model-details-close">Close</button></div><label class="model-section">Show<select id="model-detail-page"><option value="example">Diagnosis</option><option value="scores">Scores</option><option value="benchmark">Benchmark</option><option value="eligibility">Eligibility</option><option value="version">Model version</option></select></label>
+  <section id="model-detail-example" class="model-dialog-page"><h3 id="model-diagnosis-detail">Failure evidence</h3><p id="model-explanation" class="model-section"></p><p class="subtle model-section">Source image verified. Localisation and physical handling are not evaluated by this replay.</p><p id="model-provenance" class="subtle model-section"></p><button id="model-history">Open capture history</button></section>
+  <section id="model-detail-scores" class="model-dialog-page" hidden><dl class="model-details-fields"><dt>Selected type</dt><dd id="model-selected-type"></dd><dt>Score / threshold</dt><dd id="model-score"></dd><dt>Known-type check</dt><dd id="model-known-type"></dd></dl><p class="subtle">Known-type check scores the same crop using its recorded item type.</p></section>
+  <section id="model-detail-benchmark" class="model-dialog-page" hidden><h3>Development set</h3><p id="model-note" class="model-section"></p><div id="benchmark-info"><p>34 good and 28 defective picks. Membership and image hashes are frozen.</p></div></section>
+  <section id="model-detail-eligibility" class="model-dialog-page" hidden><h3>Comparison eligibility</h3><p class="model-section">Every model must have verified test results for every benchmark member. Training/calibration overlap blocks comparison.</p><p class="model-section">Recorded collection labels; physical specimen identities are unverified. These results do not establish unseen-defect performance.</p><p>A new audit benchmark requires reviewed labels and independent physical specimens.</p></section>
+  <section id="model-detail-version" class="model-dialog-page" hidden><dl class="model-details-fields"><dt>Bundle</dt><dd id="model-bundle"></dd><dt>Device</dt><dd id="model-device"></dd><dt>Decision</dt><dd>Top-view anomaly score with automatic size routing. Tape overrides excluded.</dd><dt>Threshold policy</dt><dd id="model-margin"></dd></dl><p id="model-version-status" class="subtle"></p></section>
+</dialog>
+</body></html>

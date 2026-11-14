@@ -24,6 +24,8 @@
     "min_table_clearance_mm": 2,
     "_clearance": "closed fingertips this far above the table at the end of the grasp (a flat nut is ~5 mm thick)",
     "tcp_to_tip_mm": 20.5,
+    "tip_to_sensor_mm": 61.8,
+    "_tip_to_sensor": "how far above the fingertips the first thing a part standing between the jaws would hit sits (sensor housing / palm), along the gripper axis: 61.8 mm measured by hand by Pranav with the fingers OPEN, arm stationary, 2026-11-14 ~11:30 (pranav/fast-carry ed279a1). Used as-is for the closed-tip gap (closed tips sit ~7.5 mm lower, so the true closed gap is ~69 mm): the conservative side. Used by sort.Sorter.upright_guard. Copied to new-pipeline [claude-code/claude-opus-5-5 · op Ali · Ali's laptop · new-pipeline]",
     "_tcp_to_tip": "how far the CLOSED fingertips reach past the gripper TCP (arm + 150 mm): motion_probe.py --live --touch 400,0 --closed on the bare table, 2026-11-13. Open they reach ~13 mm: the linkage carries the tips ~7-10 mm down as the fingers close, so the grasp is planned for the closed tips and the open fingers descend well clear of the table",
     "table_z": -1.3,
     "surface_z": {"white": -1.3, "cardboard": 6.5},

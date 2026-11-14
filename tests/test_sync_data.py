@@ -160,6 +160,53 @@ class SyncTest(unittest.TestCase):
         e = self.hub.read_index()["runs"]["20261113_151143_collect"]
         self.assertEqual((e["items"], e["without_meta"], e["labels"], e["types"]), (2, 2, {"good": 2}, {"button_ss_long": 2}))
 
+    def test_post_run_push_spawns_one_detached_run_push(self):
+        run = make_run(self.station, "20261114_120000_collect", age=0)
+        calls = []
+
+        def fake_popen(cmd, **kw):
+            calls.append((cmd, kw))
+            return "proc"
+        self.assertEqual(S.spawn_push(run, popen=fake_popen), "proc")
+        (cmd, kw), = calls
+        self.assertEqual(cmd[cmd.index("--root") + 1], str(self.station))
+        self.assertEqual(cmd[-4:], ["push", "20261114_120000_collect", "--min-age", "0"])
+        self.assertEqual(cmd[:3], ["nice", "-n", "10"])
+        self.assertTrue(kw["start_new_session"])
+        self.assertIn("post-run push 20261114_120000_collect", (self.station / "runs" / S.POST_RUN_LOG).read_text())
+        # the command it builds pushes the fresh run (min-age 0) and nothing else
+        make_run(self.station, "20261114_110000_collect")
+        with patch("socket.gethostname", return_value="station"):
+            S.cmd_push(push_args(runs=[cmd[-3]], min_age=0), self.hub, self.station)
+        self.assertEqual(sorted(self.hub.read_index()["runs"]), ["20261114_120000_collect"])
+
+    def test_post_run_push_skips_runs_without_picks(self):
+        empty = self.station / "runs" / "20261114_120500_collect"
+        empty.mkdir(parents=True)
+        (empty / "decisions.jsonl").write_text("")
+        self.assertIsNone(S.spawn_push(empty, popen=lambda *a, **k: self.fail("spawned")))
+
+    def test_push_holds_the_host_lock_around_index_read_and_commit(self):
+        import fcntl
+        make_run(self.laptop, "20261113_150000_collect")
+        lock = (self.laptop / "runs" / S.LOCK_NAME)
+        seen = []
+        real_read = self.hub.read_index
+
+        def read_index(revision=None):
+            with open(lock) as f:   # a second locker must not get in while the push runs
+                try:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    seen.append("free")
+                except BlockingIOError:
+                    seen.append("held")
+            return real_read(revision)
+        self.hub.read_index = read_index
+        self.push(self.laptop)
+        self.assertEqual(seen, ["held"])
+        with open(lock) as f:       # released afterwards
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_dry_run_commits_nothing(self):
         make_run(self.laptop, "20261113_150000_collect")
         self.assertIsNone(self.push(self.laptop, dry_run=True))

@@ -1,49 +1,51 @@
-// [pi/gpt-6-astra · op Ali · Alis-MacBook-Air.local · ali/pipeline]
-// Offline contract tests. No sockets, SDK, browser or robot connection.
+// [codex/unknown · op Ali · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14]
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const vm=require('node:vm');
-function ui(){
-  const elements=new Map();
-  const element=id=>{if(!elements.has(id)) elements.set(id,{id,style:{},dataset:{},children:[],classList:{toggle(){}},removeAttribute(k){delete this[k]},setAttribute(){},prepend(){},getContext(){return {fillRect(){}}}});return elements.get(id)};
-  const context=vm.createContext({document:{getElementById:element,querySelectorAll:()=>[],createElement:()=>({})},Date,console,setInterval(){},Image:function(){}});
-  let script=fs.readFileSync('dashboard/index.html','utf8').split('<script>')[1].split('</script>')[0];
-  script=script.replace('renderAll(); connect();','');
-  vm.runInContext(script+'\nrenderAll=()=>{}; backlog=true;',context);
-  return {run:code=>vm.runInContext(code,context),elements,element};
-}
-test('camera selection survives look, watch state and run reset',()=>{
-  const u=ui();
-  u.run('S.tab="ref"; onEvent({k:"look",t:1,n:1,item:null}); onEvent({k:"state",state:"WATCH",item:1,t:2}); onEvent({k:"run",t:3,cmd:"test",run:"offline"})');
-  assert.equal(u.run('S.tab'),'ref');
+const {RunState,anomalyStatus,captureVerdict,frameUrl}=require('../dashboard/state.js');
+function run(){const s=new RunState();s.ingest({k:'run',run:'one',live:true});s.ingest({k:'state',n:1,state:'INSPECT'});return s;}
+test('top retries stay separate and a score belongs to the latest preceding capture',()=>{
+ const s=run();s.ingest({k:'look',n:1,s:1,t:1,label:'hover look 1'});s.ingest({k:'look',n:1,s:2,t:2,label:'hover look 2'});
+ s.ingest({k:'anomaly_result',n:1,t:3,view:'top',status:'ok',score:12,threshold:10,anomalous:true});
+ assert.equal(s.item(1).captures.length,2);assert.equal(anomalyStatus(s.item(1).captures[0].score),'Not evaluated');assert.equal(s.item(1).captures[1].score.anomalous,true);
 });
-test('newest frame wins across watch, snapshot and active-run preview',()=>{
-  const u=ui();
-  u.run('S.watch={k:"watch",t:1,frame:{id:"old"}}; S.snap.cam={k:"snap",t:2,frame:{id:"snapshot"}}; S.state="PICK"; render()');
-  assert.equal(u.element('cam').src,'/frame/snapshot');
-  u.run('$("cam").onload(); onEvent({k:"preview",cam:"cam",t:3,frame:{id:"preview"}}); render()');
-  assert.equal(u.element('cam').src,'/frame/preview');
-  u.run('onEvent({k:"preview",cam:"cam",t:2,frame:{id:"late"}})');
-  assert.equal(u.run('PV.cams.cam.frame.id'),'preview');
-  assert.match(u.run('frameLabel(S.snap.cam)'),/SNAPSHOT.*s old/);
-  assert.match(u.run('frameLabel(S.watch)'),/STALE PREVIEW/);
-  assert.match(u.run('frameLabel({k:"preview",t:Date.now()/1000})'),/LIVE PREVIEW/);
+test('late scores do not attach to a later retry or a different item',()=>{
+ const s=run();s.ingest({k:'look',n:1,s:1,t:1});s.ingest({k:'look',n:1,s:2,t:4});s.ingest({k:'look',n:2,s:3,t:5});
+ s.ingest({k:'anomaly_result',n:1,t:2,view:'top',status:'ok',anomalous:true});
+ assert.equal(s.item(1).captures[0].score.anomalous,true);assert.equal(s.item(1).captures[1].score.status,undefined);assert.equal(s.item(2).captures[0].score.status,undefined);
 });
-test('item progress persists and distinguishes decision, release and missing evidence',()=>{
-  const u=ui();
-  u.run('S.item=1; S.live=true; recordProgress({k:"look",n:1,item:{},frame:{id:"a"}}); recordProgress({k:"grasp_result",n:1,ok:false,attempt:1}); recordProgress({k:"decision",n:1,decision:"reject",reason:"tape"})');
-  assert.equal(u.run('S.progress[1].Placement'),'not confirmed');
-  assert.match(u.run('S.progress[1]["Grip verification"]'),/MISSED/);
-  u.run('recordProgress({k:"span",item:1,name:"release (reject)",phase:"drop",error:"jam"})');
-  assert.match(u.run('S.progress[1].Placement'),/failed/);
-  u.run('recordProgress({k:"span",item:1,name:"release (reject)",phase:"drop",error:null}); S.item=2; recordProgress({k:"state",item:2,state:"PICK"}); renderProgress()');
-  assert.match(u.run('S.progress[1].Placement'),/release sequence completed.*physical placement not confirmed/);
-  assert.match(u.element('progress').innerHTML,/Item 1/);
-  assert.match(u.element('progress').innerHTML,/not reported/);
+test('tape decision retains independently positive anomaly evidence',()=>{
+ const s=run();s.ingest({k:'look',n:1,s:1,t:1,tape:.03});s.ingest({k:'anomaly_result',n:1,t:2,view:'top',status:'ok',anomalous:true});
+ s.ingest({k:'decision',n:1,t:3,decision:'reject',at:'top',reason:'known: tape (top face)'});
+ const c=s.item(1).captures[0];assert.equal(c.trigger_detector,'tape');assert.equal(c.score.anomalous,true);assert.equal(s.item(1).delivery,'Not confirmed');
 });
-test('dry run release never confirms physical placement',()=>{
-  const u=ui();
-  u.run('S.item=1; recordProgress({k:"span",name:"release (set)",phase:"place"})');
-  assert.match(u.run('S.progress[1].Placement'),/physical placement not confirmed/);
+test('release success, release failure and dry run do not imply physical delivery',()=>{
+ const s=run();s.ingest({k:'span',n:1,name:'release (reject)',error:'jam'});assert.match(s.item(1).delivery,/failed/);
+ s.ingest({k:'span',n:1,name:'release (reject)',error:null});assert.match(s.item(1).delivery,/completed; physical placement unconfirmed/);
+ s.live=false;s.ingest({k:'span',n:2,name:'release (set)'});assert.match(s.item(2).delivery,/Dry-run.*unconfirmed/);assert.match(s.item(1).delivery,/completed/);
+});
+test('camera feeds keep newest timestamp and images carry run identity',()=>{
+ const s=run();s.ingest({k:'watch',run:'one',t:2,frame:{id:1}});s.ingest({k:'preview',cam:'cam',t:3,frame:{id:2}});s.ingest({k:'preview',cam:'cam',t:1,frame:{id:3}});
+ assert.equal(s.feeds.cam.frame.id,2);assert.equal(frameUrl({run:'one',frame:{id:1}}),'/frame/1?run=one');assert.equal(frameUrl({frame:{id:1,ok:false}}),null);
+});
+test('new runs clear old evidence and old packets cannot overwrite it',()=>{
+ const s=run();s.ingest({k:'look',n:1,s:1,t:1});s.ingest({k:'run',run:'two'});s.ingest({k:'look',run:'one',n:1,s:2,t:2});
+ assert.equal(s.items.size,0);assert.equal(s.run,'two');
+});
+test('missing or invalid model results never display as clear',()=>{
+ assert.equal(anomalyStatus({status:'missing'}),'Unavailable');assert.equal(anomalyStatus({status:'unknown_type'}),'Unknown type');assert.equal(anomalyStatus({status:'ok'}),'Result incomplete');
+});
+test('plain verdict distinguishes missed labeled defects from unlabeled clear captures',()=>{
+ const clear={status:'ok',anomalous:false};
+ assert.equal(captureVerdict(clear,null,'tape').text,'Defect missed');
+ assert.equal(captureVerdict(clear,null,null).text,'No defect detected');
+ assert.equal(captureVerdict({status:'missing'},null,'tape').text,'Not checked');
+ assert.equal(captureVerdict({status:'unknown_type',anomalous:false},null,'tape').text,'Could not check');
+ assert.equal(captureVerdict({status:'ok',anomalous:true},null,'good').text,'Good part flagged');
+});
+test('rechecked verdict never borrows a tape flag from the original run',()=>{
+ const clear={status:'ok',anomalous:false},flag={status:'ok',anomalous:true};
+ assert.equal(captureVerdict(clear,true,'tape',true).text,'Defect missed');
+ assert.equal(captureVerdict(clear,true,'tape',false).text,'Defect found by tape rule');
+ assert.equal(captureVerdict(flag,true,null,false).text,'Defect found by model and tape rule');
+ assert.equal(captureVerdict({status:'not_replayed'},true,'tape',true).text,'Not checked');
 });

@@ -43,7 +43,7 @@ async def main(a):
             args = " ".join(shlex.quote(x) for x in a.rest)
             # setsid: fully detach, or the shell stream stays open until the run ends (19:15: start timed out)
             cmd = (f"cd {BASE}/current && setsid nohup {BASE}/.venv/bin/python3.12 -u sort.py {args} "
-                   f"--dash-host {laptop_ip()} > {LOG} 2>&1 < /dev/null & echo $! > {PIDF}; sleep 1; cat {PIDF}")
+                   f"--dash-host 127.0.0.1 --dash-port 8776 > {LOG} 2>&1 < /dev/null & echo $! > {PIDF}; sleep 1; cat {PIDF}")
             try:
                 rc, out = await execute(m, cmd, 30)
                 print("started on station, pid", out.strip())
@@ -56,6 +56,12 @@ async def main(a):
             rc, out = await execute(m, f"P=$({q}); [ -n \"$P\" ] && kill -TERM $P; for i in 1 2 3 4 5; do {q} >/dev/null || break; "
                                        f"sleep 1; done; {q} >/dev/null && kill -9 $({q}); sleep 1; {q} && echo STILL RUNNING || echo stopped", 30)
             print(out.strip())
+            if "STILL RUNNING" not in out:
+                # sort.py --tcp-limit raises the arm's joint speed; a SIGKILL skips its restore. Always put the module
+                # defaults back once the loop is gone (60 deg/s, 381.67 deg/s^2).
+                from viam.components.arm import Arm
+                await Arm.from_robot(m, "arm").do_command({"set_speed": 60.0, "set_acceleration": 381.67})
+                print("arm speed restored to 60 deg/s, 381.67 deg/s^2")
             return
         rc, out = await execute(m, f"grep -v rpc.dial {LOG} | tail -n {a.lines}; "
                                    "pgrep -f 'python3.12 -u sort.py' >/dev/null && echo '== RUNNING' || echo '== NOT RUNNING'", 30)

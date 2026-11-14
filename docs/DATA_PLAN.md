@@ -103,6 +103,12 @@ If team-managed uploads are wanted later, transfer ownership via HF settings and
 First push 19:35: 19 laptop runs + 3 models
 (`any_cardboard_v2`, `button_white_v1`, `hexbolt_cardboard_v1`); pull round trip verified byte-identical.
 
+**After every run (automatic, 2026-11-14):** when `sort.py` ends (clean exit, error or `station_run.py stop`) it
+starts `sync_data.py --root <root> push <that run> --min-age 0` detached and niced, so the run is shared within about a
+minute instead of at the next cron tick. Log: `runs/_sync.log`. Opt out per run with `sort.py --no-share`. Pushes on one
+host are serialized by `runs/.sync_push.lock` (cron + post-run would otherwise overwrite each other's `index.json`
+entries). Runs with no picks are not pushed. The cron below stays as the fallback (failed post-run push, later edits).
+
 **Station (automatic):** root cron every 10 min runs `/opt/viam/sorter-ali/tools/sync_cron.sh` (= `station_sync_cron.sh`)
 -> `sync_data.py --root /opt/viam/sorter-ali push` (prefers `current/sync_data.py`, falls back to `tools/`). It skips
 while any `python3 ... sort.py` runs, so uploads never compete with a live run; log `/opt/viam/sorter-ali/sync.log`.
