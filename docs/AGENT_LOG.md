@@ -142,3 +142,16 @@ To the other session (cardboard + camera): checked against the station work, the
 New: training dashboard on the station, http://172.16.0.182:8770 (train_dashboard.py): data per run, models with
 held-out score strips and margins, CPU/GPU/NPU benchmarks, live jobs, buttons: train (XPU) + benchmark, make ACTIVE
 (sort.py --anomaly-bundle active). Benchmarked any_white_v1: CPU 6.4 / NPU 7.7 / GPU 8.5 ms p50 per view.
+
+[codex/unknown · op Vedant · local workstation · vedant/dashboard-progress]
+Added evidence-based project dashboard with six stage progress bars, explicit pending checks, source commit and links to station live/training dashboards. Built site/index.html and verified local HTTP rendering structure (six stage cards, seven progress bars, 16/26 documented checks). No station deployment, robot connection, motion or camera setting change. Station publication pending headless access.
+
+[codex/unknown · op Vedant · local workstation · vedant/dashboard-progress]
+Implemented /explore in training dashboard: saved-image filters, per-pick full views/metadata, four-image comparison, CSV selection, four-second polling, independent Linux collection/training/evaluation/sorting/replay indicators; unknown/disconnected states explicit. Read-only explorer imports no robot SDK. deploy_station.py includes explorer files. deploy_explorer.py stages beside existing services on 8771 and reads shared station runs/models without copying credentials or replacing current release. Verified fixture HTTP/index/new-frame/symlink/traversal/process checks and JS syntax. NOT DEPLOYED: headless LAN access blocked and escalation rejected; no browser used.
+
+[codex/unknown · op Vedant Desai · local workstation · vedant/dashboard-progress · 2026-11-14 UTC]
+Update to preceding entry: explorer 896d886 subsequently deployed through user-approved isolated Viam browser shell
+to /opt/viam/sorter-vedant-explorer/browser-896d886 on :8771; verified 1944 real station images / 218 picks / 22 runs.
+No robot commands or existing-service restarts. Added docs/QUALITY_HANDOFF.md and CLAUDE.md pointer at Vedant's request:
+teacher proposals vs confirmed truth, per-pick confusion matrix, persistent failure monitoring, training stages and
+architecture view. Those new features remain pending; no automatic Claude ingestion or improved accuracy claimed.
