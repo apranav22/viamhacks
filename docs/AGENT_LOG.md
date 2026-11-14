@@ -560,3 +560,16 @@ bolt (pos 123), teleop off. Plan: 60 deg/s; path-checked joint move to the surve
 (275,350), lower, open (bolt set on the pad), up, home.
 11:01 reset done: home -> over pad (275,350) -> lowered to TCP z 39 -> opened (bolt set on the pad) -> home.
 Path clearances 90-121 mm. Speed/accel left at the defaults 60 / 381.67. ARM: released (home/survey pose, gripper open).
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/clean-base · 2026-11-14 10:48]
+Done: ported the coverage pipeline from the shared checkout (ali/judges-presentation, uncommitted) onto ali/clean-base: vh/coverage.py; sort.py --views coverage (oblique wrist looks ±45 before the grasp, webcam under/end_a/end_b) + grasp at the part's length midpoint + hover fallback via the look pose + crop telemetry; vh/detection.detect(ends=True) (was screws.py); bins re-measured 2026-11-14 10:25 (config/obstacles.json cardboard-box, checkpoint good_drop, sort.GOOD_TCP); dashboard crop frames + coverage view labels. Default --views stays classic.
+Verified: 80 Python tests OK (1 optional skip), 9 JS reducer tests, sort.py --help, detect(ends=True) offline smoke. Live behaviour was verified earlier from the shared checkout (runs/20261114_103009_collect, 20261114_104514_collect), not re-run from this branch.
+Not done: no deployment from this branch, no motion. config/webcam_refs stays gitignored (local images).
+Robot: untouched by this change.
+Next: deploy from a clean checkout of ali/clean-base before the next station collection with --views coverage.
+
+[claude-code/claude-opus-5-5 · op Ali (git: Ali) · Alis-MacBook-Air.local · ali/clean-base · 2026-11-14 11:11]
+Done: dashboard run control (operator request): Live tab "Start a run" panel for a capture run (sort.py --mode collect) or live anomaly detection (--mode sort), local or station (deployed release via station_run.py). dashboard/runner.py whitelists options, requires the E-stop confirmation per run, refuses while a run is active / another sort.py runs, appends ARM taken/released here; Stop button. Same-origin JSON only; hidden with --no-run-control/--no-preview/--replay.
+Verified: 89 Python tests OK (9 new, fake sort.py; 1 optional skip), 9 JS tests. Not clicked in a browser, no live run started from it yet.
+Robot: untouched.
+Next: first real use = a 2-pick capture from the panel with the operator watching.

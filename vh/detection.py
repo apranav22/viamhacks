@@ -32,8 +32,9 @@ class WristView:
         return float(self.t[0] + s * d[0]), float(self.t[1] + s * d[1])
 
 
-def detect(rgb, view: WristView | None, region: dict | None) -> list:
-    """Parts on the white table: [(x, y, pixels, yaw_deg, bbox)]. World mm with a view, else pixels."""
+def detect(rgb, view: WristView | None, region: dict | None, ends: bool = False) -> list:
+    """Parts on the white table: [(x, y, pixels, yaw_deg, bbox)]. World mm with a view, else pixels.
+    ends=True appends the two extreme points of the blob along its long axis, ((x0, y0), (x1, y1)), same units."""
     f = rgb.astype(np.float32)
     if view is not None:
         s = REF_MM_PER_PX / ((view.t[2] - view.table_z) / view.k.focal_x_px)
@@ -69,5 +70,10 @@ def detect(rgb, view: WristView | None, region: dict | None) -> list:
             yaw = math.degrees(math.atan2(y2 - y, x2 - x))
             if region and not (region["x_min"] < x < region["x_max"] and region["y_min"] < y < region["y_max"]):
                 continue
-        out.append((x, y, len(xs), yaw, (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max()))))
+        det = (x, y, len(xs), yaw, (int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())))
+        if ends:
+            along = (xs - u) * a[0] + (ys - v) * a[1]       # pixel positions along the long axis
+            e = [(u + a[0] * t, v + a[1] * t) for t in (float(along.min()), float(along.max()))]
+            det += (tuple(e) if view is None else tuple(view.to_world(*p) for p in e),)
+        out.append(det)
     return out

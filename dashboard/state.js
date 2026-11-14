@@ -37,6 +37,11 @@
     if (score?.status && !['missing','not_replayed'].includes(score.status)) return {text:'Could not check',short:'',tone:''};
     return {text:'Not checked',short:'',tone:''};
   }
+  function viewLabel(v) {
+    const names={'oblique+45':'Table, tilted +45°','oblique-45':'Table, tilted −45°','tilt+60':'Held, underside +60°','tilt-60':'Held, underside −60°',
+      'end_a':'Held, end A','end_b':'Held, end B'};
+    return names[v] || v;
+  }
   class RunState {
     constructor() { this.reset(); }
     reset(run = null) {
@@ -72,17 +77,18 @@
       if (n==null) return;
       const item=this.item(n);
       if (event.k==='look' || event.k==='view' || (event.k==='watch' && event.placed)) {
-        const view=event.k==='look'?'top':event.k==='view'?event.view:'watch';
+        const view=event.k==='look'?(event.view || 'top'):event.k==='view'?event.view:'watch';
         const id=event.capture_id || [this.run,n,view,event.s ?? event.frame?.id ?? event.t].join(':');
         if (!item.captures.some(c=>c.id===id)) {
           const attempt=(event.label || '').match(/(?:look|attempt)\s+(\d+)/i)?.[1];
-          item.captures.push({id,capture_id:event.capture_id,filename:event.k==='look'?(attempt?`top_${attempt}.jpg`:event.label || 'top'):view,
-            label:event.k==='look'?(attempt?`Top ${attempt}`:'Top'):view,view,url:frameUrl(event),timestamp:event.t,
+          item.captures.push({id,capture_id:event.capture_id,filename:event.k==='look'?(event.view?`${event.view}.jpg`:attempt?`top_${attempt}.jpg`:event.label || 'top'):view,
+            label:event.k==='look'?(event.view?viewLabel(event.view):attempt?`Top ${attempt}`:'Top'):viewLabel(view),view,url:frameUrl(event),timestamp:event.t,
             bbox:event.item?.bbox || event.crop,score:{},tape:event.tape,tape_threshold:event.tape_threshold ?? this.policy[view==='top'?'tape_top':'tape_web'],trigger:false});
           this.pending=this.pending.filter(p=>{if(p.n===n && this.source(item,p.event)){this.attach(item,p.event);return false;}return true;});
         }
       }
       if (event.k==='anomaly_result' && !this.attach(item,event)) this.pending.push({n,event});
+      if (event.k==='crop') { const c=this.source(item,event); if (c) { c.crop_url=frameUrl(event); c.crop_label='Inspected crop'; } }
       if (event.k==='decision' || event.k==='cycle') {
         Object.assign(item.record,event);
         for (const [view,score] of Object.entries(event.scores || {})) {
@@ -108,5 +114,5 @@
       return true;
     }
   }
-  return {RunState,frameUrl,anomalyStatus,captureVerdict,detector,finite};
+  return {viewLabel,RunState,frameUrl,anomalyStatus,captureVerdict,detector,finite};
 });

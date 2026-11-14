@@ -1,11 +1,33 @@
 <!doctype html>
 <!-- [codex/unknown · op Ali · Mac.mynetworksettings.com · ali/pipeline · 2026-11-14] -->
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Spot it, sort it</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/viewport.css"><script defer src="/state.js"></script><script defer src="/app.js"></script><script defer src="/models.js"></script></head>
+<title>Spot it, sort it</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/viewport.css"><script defer src="/state.js"></script><script defer src="/app.js"></script><script defer src="/models.js"></script><script defer src="/control.js"></script></head>
 <body>
 <header class="app-header"><h1>Spot it, sort it</h1><nav aria-label="Dashboard views"><button id="nav-live" type="button" aria-controls="live" aria-pressed="false">Live</button><button id="nav-history" type="button" aria-controls="history" aria-pressed="true">History</button><button id="nav-models" type="button" aria-controls="models" aria-pressed="false">Models</button></nav><span id="connection" class="subtle" role="status">Connecting…</span></header>
 <main>
 <section id="live" hidden aria-label="Live monitoring">
+<details id="run-control" class="run-control" open hidden><summary>Start a run <span id="run-badge" class="subtle"></span></summary>
+  <form id="run-form" novalidate>
+    <div class="segmented" role="radiogroup" aria-label="Run kind"><label><input type="radio" name="kind" value="capture" checked> Capture run</label><label><input type="radio" name="kind" value="detect"> Live anomaly detection</label></div>
+    <div class="run-fields">
+      <label data-kind="capture">Part type<select id="run-type"><option value="unknown">Unknown</option></select></label>
+      <label data-kind="capture">Label<select id="run-label"><option value="good">Good</option><option value="tape">Tape (defect)</option><option value="other">Other…</option></select></label>
+      <label data-kind="capture" id="run-other-wrap" hidden>What<input id="run-other" placeholder="e.g. scratched" pattern="[a-z0-9_+-]{1,32}"></label>
+      <label data-kind="capture">Picks<input id="run-reps" type="number" min="1" max="200" value="10"></label>
+      <label data-kind="detect" hidden>Items<input id="run-items" type="number" min="1" max="200" value="6"></label>
+      <label data-kind="detect" hidden>Model<select id="run-bundle"></select></label>
+      <label data-kind="detect" hidden>Decide from<select id="run-decide"><option value="all">All views</option><option value="top">Top view only</option></select></label>
+      <label data-kind="detect" hidden>Device<select id="run-device"><option>CPU</option><option>GPU</option><option>NPU</option></select></label>
+      <label>Surface<select id="run-background"><option value="cardboard">Cardboard</option><option value="white">White table</option></select></label>
+      <label>Views<select id="run-views"><option value="coverage">Coverage (oblique, underside, ends)</option><option value="classic">Classic</option></select></label>
+      <label>Runs on<select id="run-target"><option value="local">This computer</option><option value="station">Station (deployed release)</option></select></label>
+      <label>Wait for a part (s)<input id="run-timeout" type="number" min="10" max="3600" value="300"></label>
+    </div>
+    <div class="run-checks"><label class="check" data-kind="capture"><input id="run-lying" type="checkbox"> Parts laid flat (skip upright check)</label><label class="check"><input id="run-refs" type="checkbox"> Capture empty-gripper references first</label></div>
+    <div class="run-actions"><label class="check estop"><input id="run-estop" type="checkbox"> A person is at the E-stop</label><button id="run-start" type="submit" disabled>Start capture run</button><button id="run-stop" type="button" disabled>Stop</button><span id="run-state" class="status" role="status"></span></div>
+    <pre id="run-output" hidden></pre>
+  </form>
+</details>
   <div class="live-tools"><label>View<select id="live-view"><option value="camera">Camera</option><option value="inspection">Inspection</option></select></label><label class="check"><input id="follow" type="checkbox" checked> Follow item</label><span id="live-status" class="status">No telemetry</span></div>
   <div class="section-bar"><div><h2 id="live-title">Waiting for a run</h2><p id="live-subtitle"></p></div></div>
   <details class="feed" open><summary>Camera feed <span id="feed-age" class="subtle"></span></summary><div class="feed-tools"><label for="camera">Camera<select id="camera" aria-label="Camera"><option value="cam">Wrist</option><option value="overview-cam">Webcam</option></select></label></div><div class="feed-image"><img id="feed-image" alt="Latest camera frame" hidden><p id="feed-empty" class="subtle">No camera frames received</p></div><span id="feed-age-visible" class="subtle"></span></details>

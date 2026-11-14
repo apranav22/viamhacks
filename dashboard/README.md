@@ -76,3 +76,18 @@ Local review server for this implementation: `http://localhost:8877/#models` (ca
 ```
 
 Additional checks: `python3 -m unittest discover -s tests -p 'test_benchmarks.py'`.
+
+## Starting runs from the dashboard
+
+The Live tab has a **Start a run** panel: **Capture run** (`sort.py --mode collect`: part type, label, picks) or
+**Live anomaly detection** (`sort.py --mode sort`: items, model bundle, which views decide). Both take the surface,
+the view set (coverage/classic) and where to run: *This computer* (telemetry straight to this dashboard) or *Station*
+(the **deployed** release, via `station_run.py`; deploy first if the code changed).
+
+Safety (AGENTS.md §2): Start stays disabled until "A person is at the E-stop" is ticked, asks for confirmation, and
+unticks after each start. The server refuses while any run is sending telemetry or another `sort.py` runs on this
+computer; sort.py itself refuses while teleop runs or the joints are moving. Each start/end appends
+`ARM: taken` / `ARM: released` to `docs/AGENT_LOG.md`. Stop terminates the run (station: `station_run.py stop`).
+Only whitelisted options reach sort.py; requests must be same-origin JSON. The panel is hidden with
+`--no-run-control`, `--no-preview` or `--replay`. Bind to `127.0.0.1` (the default) unless you want other machines on
+the network to be able to start the arm.
