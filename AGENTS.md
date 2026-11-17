@@ -106,23 +106,9 @@ Next:      the single most useful next step
 |---|---|
 | `docs/CONTEXT.md` · `PLAN.md` · `ARCHITECTURE.md` · `NOTES.md` | event + scoring, decisions, design, findings |
 | `docs/DATA_PLAN.md` | part classes, data splits, holdout defects |
-| `sync_data.py` | share runs/ and models/ with the team (public HF dataset; read access needs no login): `status` · `pull` · `push` (DATA_PLAN.md, end) |
 | `docs/AGENT_LOG.md` | who is doing what, arm taken/released, config changes |
-| `docs/DAY1_RECAP.md` · `RUN_CATALOG.md` | day-1 recap; every run with part, label, counts, flag and note |
-| `catalog.py` | rebuilds the catalog: `python3 catalog.py` then `open runs/index.html` (all images + metadata per pick); notes in `docs/run_notes.json` |
 | `pipeline.py`, `motion_probe.py`, `overview.py` (Pranav) | scan, grasp, motion primitives, present views |
 | `vh/`, `run.py` (Ali) | perception, geometry, telemetry; baseline cycle |
 | `dashboard/server.py` | live dashboard (UDP telemetry, idle camera preview) on :8765 |
 | `config/` | measured poses, checkpoint, Viam config tooling |
 | `site/` | visual overview (`python3 site/build.py`) |
-
-
-## Offline calibration handoff
-
-`compare_anomaly.py`: `score` → `specimens` (human-reviewed identity/role template) → `report`.
-Read `docs/ANOMALY_CALIBRATION.md` first. No live activation. Never invent physical specimen identities or call
-repeated grasps independent samples. The good-reject budget is explicit; insufficient calibration stays uncertain.
-
-## Day-1 evening handoff
-
-See `docs/THRESHOLD_FINDINGS.md` for the new captured data, threshold comparisons, false rejects, missed defects and safety incidents. Data access and station backup are documented in `docs/DATA_PLAN.md`. Earlier status sections are historical; the live Intel loop has now been exercised.
