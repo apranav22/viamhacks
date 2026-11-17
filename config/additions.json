@@ -1,0 +1,33 @@
+{
+  "modules": [
+    {"type": "registry", "name": "viam_viam-openvino", "module_id": "viam:viam-openvino", "version": "0.0.6"},
+    {"type": "registry", "name": "viam-labs_anomalib", "module_id": "viam-labs:anomalib", "version": "0.1.5"}
+  ],
+  "packages": [
+    {"name": "fastener-patchcore", "package": "6d6c7293-bc67-43e4-9c8b-31c76aac27d3/fastener-patchcore", "type": "ml_model", "version": "1"}
+  ],
+  "services": [
+    {
+      "name": "ov-anomaly",
+      "api": "rdk:service:mlmodel",
+      "model": "viam:openvino:mlmodel",
+      "attributes": {
+        "model_path": "${packages.ml_model.fastener-patchcore}/model.xml",
+        "device": "GPU",
+        "inference_precision": "f32"
+      }
+    },
+    {
+      "name": "ov-diag",
+      "api": "rdk:service:generic",
+      "model": "viam:openvino:diagnostics",
+      "attributes": {"mlmodel_name": "ov-anomaly"}
+    },
+    {
+      "name": "anomaly",
+      "api": "rdk:service:vision",
+      "model": "viam-labs:anomalib:vision",
+      "attributes": {"mlmodel_name": "ov-anomaly", "camera_name": "cam", "threshold": 0.2}
+    }
+  ]
+}

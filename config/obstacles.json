@@ -1,0 +1,40 @@
+{
+ "_comment": "extra obstacles measured with wrist depth 14:30-14:50 (world mm, box center + dims); add to Pranav's world_state(table_z)",
+ "webcam-tripod": {
+  "center": [
+   -150,
+   -225,
+   190
+  ],
+  "dims": [
+   120,
+   100,
+   380
+  ]
+ },
+ "lamp": {
+  "center": [
+   -225,
+   -415,
+   200
+  ],
+  "dims": [
+   350,
+   110,
+   400
+  ]
+ },
+ "cardboard-box": {
+  "center": [
+   327,
+   -147,
+   72
+  ],
+  "dims": [
+   335,
+   290,
+   145
+  ],
+  "note": "x 160-495, y -292..-2 (walls x~170/485, y~-285/-10, divider x~315; walls 110-120 tall, height kept 145 for the flap). Reject = near half (x 170-315), good = far half (x 315-485). Re-measured 2026-11-14 10:25 after the operator moved the bins: wrist depth from TCP (380,-120,480), runs/bins_20261114_102438 [claude-code/claude-opus-5-5 \u00b7 op Ali]. Before: center [397,-125,72] dims [335,276,145]."
+ }
+}

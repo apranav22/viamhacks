@@ -1,0 +1,6 @@
+{
+  "_comment": "Numbers from the day-2 coverage pipeline. Leave a field null until it is measured; the deck then shows the day-1 figure, labelled as such. Fill 'eval' from the held-out evaluation of the new banks and 'row' with presentation/set_row.py after the judged run.",
+  "device": null,
+  "eval": null,
+  "row": null
+}

@@ -1,0 +1,71 @@
+{
+  "identity": "claude-code/claude-fable-5-2; operator Ali (git: Ali); host Alis-MacBook-Air.local; branch ali/judges-presentation",
+  "wrist_pick": "runs/20261114_103009_collect/item_002",
+  "webcam_pick": "runs/20261114_104514_collect/item_001",
+  "assets": [
+    {
+      "asset": "judges-cov-top.jpg",
+      "source": "runs/20261114_103009_collect/item_002/top_1.jpg",
+      "source_sha256": "c942817b544bdc5e9257b42e4ed4cfefa53731c78cc7247a968688b2fbf354b1",
+      "asset_sha256": "f7f01209476459d2ec045e39cc24a1c5f9d0edc3ac389e74aaf2ac9e163bc5a4",
+      "display_crop": [
+        329,
+        151,
+        1049,
+        691
+      ]
+    },
+    {
+      "asset": "judges-cov-obl-p.jpg",
+      "source": "runs/20261114_103009_collect/item_002/oblique+45.jpg",
+      "source_sha256": "7031a5f3aa9d1b5877069cb736a8cf02efaa2b035683701d75ee9f1c5be50882",
+      "asset_sha256": "025e62a35c19467e000a46fc64255777cbbb54a6f2503a20531dd9e82b2b401b",
+      "display_crop": [
+        300,
+        70,
+        1020,
+        610
+      ]
+    },
+    {
+      "asset": "judges-cov-obl-m.jpg",
+      "source": "runs/20261114_103009_collect/item_002/oblique-45.jpg",
+      "source_sha256": "02a3a43dfc83c7701aac88cc86da837a4d4c5c2a035f3284fe26d3b9c0daae4a",
+      "asset_sha256": "1af8f21b72c2f76799145798aca701799637d51ee0b0f8134e5bc4d3a96c2dad",
+      "display_crop": [
+        340,
+        100,
+        1060,
+        640
+      ]
+    },
+    {
+      "asset": "judges-cov-under.jpg",
+      "source": "runs/20261114_104514_collect/item_001/crop_under.jpg",
+      "source_sha256": "34f078ef929fe420dec91406de7dcc75f5dbcbfefe2c57e48b0a79257ee00314",
+      "asset_sha256": "b204d4944cb63a502afa1d9f16412986204ec2d48cc8c1359aefeaab0e4c3ad3",
+      "display_crop": null
+    },
+    {
+      "asset": "judges-cov-end_a.jpg",
+      "source": "runs/20261114_104514_collect/item_001/crop_end_a.jpg",
+      "source_sha256": "9a24a17ea9caa9bfbd7ba4b22ae5692f8e92271f8ade7c3a8422f30fd050d2c3",
+      "asset_sha256": "0bc07763493551e47a055f4cb00cf6281b8b5448f9a722c367269a09ef811829",
+      "display_crop": null
+    },
+    {
+      "asset": "judges-cov-end_b.jpg",
+      "source": "runs/20261114_104514_collect/item_001/crop_end_b.jpg",
+      "source_sha256": "65bdf43e37f49c3fe9641ad9beaff9985b15e466c82fb4db4f0a2c89d388d47a",
+      "asset_sha256": "e4b6a92bb55e98174988e6ecbcfc3fceae8647d847a2ad890c774f73d0576421",
+      "display_crop": null
+    },
+    {
+      "asset": "judges-cov-calib-grid.jpg",
+      "source": "site/img/webcam_calib_grid.jpg",
+      "source_sha256": "254ae66e3a5586810bdb4fe65c8d586f7145076ac23a135092a427710e5038f3",
+      "asset_sha256": "08e6f52c62f47f2b6010861a7031fcbca763bedf9477ae8ee8e6e33a24066039",
+      "display_crop": null
+    }
+  ]
+}

@@ -1,0 +1,418 @@
+{
+  "modules": [
+    {
+      "name": "viam_find-webcams",
+      "module_id": "viam:find-webcams",
+      "type": "registry",
+      "version": "latest"
+    },
+    {
+      "name": "devrel_so101-arm",
+      "module_id": "devrel:so101-arm",
+      "type": "registry",
+      "version": "latest"
+    },
+    {
+      "name": "viam_teleop",
+      "module_id": "viam:teleop",
+      "type": "registry",
+      "version": "latest"
+    },
+    {
+      "name": "viam_capture-control",
+      "module_id": "viam:capture-control",
+      "type": "registry",
+      "version": "0.1.1"
+    },
+    {
+      "name": "viam-labs_capture-control-webapp",
+      "module_id": "viam-labs:capture-control-webapp",
+      "type": "registry",
+      "version": "0.2.0"
+    }
+  ],
+  "components": [
+    {
+      "api": "rdk:component:camera",
+      "name": "overview-cam",
+      "service_configs": [
+        {
+          "type": "data_manager",
+          "attributes": {
+            "capture_methods": [
+              {
+                "additional_params": {},
+                "disabled": false,
+                "method": "GetImages",
+                "capture_frequency_hz": 10.0
+              }
+            ]
+          }
+        }
+      ],
+      "attributes": {
+        "width_px": 640.0,
+        "height_px": 480.0,
+        "format": "YUYV",
+        "video_path": "/dev/video38"
+      },
+      "model": "rdk:builtin:webcam"
+    },
+    {
+      "api": "rdk:component:arm",
+      "name": "leader-arm",
+      "attributes": {
+        "port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90100977-if00"
+      },
+      "model": "devrel:so101:arm"
+    },
+    {
+      "api": "rdk:component:gripper",
+      "name": "leader-gripper",
+      "attributes": {
+        "gripper_type": "leader",
+        "arm": "leader-arm"
+      },
+      "model": "devrel:so101:gripper"
+    },
+    {
+      "api": "rdk:component:sensor",
+      "name": "leader-calibration",
+      "disabled": true,
+      "attributes": {
+        "port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90100977-if00"
+      },
+      "model": "devrel:so101:calibration"
+    },
+    {
+      "api": "rdk:component:switch",
+      "name": "home-pose",
+      "attributes": {
+        "extra": {},
+        "constraints": {
+          "linear_constraints": [],
+          "orientation_constraints": [],
+          "pseudolinear_constraints": [],
+          "collision_specifications": []
+        },
+        "joints": [
+          0.0,
+          0.393937,
+          -0.884603,
+          0.0,
+          -1.29246,
+          0.0
+        ],
+        "vision_services": [],
+        "motion": "",
+        "arm": "arm"
+      },
+      "model": "erh:vmodutils:arm-position-saver"
+    },
+    {
+      "api": "rdk:component:sensor",
+      "name": "capture-control",
+      "attributes": {
+        "default_capture_frequency_hz": 0.0,
+        "resources": [
+          {
+            "method": "JointPositions",
+            "resource_name": "arm"
+          },
+          {
+            "method": "IsHoldingSomething",
+            "resource_name": "vacuum-gripper"
+          },
+          {
+            "method": "GetImages",
+            "resource_name": "cam"
+          },
+          {
+            "method": "GetImages",
+            "resource_name": "overview-cam"
+          }
+        ]
+      },
+      "model": "viam:capture-control:capture-control-sensor"
+    },
+    {
+      "api": "rdk:component:switch",
+      "name": "leader-home",
+      "attributes": {
+        "extra": {},
+        "constraints": {
+          "linear_constraints": [],
+          "orientation_constraints": [],
+          "pseudolinear_constraints": [],
+          "collision_specifications": []
+        },
+        "joints": [
+          -0.0015343553863686413,
+          -0.7073378331159438,
+          -0.2178784648643471,
+          1.6279510649371285,
+          1.624882354164391
+        ],
+        "vision_services": [],
+        "motion": "",
+        "arm": "leader-arm"
+      },
+      "model": "erh:vmodutils:arm-position-saver"
+    },
+    {
+      "name": "vacuum-gripper",
+      "attributes": {
+        "arm": "arm"
+      },
+      "model": "viam:ufactory:vacuum_gripper",
+      "ui_folder": {
+        "name": "hardware"
+      },
+      "service_configs": [
+        {
+          "type": "data_manager",
+          "attributes": {
+            "capture_methods": [
+              {
+                "additional_params": {},
+                "disabled": false,
+                "method": "IsHoldingSomething",
+                "capture_frequency_hz": 10.0
+              }
+            ]
+          }
+        }
+      ],
+      "api": "rdk:component:gripper",
+      "disabled": true,
+      "frame": {
+        "orientation": {
+          "type": "ov_degrees",
+          "value": {
+            "y": 0.0,
+            "z": 1.0,
+            "x": 0.0,
+            "th": 180.0
+          }
+        },
+        "translation": {
+          "y": 0.0,
+          "z": 0.0,
+          "x": 0.0
+        },
+        "parent": "arm"
+      }
+    }
+  ],
+  "services": [
+    {
+      "api": "rdk:service:discovery",
+      "name": "discovery-cam",
+      "attributes": {},
+      "model": "viam:find-webcams:webcam-discovery"
+    },
+    {
+      "api": "rdk:service:discovery",
+      "name": "discovery-arm",
+      "attributes": {},
+      "model": "devrel:so101:discovery"
+    },
+    {
+      "api": "rdk:service:generic",
+      "name": "teleop",
+      "attributes": {
+        "leader_gripper_commands": {
+          "on_start": [
+            {
+              "enable": false,
+              "command": "set_torque"
+            }
+          ]
+        },
+        "follower_gripper_mode": "open_close",
+        "pairs": [
+          {
+            "leader_arm": "leader-arm",
+            "leader_gripper": "leader-gripper",
+            "name": "main",
+            "follower_component": "gripper",
+            "follower_gripper": "gripper"
+          }
+        ],
+        "scale": 2.5,
+        "tool_orientation": {
+          "type": "ov_degrees",
+          "value": {
+            "z": 1.0,
+            "y": 0.0,
+            "x": 0.0,
+            "th": -90.0
+          }
+        },
+        "origin_orientation": {
+          "type": "ov_degrees",
+          "value": {
+            "y": 0.0,
+            "z": 1.0,
+            "x": 0.0,
+            "th": 0.0
+          }
+        },
+        "align_on_start": true,
+        "leader_gripper_read_command": {
+          "command": "get_position"
+        },
+        "leader_hold": "manual",
+        "leader_tool_offset_mm": {
+          "y": 0.0,
+          "z": 100.0,
+          "x": 0.0
+        },
+        "capture_control_sensor": "capture-control",
+        "leader_gripper_read_key": "position_percentage"
+      },
+      "model": "viam:teleop:leader-follower"
+    },
+    {
+      "api": "rdk:service:data_manager",
+      "name": "data_manager",
+      "attributes": {
+        "tags": [],
+        "sync_interval_mins": 0.1,
+        "sync_disabled": true,
+        "capture_dir": "",
+        "capture_control_sensor": {
+          "key": "overrides",
+          "name": "capture-control"
+        },
+        "capture_disabled": true
+      },
+      "depends_on": [
+        "capture-control"
+      ],
+      "model": "rdk:builtin:builtin"
+    },
+    {
+      "api": "rdk:service:generic",
+      "name": "capture-webapp",
+      "attributes": {
+        "port": 8888.0
+      },
+      "model": "viam-labs:capture-control:webapp"
+    }
+  ],
+  "fragments": [
+    {
+      "variables": {
+        "arm-ip-address": "192.168.1.233",
+        "base-axis-rotation-degrees": 0.0,
+        "arm-name": "arm",
+        "translation": {
+          "y": 0.0,
+          "z": 0.0,
+          "x": 0.0
+        },
+        "cam-serial-number": "262422075484"
+      },
+      "id": "086f4921-8427-47b6-92e0-dbdc87f2267c"
+    },
+    {
+      "variables": {
+        "front-wall-translation": {
+          "y": 0.0,
+          "z": 300.0,
+          "x": 740.0
+        },
+        "ceiling-translation": {
+          "y": 0.0,
+          "z": 1050.0,
+          "x": 0.0
+        },
+        "table-translation": {
+          "y": 0.0,
+          "z": -123.0,
+          "x": 0.0
+        },
+        "side-wall-translation": {
+          "y": -500.0,
+          "z": 300.0,
+          "x": 0.0
+        }
+      },
+      "id": "01ca42e4-78b9-425c-ae75-1101b9a7f3e8"
+    },
+    {
+      "id": "b511adfa-80ab-4a70-9bd5-fbb14696b17e"
+    }
+  ],
+  "fragment_mods": [
+    {
+      "fragment_id": "086f4921-8427-47b6-92e0-dbdc87f2267c",
+      "mods": [
+        {
+          "$set": {
+            "components.cam.attributes.height_px": 480.0,
+            "components.cam.attributes.width_px": 640.0
+          }
+        },
+        {
+          "$set": {
+            "components.cam.service_configs": [
+              {
+                "type": "data_manager",
+                "attributes": {
+                  "capture_methods": [
+                    {
+                      "additional_params": {},
+                      "method": "GetImages",
+                      "capture_frequency_hz": 10.0
+                    }
+                  ]
+                }
+              }
+            ],
+            "components.arm.service_configs": [
+              {
+                "type": "data_manager",
+                "attributes": {
+                  "capture_methods": [
+                    {
+                      "additional_params": {},
+                      "method": "JointPositions",
+                      "capture_frequency_hz": 10.0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "fragment_id": "01ca42e4-78b9-425c-ae75-1101b9a7f3e8",
+      "mods": [
+        {
+          "$set": {
+            "components.table.disabled": true
+          }
+        },
+        {
+          "$set": {
+            "components.wall-front.disabled": true
+          }
+        },
+        {
+          "$set": {
+            "components.wall-side.disabled": true
+          }
+        },
+        {
+          "$set": {
+            "components.ceiling.disabled": true
+          }
+        }
+      ]
+    }
+  ]
+}

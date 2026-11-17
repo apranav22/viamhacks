@@ -1,0 +1,379 @@
+{
+  "name": "Development set",
+  "_comment": "[codex/unknown \u00b7 op Ali \u00b7 Mac.mynetworksettings.com \u00b7 ali/pipeline \u00b7 2026-11-14] Frozen pick membership, not independent physical specimens. Recorded collection labels, not newly human-reviewed truth.",
+  "limitations": "Repeated specimens; physical identities unverified. Top-view anomaly only; excludes tape overrides and physical handling.",
+  "members": [
+    {
+      "pick": "20261113_173900_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "bbc987fa512a5053427dcb9230ac0da5f36b87089f669718826694a1a4df9f98"
+    },
+    {
+      "pick": "20261113_173900_collect/item_011",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "471559c4f39c89aa66d3cff232f01a9f3aafc0c9800cf74cc51f2be8329ab78d"
+    },
+    {
+      "pick": "20261113_173900_collect/item_016",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "df91a55085f3e15e1337db1f92091ea1c4f96311d624bde385cf285dbcad3068"
+    },
+    {
+      "pick": "20261113_173900_collect/item_017",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "9b233778961da69297c673b67921a0eb177203f88c45f287fd30367358a7961e"
+    },
+    {
+      "pick": "20261113_173900_collect/item_018",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "62816ecf079d95ebd85afbb97242a4f71f7b39f6638ebcd6d23fae2b2b34fe5d"
+    },
+    {
+      "pick": "20261113_173900_collect/item_022",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "40ac7253ebe220a6bff49f4cff321f5865b23dc8297e14c7626444a0b51c2acb"
+    },
+    {
+      "pick": "20261113_173900_collect/item_026",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "9135fb00969ae9ad228d55ad1b9e3edcc2a6e4f21dbbbe3420bb66958b776183"
+    },
+    {
+      "pick": "20261113_181752_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "2e9054ee5b698264c2b7099bbb7c90a2aa919dc09f26d5ce1f5c73a47056e39b"
+    },
+    {
+      "pick": "20261113_181752_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "033ae55bdd1dcc3f955394582959b4e452227121de3bf51523947b977c352f02"
+    },
+    {
+      "pick": "20261113_181752_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "d99b69d6059e63b28d85ae89190aa9c379edb90e02e0e9c121d4617bfa6c8c15"
+    },
+    {
+      "pick": "20261113_181752_collect/item_010",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "cd3bb36263c21c1bdef04a15bdec58b8284bc931dc3403419b016549705e3a9b"
+    },
+    {
+      "pick": "20261113_181752_collect/item_023",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "8c33b1887ac99a8aab48971d3761a6442a8292f6ad98b5b5ac4cfcaa13fd5984"
+    },
+    {
+      "pick": "20261113_181752_collect/item_024",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "5fee00eab51e71fa127e359fa2ee547ba9bd46866eb0923385744b40dbb064a2"
+    },
+    {
+      "pick": "20261113_181752_collect/item_025",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "da500e52ca4dd5f2d785a8165ce443c85be77626ce44a3c0014233285c14d826"
+    },
+    {
+      "pick": "20261113_181752_collect/item_026",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "e71e77c3e78d48fa8cb24f11de974f3c11b902b59c682e2cb32721cf07afdf8b"
+    },
+    {
+      "pick": "20261113_181752_collect/item_035",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "c76e29edcd4f9dce164e0291b684abc72c8c9b256ad0a9d5568a3ea9392c515e"
+    },
+    {
+      "pick": "20261113_181752_collect/item_036",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "7d5454e5f3d98a38445be72feb801257b75c9b38a95b2323e1f2fb684e091d72"
+    },
+    {
+      "pick": "20261113_183403_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "9d1491c53a1d162758c2cd7aeafa4eda7aeea1db30daa5933cadc7e6b7aa901f"
+    },
+    {
+      "pick": "20261113_183403_collect/item_008",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "fc409aa37bf9a2b71d66334da6b9510f85cb62fdc824ce31b028ce29a55cf27c"
+    },
+    {
+      "pick": "20261113_183403_collect/item_012",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "331e81a96ac0cfb4dbeedf9bd0fa31fd4c1aa4b6c6c8ec91d87988aabbbcf2dc"
+    },
+    {
+      "pick": "20261113_183403_collect/item_014",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "f3067651a2fc0d225a535700da95d978278d510ca205873a82a1c17ad74fe173"
+    },
+    {
+      "pick": "20261113_183403_collect/item_019",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "8f408ced4f1828059e9591679bf752304cf19cbfd1bed2fb81f02346aaa3b6cf"
+    },
+    {
+      "pick": "20261113_185701_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "d342a379a5f644578e4e1928a9b9acc6fc1c333695814e3745067491c97e4d5c"
+    },
+    {
+      "pick": "20261113_185701_collect/item_010",
+      "file": "top_2.jpg",
+      "label": "good",
+      "image_sha256": "8a3b47e56c91bfe7404bf13d371ddc051464461a4ee1dc906e17cf1393fc6f0f"
+    },
+    {
+      "pick": "20261113_171443_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "5ffa3121b0ffdd3f2a8f6ac67d0e8f0e88fcd267343a19995578171f04f5f87c"
+    },
+    {
+      "pick": "20261113_171443_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "3600f69f501aabf3548a2cb2fef2aae2fa52787060d48fc2ce992f1ae880fa1f"
+    },
+    {
+      "pick": "20261113_171443_collect/item_003",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "b1b003e2bd81c94ff907ba3292dc8d1258458190f4b1c2569b7a019535b60a5d"
+    },
+    {
+      "pick": "20261113_171443_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "afda07f7e631500568229a18d86aa89d1227c8ac11e5fdeb485f8248dbf35f74"
+    },
+    {
+      "pick": "20261113_171443_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "202d7512fead5d4da1b22a60f544886889841aa7b167b37ee191f6b57fbe9a78"
+    },
+    {
+      "pick": "20261113_171443_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "759b1151fc28e6319cea4032dc55d0e64db3fcb3c1c7247d490a9146e1fc4807"
+    },
+    {
+      "pick": "20261113_171810_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "38864933d94c58508ea89c4a134d165e83da35f3d1281a369861d77f5645a281"
+    },
+    {
+      "pick": "20261113_171810_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "ddf924e77346f897949fa407844e2b7ffb4506333096af3615174a21e7069a9e"
+    },
+    {
+      "pick": "20261113_171810_collect/item_003",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "051d1d8c3e1773ec96f6d3a07e6a1cdacaf954ef5d21b4826d155657d5b656bc"
+    },
+    {
+      "pick": "20261113_171810_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "c33fb39ec0c58bfc6f989495e80f4745155ab918f848a926963dc93493cd27a0"
+    },
+    {
+      "pick": "20261113_171810_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "fd666e151da5c77b981373765103016c5e226161b607fe2a1d3d23c9a8eaaa81"
+    },
+    {
+      "pick": "20261113_171810_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "marker",
+      "image_sha256": "679a35e525f7bb21a9c86bdd3f0c2f57ec8953aa652de8b8371167f7591c9379"
+    },
+    {
+      "pick": "20261113_172425_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "905f7f833b9c6821b8ad101cb7c50fbed1a4fad63fc5b6cae1069fa14f0e6c4f"
+    },
+    {
+      "pick": "20261113_172425_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "2319e938cd31d7dc28b0045c826841a281d1107e978a79382859186177f993bc"
+    },
+    {
+      "pick": "20261113_172425_collect/item_003",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "8fd3a6e55ec00728cf1e3ee8b4dca50537e2bd1eb640fe15de09d352e563da9d"
+    },
+    {
+      "pick": "20261113_172425_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "b7d0be39397a5c30e36ad23a5d811fd7faf15147cf6a004b457a8c1e65ff34b0"
+    },
+    {
+      "pick": "20261113_172425_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "af1ba9c626b10c15d2fefd7e01a91763752ecd8593ed28ca82a0402912d50aef"
+    },
+    {
+      "pick": "20261113_172425_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "bde704502ea9cb9e0c271ae207f813e51b21df7eb724121cf426cdc47ac8ee65"
+    },
+    {
+      "pick": "20261113_172711_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "89e9f5c27b7cb70846669640ad58c3b2b31bb6e99af4281187efa59c63d7b734"
+    },
+    {
+      "pick": "20261113_172711_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "19ccaf77b5b5cc9072e72efc7bdda711d298d251a2721977c2cefe0b63510f64"
+    },
+    {
+      "pick": "20261113_172711_collect/item_003",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "fee8dc29c119a5f39550a1c274c656f0010efe2e75996d51e23389b80a00c4b6"
+    },
+    {
+      "pick": "20261113_172711_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "10ff68f3f37b3db026fa25cedd4c87f98b249e6f992a550f094f4c82bf09fa07"
+    },
+    {
+      "pick": "20261113_172711_collect/item_005",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "c49032523af3a9b4c3ce5bc24c33363dbf4d6d1652cdab694dbac2ea1f469ef8"
+    },
+    {
+      "pick": "20261113_172711_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "other",
+      "image_sha256": "883cf9344e3a4f3b936798501d89b535783b922914650e73b31f5219ae93143b"
+    },
+    {
+      "pick": "20261113_173029_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "cbb12f8787539ef77e04f2902c061ceac356def895564767cadc9c66686f5876"
+    },
+    {
+      "pick": "20261113_173029_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "88830a62a6be3882feb71fa4d60c5a1edb77670abeb33246728d7bc39718b494"
+    },
+    {
+      "pick": "20261113_173029_collect/item_003",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "6aaa68b424c1a76a553bea25aa2554a9d68e68780d72ef7cf113b1baac7cf23c"
+    },
+    {
+      "pick": "20261113_173029_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "tape",
+      "image_sha256": "a972c061975a5734644a00c90d07a4789bd58c0a599966a2af48451f5ef80f38"
+    },
+    {
+      "pick": "20261113_173920_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "9581859ee37dd81f0042dadaae9ca187e8ca5d93ea36253681abd87ee40e232b"
+    },
+    {
+      "pick": "20261113_173920_collect/item_011",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "c63fc6e89b26cb469da0f35cb21a4e400da5ccda90939ede58cb5f55d2ea4f23"
+    },
+    {
+      "pick": "20261113_173920_collect/item_012",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "6d0d22641b3cd3b71b8b09cfaf51b70818ac2577b8882d3f76eeb0935adf81c6"
+    },
+    {
+      "pick": "20261113_173920_collect/item_017",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "f73ad3595decfd870f33956f38836dc6af5eaffe8ecb10b0bc1b7b8a896f6523"
+    },
+    {
+      "pick": "20261113_173920_collect/item_019",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "1cc7b6546649dcc717c2b2f6a70d11993ef0d63d17dbb2647396b2a7e7b7a512"
+    },
+    {
+      "pick": "20261113_183052_collect/item_001",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "f862dd0fe09454ec6e3fcc21415e4f3c8a0f83d0331dd6da6858295ac533cb8d"
+    },
+    {
+      "pick": "20261113_183542_collect/item_002",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "3efb1f3bfff3679b98aaba05605743b344af925320ab8c4a3f052e51a3518d15"
+    },
+    {
+      "pick": "20261113_184545_collect/item_004",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "a1db1ac24476c2bc26452550f73c5de4f369c7812c62dbdcdab2e690696ad6e1"
+    },
+    {
+      "pick": "20261113_184545_collect/item_006",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "2e0ff2f5adf326ec40cbdee0862e6227c937571d6ec2b2793b4eca8dc94b17db"
+    },
+    {
+      "pick": "20261113_184545_collect/item_007",
+      "file": "top_1.jpg",
+      "label": "good",
+      "image_sha256": "113bb1ab9648a549d23f64d866309b790800758a4546cafa4d1a775de7a164e1"
+    }
+  ]
+}

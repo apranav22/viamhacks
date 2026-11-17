@@ -1,0 +1,7 @@
+viam-sdk==0.85.2
+numpy
+scipy
+pillow
+python-dotenv
+opencv-python-headless  # optional: 10x faster morphology in vh/perception.py
+huggingface_hub==2.4.0   # sync_data.py (shared runs/models on the team's HF dataset repo)

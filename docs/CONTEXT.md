@@ -9,7 +9,7 @@ Sources: the event slides, the reference sheet (version 2026-11-13 08:28, the au
 
 ## How we're scored
 
-One **five-minute run on 6 judge items** (good, defective, and **at least one defect type we've never seen**), then a **five-minute design explanation**.
+One **five-minute run on 6 judge items, placed one at a time** (good, defective, and **at least one defect type we've never seen**), then a **five-minute design explanation**.
 
 | Weight | What | What it means for us |
 |---|---|---|

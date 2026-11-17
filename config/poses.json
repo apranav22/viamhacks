@@ -1,0 +1,40 @@
+{
+  "_comment": "Positions are the gripper TCP in the world frame, mm. Record destinations with: python record_pose.py <name>",
+  "scan_joints_deg": [0.0, 22.571, -50.684, 0.0, -74.053, 0.0],
+  "destinations": {
+    "box": null,
+    "reject": null,
+    "hold": null
+  },
+  "overview": {
+    "_comment": "overview-cam calibration grid (world mm) and fingertip heights above the table; see overview.py",
+    "_grid": "where the overview-cam sees the claws whole (it sits on the -y side looking toward +y; at y<=0 the claws leave the frame)",
+    "cal_grid_x": [200, 350, 500],
+    "cal_grid_y": [100, 225, 350],
+    "cal_tip_heights_mm": [25, 85],
+    "still_s": 0.3,
+    "still_timeout_s": 10,
+    "descent_abort_mm": 8,
+    "align_tol_mm": 2
+  },
+  "pick_region":{"x_min": 150, "x_max": 650, "y_min": -350, "y_max": 350},
+  "decision": {"hold_low": 0.15, "hold_high": 0.3},
+  "grasp": {
+    "approach_height_mm": 120,
+    "min_table_clearance_mm": 2,
+    "_clearance": "closed fingertips this far above the table at the end of the grasp (a flat nut is ~5 mm thick)",
+    "tcp_to_tip_mm": 20.5,
+    "tip_to_sensor_mm": 61.8,
+    "_tip_to_sensor": "how far above the fingertips the first thing a part standing between the jaws would hit sits (sensor housing / palm), along the gripper axis: 61.8 mm measured by hand by Pranav with the fingers OPEN, arm stationary, 2026-11-14 ~11:30 (pranav/fast-carry ed279a1). Used as-is for the closed-tip gap (closed tips sit ~7.5 mm lower, so the true closed gap is ~69 mm): the conservative side. Used by sort.Sorter.upright_guard. Copied to new-pipeline [claude-code/claude-opus-5-5 · op Ali · Ali's laptop · new-pipeline]",
+    "_tcp_to_tip": "how far the CLOSED fingertips reach past the gripper TCP (arm + 150 mm): motion_probe.py --live --touch 400,0 --closed on the bare table, 2026-11-13. Open they reach ~13 mm: the linkage carries the tips ~7-10 mm down as the fingers close, so the grasp is planned for the closed tips and the open fingers descend well clear of the table",
+    "table_z": -1.3,
+    "surface_z": {"white": -1.3, "cardboard": 6.5},
+    "_surface_z": "world z of the pick surface per --background. cardboard: closed-tip touch with pad_touch.py, 2026-11-13 17:12, (300,340)=6.64 and (230,290)=6.27 (spread 0.4 mm): pad 7.8 mm above the bare table; runs/pad_touch_20261113_171209.json. Wrist depth read +4 (noise +-7), use the touch value. [claude-code/claude-opus-5-5 · op Ali]",
+    "_table_z": "world z of the table top; the median of every scan except one (+1.5) on 2026-11-13",
+    "empty_below_pos": 30,
+    "_empty_below_pos": "finger position (0-850) under which the gripper closed on nothing; a held screw stopped at ~700",
+    "retries": 2,
+    "use_yaw": true,
+    "jaw_offset_deg": 90
+  }
+}

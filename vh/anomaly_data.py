@@ -1,0 +1,141 @@
+"""Curated collection runs -> cropped samples, split by whole pick (never by view/frame).
+
+Runs must be selected explicitly. This does not assume all historic runs are good quality.
+A held-out pick of the SAME physical part is not an independent part-generalization test.
+"""
+import hashlib
+import json
+from collections import defaultdict
+from pathlib import Path
+
+from PIL import Image
+
+from .anomaly import CROP_POLICY, group_key, model_crop
+
+
+def split_picks(pick_ids, seed=17):
+    picks = sorted(set(pick_ids), key=lambda p: hashlib.sha256(f"{seed}:{p}".encode()).hexdigest())
+    if len(picks) < 5:
+        raise ValueError("At least 5 successful good picks required for train/calibration/test")
+    n = max(1, len(picks) // 4)
+    return {p: "calibration" if i < n else "test" if i < 2 * n else "train" for i, p in enumerate(picks)}
+
+
+def collect_samples(run_dirs, part_type, background):
+    records, skipped = [], []
+    for root in map(Path, run_dirs):
+        # runs/<run>/exclude.json {"item_017": "reason", ...}: picks reviewed as bad data (wrong top crop etc.)
+        excl = json.loads((root / "exclude.json").read_text()) if (root / "exclude.json").exists() else {}
+        for line in (root / "decisions.jsonl").read_text().splitlines():
+            row = json.loads(line)
+            pick = f"{root.name}/item_{row['item']:03d}"
+            if f"item_{row['item']:03d}" in excl:
+                skipped.append({"pick": pick, "reason": "excluded on review: " + excl[f"item_{row['item']:03d}"]})
+                continue
+            folder = root / f"item_{row['item']:03d}"
+            # part_type "any": one model per view over every part type's good picks (the judged run can't know the type)
+            if row.get("decision") != "collect" or (part_type not in ("any", "each") and row.get("type") != part_type):
+                skipped.append({"pick": pick, "reason": "not a completed collection of requested type"})
+                continue
+            if not (folder / "meta.json").exists():
+                skipped.append({"pick": pick, "reason": "missing meta.json (legacy data needs curation)"})
+                continue
+            meta = json.loads((folder / "meta.json").read_text())
+            if meta.get("background", "white") != background:     # picks before 16:10 have no field: bare table (white)
+                skipped.append({"pick": pick, "reason": f"collected on {meta.get('background', 'white')}, not {background}"})
+                continue
+            pose = row.get("pose", meta.get("pose"))
+            if pose not in {"lying", "upright"}:
+                skipped.append({"pick": pick, "reason": "unknown held pose"})
+                continue
+            # part_type "each": one bank per collected type (row type); "any": one pooled bank
+            common = {"pick_id": pick, "part_type": row.get("type") if part_type == "each" else part_type, "pose": pose, "background": background,
+                      "label": row.get("label", meta.get("label")), "source_run": str(root)}
+            tops = [(name, v) for name, v in meta.get("top", {}).items() if v.get("bbox")]
+            if tops:
+                name, value = sorted(tops, key=lambda p: int(p[0].split('_')[-1]))[-1]
+                bbox = value["bbox"]
+                with Image.open(folder / f"{name}.jpg") as im:      # 640x480 before 17:05, 1280x720 after
+                    w, h = im.size
+                if bbox[0] > 3 and bbox[1] > 3 and bbox[2] < w - 4 and bbox[3] < h - 4:
+                    records.append({**common, "view": "top", "image": str(folder / f"{name}.jpg"), "bbox": bbox})
+                else:
+                    skipped.append({"pick": pick, "reason": "top crop touches frame border"})
+            sharp = meta.get("sharpness", {})
+            for view, value in meta.get("views", {}).items():
+                records.append({**common, "view": view, "image": str(folder / f"web_{view}.jpg"), "bbox": value["crop_box"],
+                                "sharpness": sharp.get(view)})
+            for view in meta.get("oblique", {}):              # coverage: oblique wrist looks (crop saved at capture)
+                crop = folder / f"crop_{view}.jpg"
+                if crop.exists():
+                    records.append({**common, "view": view, "image": str(crop), "bbox": None, "sharpness": sharp.get(view)})
+    # 2026-11-14: blurred frames and crops that missed the part (round nut, pad seam) score far below their view's
+    # median sharpness. Keep them out of the normal bank: < 0.5 x the (type, view) median is skipped.
+    by = defaultdict(list)
+    for r in records:
+        if r.get("sharpness") is not None:
+            by[(r["part_type"], r["view"])].append(r["sharpness"])
+    kept = []
+    for r in records:
+        vals = by.get((r["part_type"], r["view"]))
+        if r.get("sharpness") is not None and vals and len(vals) >= 5 and r["sharpness"] < 0.5 * sorted(vals)[len(vals) // 2]:
+            skipped.append({"pick": r["pick_id"], "view": r["view"],
+                            "reason": f"sharpness {r['sharpness']} < 0.5 x view median {sorted(vals)[len(vals) // 2]}"})
+            continue
+        kept.append(r)
+    return kept, skipped
+
+
+def build_dataset(run_dirs, output, part_type, background, seed=17):
+    output = Path(output)
+    if output.exists():
+        raise FileExistsError(f"Refusing to overwrite dataset: {output}")
+    records, skipped = collect_samples(run_dirs, part_type, background)
+    # The wrist cam went 640x480 -> 1280x720 (+ fixed exposure) at 17:05: never mix top views across that change.
+    # Keep the resolution of the newest pick; webcam views are unaffected (same 1080p webcam throughout).
+    tops = [r for r in records if r['view'] == 'top']
+    if tops:
+        def size(r):
+            with Image.open(r['image']) as im:
+                return im.size
+        # by file time, not run name: station run names are MST, laptop ones EST (2 h apart)
+        newest = size(max(tops, key=lambda r: Path(r['image']).stat().st_mtime))
+        for r in tops:
+            if size(r) != newest:
+                records.remove(r)
+                skipped.append({'pick': r['pick_id'], 'view': 'top', 'reason': f'wrist frame {size(r)} != newest {newest}'})
+    splits = {}
+    for ty in sorted({r['part_type'] for r in records}):        # stratified: every type gets train/cal/test picks
+        good = sorted({r['pick_id'] for r in records if r['label'] == 'good' and r['part_type'] == ty})
+        if len(good) >= 5:
+            splits.update(split_picks(good, seed))
+    output.mkdir(parents=True)
+    samples = []
+    for n, r in enumerate(records):
+        if r['label'] == 'good' and r['pick_id'] not in splits:
+            skipped.append({'pick': r['pick_id'], 'view': r['view'], 'reason': 'fewer than 5 good picks of this type'})
+            continue
+        split = splits[r['pick_id']] if r['label'] == 'good' else 'test'
+        try:
+            crop, box = model_crop(r['image'], r['bbox'], r['view'])
+        except (ValueError, OSError) as e:
+            skipped.append({'pick': r['pick_id'], 'view': r['view'], 'reason': str(e)})
+            continue
+        filename = f'images/{n:05d}.png'
+        (output / 'images').mkdir(exist_ok=True)
+        crop.save(output / filename)
+        samples.append({**r, 'image': filename, 'source_image': r['image'], 'crop': box, 'split': split,
+                        'group': group_key(r['part_type'], r['pose'], r['view'], background)})
+    manifest = {'schema': 1, 'crop_policy': CROP_POLICY, 'seed': seed, 'samples': samples, 'skipped': skipped,
+                'limitations': ['Pick-level split; samples may be the same physical item.',
+                                'No rotation normalization or part/background masking in this baseline.',
+                                'Background labels are supplied by the operator for explicitly selected runs.']}
+    (output / 'dataset.json').write_text(json.dumps(manifest, indent=2))
+    return manifest
+
+
+def groups(dataset):
+    out = defaultdict(list)
+    for sample in dataset['samples']:
+        out[sample['group']].append(sample)
+    return dict(out)
